@@ -1,22 +1,37 @@
-"""FM24-inspired dark skin QSS stylesheet."""
+"""FM24 default skin QSS stylesheet — colours extracted from game files.
 
-# Palette (FM24 default dark skin)
+Sources (settings.fmf → settings/fm colours.xml):
+  alt_box_background     rgb(20,21,26)   → window_bg
+  alt_dark_box_background rgb(26,34,38)  → surface
+  alpha_box_background   rgb(41,43,50)   → elevated
+  FM purple              rgb(105,51,189) → accent
+  FM purple light        rgb(115,92,228) → accent_hover
+  FM purple dark         rgb(100,30,170) → accent_press
+  status_homegrown_club  rgb(90,160,209) → hgp_blue
+  status_cannot_play     rgb(209,67,67)  → non_hgp_red
+  default foreground     rgb(255,255,255)→ text_primary
+"""
+
 COLORS = {
-    'window_bg':     '#131722',
-    'surface':       '#1e2430',
-    'elevated':      '#252f3f',
-    'border':        '#2a3548',
-    'border_bright': '#3a4a60',
-    'text_primary':  '#e8ecf3',
-    'text_secondary':'#7a8ba6',
-    'text_dim':      '#4a5a72',
-    'accent':        '#1969e1',
-    'accent_hover':  '#2478f0',
-    'accent_press':  '#1258c0',
-    'hgp_green':     '#22c55e',
-    'non_hgp_red':   '#ef4444',
-    'warning':       '#f59e0b',
-    'selection_bg':  '#1e3a6e',
+    # backgrounds — from fm colours.xml box_background tokens
+    'window_bg':     '#14151A',  # alt_box_background
+    'surface':       '#1A2226',  # alt_dark_box_background
+    'elevated':      '#292B32',  # alpha_box_background
+    'border':        '#343740',
+    'border_bright': '#454A58',
+    # text — default foreground is white in the fm skin
+    'text_primary':  '#FFFFFF',
+    'text_secondary':'#8B96A8',
+    'text_dim':      '#525B68',
+    # FM purple brand accent (from fm colours.xml)
+    'accent':        '#6933BD',  # FM purple rgb(105,51,189)
+    'accent_hover':  '#735CE4',  # FM purple light rgb(115,92,228)
+    'accent_press':  '#641EAA',  # FM purple dark rgb(100,30,170)
+    # squad status colours (from fm colours.xml status_* tokens)
+    'hgp_green':     '#5AA0D1',  # status_homegrown_club rgb(90,160,209)
+    'non_hgp_red':   '#D14343',  # status_cannot_play rgb(209,67,67)
+    'warning':       '#FF501E',  # FM orange
+    'selection_bg':  '#2A1B4A',  # dark purple row selection
 }
 
 QSS = f"""
@@ -24,7 +39,7 @@ QSS = f"""
 QWidget {{
     background-color: {COLORS['window_bg']};
     color: {COLORS['text_primary']};
-    font-family: "Segoe UI", "Liberation Sans", Arial, sans-serif;
+    font-family: "Roboto", "Segoe UI", "Liberation Sans", Arial, sans-serif;
     font-size: 13px;
     border: none;
     outline: none;
@@ -38,7 +53,7 @@ QMainWindow {{
 QFrame#panel {{
     background-color: {COLORS['surface']};
     border: 1px solid {COLORS['border']};
-    border-radius: 4px;
+    border-radius: 3px;
 }}
 
 /* ── Labels ──────────────────────────────────────────────────────── */
@@ -48,8 +63,9 @@ QLabel {{
 }}
 QLabel#header {{
     color: {COLORS['text_primary']};
-    font-size: 16px;
+    font-size: 15px;
     font-weight: bold;
+    letter-spacing: 0.5px;
 }}
 QLabel#subheader {{
     color: {COLORS['text_secondary']};
@@ -74,7 +90,7 @@ QPushButton {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
     border: 1px solid {COLORS['border']};
-    border-radius: 3px;
+    border-radius: 2px;
     padding: 6px 14px;
     font-size: 13px;
 }}
@@ -96,6 +112,7 @@ QPushButton#accent {{
     border: none;
     padding: 7px 18px;
     font-weight: bold;
+    border-radius: 2px;
 }}
 QPushButton#accent:hover {{
     background-color: {COLORS['accent_hover']};
@@ -113,7 +130,7 @@ QLineEdit {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
     border: 1px solid {COLORS['border']};
-    border-radius: 3px;
+    border-radius: 2px;
     padding: 6px 10px;
     selection-background-color: {COLORS['selection_bg']};
 }}
@@ -130,7 +147,7 @@ QTableWidget {{
     color: {COLORS['text_primary']};
     gridline-color: {COLORS['border']};
     border: 1px solid {COLORS['border']};
-    border-radius: 4px;
+    border-radius: 3px;
     selection-background-color: {COLORS['selection_bg']};
     selection-color: {COLORS['text_primary']};
     alternate-background-color: {COLORS['elevated']};
@@ -198,7 +215,7 @@ QComboBox {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
     border: 1px solid {COLORS['border']};
-    border-radius: 3px;
+    border-radius: 2px;
     padding: 5px 10px;
 }}
 QComboBox:hover {{
@@ -219,14 +236,14 @@ QComboBox QAbstractItemView {{
 QProgressBar {{
     background-color: {COLORS['elevated']};
     border: 1px solid {COLORS['border']};
-    border-radius: 3px;
+    border-radius: 2px;
     text-align: center;
     color: {COLORS['text_secondary']};
     font-size: 11px;
 }}
 QProgressBar::chunk {{
     background-color: {COLORS['accent']};
-    border-radius: 2px;
+    border-radius: 1px;
 }}
 
 /* ── Splitter ────────────────────────────────────────────────────── */
@@ -263,7 +280,7 @@ QToolTip {{
     color: {COLORS['text_primary']};
     border: 1px solid {COLORS['border_bright']};
     padding: 4px 8px;
-    border-radius: 3px;
+    border-radius: 2px;
 }}
 
 /* ── Status bar ──────────────────────────────────────────────────── */
