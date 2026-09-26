@@ -348,8 +348,17 @@ class MainWindow(QMainWindow):
         if not matches:
             self._status.showMessage(f"No club matching '{query}'.")
             return
-        club = matches[0]
-        self._show_squad(club)
+        if len(matches) == 1:
+            self._show_squad(matches[0])
+            return
+        from PyQt6.QtWidgets import QInputDialog
+        names = [c['name'] for c in matches]
+        chosen, ok = QInputDialog.getItem(
+            self, 'Multiple matches',
+            f'{len(matches)} clubs match "{query}" — pick one:',
+            names, 0, False)
+        if ok:
+            self._show_squad(matches[names.index(chosen)])
 
     def _show_squad(self, club):
         squads = self._save_data.get('squads', {})
