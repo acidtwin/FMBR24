@@ -24,18 +24,32 @@ def _read_pool(b, start):
 
 def find_names(b):
     """Return (first_names, last_names, names_start, names_end)."""
-    for p in range(len(b) - 40):
-        if b[p + 4:p + 8] != b'\x00\x00\x00\x00': continue
+    blen = len(b)
+    search = 4
+    while True:
+        # Pattern: bytes [p+4:p+8] == 0x00000000; jump straight to zero runs.
+        z = b.find(b'\x00\x00\x00\x00', search, blen - 40)
+        if z < 0:
+            break
+        p = z - 4
+        search = z + 1
+        if p < 0:
+            continue
         count = _u32(b, p)
-        if not (10000 <= count <= 3_000_000): continue
+        if not (10000 <= count <= 3_000_000):
+            continue
         n = _u32(b, p + 8)
-        if not (1 <= n <= 100) or p + 16 + n > len(b) or _u32(b, p + 12 + n) != 1: continue
+        if not (1 <= n <= 100) or p + 16 + n > blen or _u32(b, p + 12 + n) != 1:
+            continue
         first, end = _read_pool(b, p)
-        if not first: continue
+        if not first:
+            continue
         last, end = _read_pool(b, end)
-        if not last or len(last) < 10000: continue
+        if not last or len(last) < 10000:
+            continue
         _, end = _read_pool(b, end)
-        if _ is None: continue
+        if _ is None:
+            continue
         return first, last, p, end
     raise RuntimeError("Name tables not found in game_db.dat")
 
@@ -44,29 +58,42 @@ def find_names(b):
 
 def find_clubs(b, names_start):
     """Return list of club dicts with id/uid/name/short/offset."""
-    clubs = []; p = 0
-    while p + 50 < names_start:
-        at = p; p += 1
-        if b[at + 12] or b[at + 17:at + 21] != b'\xff\xff\xff\xff': continue
+    clubs = []
+    # Search for the 0xFFFFFFFF pattern that sits at at+17; bytearray.find is C-level.
+    search = 17
+    while True:
+        ff = b.find(b'\xff\xff\xff\xff', search, names_start)
+        if ff < 0:
+            break
+        at = ff - 17
+        search = ff + 1
+        if at < 0 or at + 50 >= names_start:
+            continue
+        if b[at + 12]:
+            continue
         nation = _u32(b, at + 13)
-        if nation > 255 or _u32(b, at + 25) != nation: continue
+        if nation > 255 or _u32(b, at + 25) != nation:
+            continue
         uid, cid = _u32(b, at + 4), _u32(b, at)
-        if uid == 0 or uid == 0xFFFFFFFF or uid != _u32(b, at + 8) or cid > 100000: continue
+        if uid == 0 or uid == 0xFFFFFFFF or uid != _u32(b, at + 8) or cid > 100000:
+            continue
         n = _u32(b, at + 39)
-        if not (2 <= n <= 200) or at + 47 + n >= names_start: continue
+        if not (2 <= n <= 200) or at + 47 + n >= names_start:
+            continue
         sn = _u32(b, at + 43 + n)
-        if not (1 <= sn <= 100) or at + 47 + n + sn > names_start: continue
+        if not (1 <= sn <= 100) or at + 47 + n + sn > names_start:
+            continue
         name = b[at + 43:at + 43 + n].decode('utf-8', errors='replace')
         short = b[at + 47 + n:at + 47 + n + sn].decode('utf-8', errors='replace')
         clubs.append({'id': cid, 'uid': uid, 'name': name, 'short': short, 'offset': at})
-        p = at + 47 + n + sn
+        search = at + 47 + n + sn + 17  # skip past this record
     return clubs
 
 
 # ── Squads ────────────────────────────────────────────────────────────────────
 
 def find_squads(b, clubs, names_start):
-    """Return dict: person_id -> club_id."""
+    """Return dict: person_id (int) -> club_id (int)."""
     club_by_id = {c['id']: c for c in clubs}
     squads = {}
     p = 4
@@ -89,14 +116,21 @@ def find_squads(b, clubs, names_start):
                     club = club_by_id[oid]
         if club is None: continue
         limit = min(at + 10000, names_start)
-        for q in range(at + 30, limit - 14):
-            if _u32(b, q) != 0xFFFFFFFF: continue
+        # bytearray.find for the 0xFFFFFFFF squad-list marker (was byte-by-byte loop)
+        q = at + 30
+        while True:
+            q = b.find(b'\xff\xff\xff\xff', q, limit - 14)
+            if q < 0:
+                break
             count = _u16(b, q + 4)
-            if not (1 <= count <= 150): continue
+            if not (1 <= count <= 150):
+                q += 1; continue
             end_q = q + 6 + count * 4 + 8
-            if end_q > limit: continue
+            if end_q > limit:
+                q += 1; continue
             ids = [_u32(b, q + 6 + k * 4) for k in range(count)]
-            if len(set(ids)) != count or any(i > 3_000_000 for i in ids): continue
+            if len(set(ids)) != count or any(i > 3_000_000 for i in ids):
+                q += 1; continue
             kind = b[at - 3] if b[at - 4] == 1 and b[at - 2] == 0xFF else 100
             for pid in ids:
                 if kind == 100 or pid not in squads:
@@ -138,9 +172,19 @@ def match_identities(b, people, names_end):
     """Assign FM person IDs to each person dict in-place."""
     max_id = _u32(b, names_end) + 1
     identities = []
-    for p in range(names_end + 7, len(b) - 12):
-        if b[p - 1] or b[p - 2] or b[p - 3] or (b[p - 7] & 7) > 2 or \
-           b[p - 4] not in (0, 1, 4, 5): continue
+    blen = len(b)
+    # bytearray.find to jump to positions where b[p-3:p] == 0x000000 (was byte-by-byte)
+    search = names_end + 4  # b[p-3] starts at names_end+4 → p = names_end+7
+    while True:
+        z = b.find(b'\x00\x00\x00', search, blen - 15)
+        if z < 0:
+            break
+        p = z + 3  # b[p-3]=b[p-2]=b[p-1]=0
+        search = z + 1
+        if p < names_end + 7 or p >= blen - 12:
+            continue
+        if (b[p - 7] & 7) > 2 or b[p - 4] not in (0, 1, 4, 5):
+            continue
         pid = _u32(b, p); uid = _u32(b, p + 4)
         if pid >= max_id or uid == 0 or uid == 0xFFFFFFFF: continue
         if uid != _u32(b, p + 8):

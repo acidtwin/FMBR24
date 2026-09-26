@@ -344,6 +344,7 @@ class MainWindow(QMainWindow):
         if not query:
             return
         clubs = self._save_data.get('clubs', [])
+        squads = self._save_data.get('squads', {})
         matches = [c for c in clubs if query.lower() in c['name'].lower()]
         if not matches:
             self._status.showMessage(f"No club matching '{query}'.")
@@ -351,6 +352,11 @@ class MainWindow(QMainWindow):
         if len(matches) == 1:
             self._show_squad(matches[0])
             return
+        # Sort largest squad first so first team floats to the top
+        squad_counts = {}
+        for cid in squads.values():
+            squad_counts[cid] = squad_counts.get(cid, 0) + 1
+        matches.sort(key=lambda c: squad_counts.get(c['id'], 0), reverse=True)
         from PyQt6.QtWidgets import QInputDialog
         names = [c['name'] for c in matches]
         chosen, ok = QInputDialog.getItem(
@@ -364,15 +370,9 @@ class MainWindow(QMainWindow):
         squads = self._save_data.get('squads', {})
         people = self._save_data.get('people', [])
 
+        # squads always has int keys (normalized on cache load; int from fresh parse)
         club_pids = {pid for pid, cid in squads.items() if cid == club['id']}
-        # squads keys may be str if loaded from JSON cache
-        if not club_pids:
-            club_pids = {pid for pid, cid in squads.items()
-                         if cid == club['id'] or str(cid) == str(club['id'])}
-
-        squad = [p for p in people
-                 if str(p.get('id', -1)) in {str(x) for x in club_pids}
-                 or p.get('id', -1) in club_pids]
+        squad = [p for p in people if p.get('id', -1) in club_pids]
         squad.sort(key=lambda p: p['name'])
         self._squad = squad
 

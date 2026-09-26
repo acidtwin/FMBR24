@@ -17,6 +17,9 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
+_CACHE_VERSION = 2  # bump when schema changes to auto-invalidate old caches
+
+
 def load_cache(save_path):
     """Return cached dict if valid for current mtime, else None."""
     cp = _cache_path(save_path)
@@ -25,9 +28,14 @@ def load_cache(save_path):
     try:
         with open(cp, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        if data.get('version', 1) != _CACHE_VERSION:
+            return None
         mtime = os.path.getmtime(save_path)
         if abs(data.get('mtime', 0) - mtime) > 1:
             return None
+        # JSON dict keys are always strings; normalize squads back to int keys
+        if 'squads' in data:
+            data['squads'] = {int(k): int(v) for k, v in data['squads'].items()}
         return data
     except Exception:
         return None
@@ -38,10 +46,12 @@ def save_cache(save_path, clubs, squads, people):
     cp = _cache_path(save_path)
     slim_people = [
         {'id': p['id'], 'name': p['name'], 'nation': p['nation'],
-         'birth_year': p['birth_year'], 'end': p['end'], 'offset': p['offset']}
+         'birth_year': p['birth_year'], 'end': p['end'], 'offset': p['offset'],
+         'hgp': p.get('hgp', False)}
         for p in people if p.get('id', -1) != -1
     ]
     data = {
+        'version': _CACHE_VERSION,
         'mtime': os.path.getmtime(save_path),
         'clubs': clubs,
         'squads': squads,
