@@ -116,21 +116,24 @@ def write_archive(output_path, orig_path, header, members, index_marker,
                   progress_cb=None):
     """
     patched_members: dict of member name -> bytearray with new content.
-    progress_cb: optional callable(message: str).
+    progress_cb: optional callable(message: str, pct: int).
     """
-    def emit(msg):
+    def emit(msg, pct):
         if progress_cb:
-            progress_cb(msg)
+            progress_cb(msg, pct)
 
-    emit("Recompressing modified member(s)...")
+    n = len(members)
+    emit("Recompressing modified member(s)...", 10)
     member_data = {}
-    for m in members:
+    for i, m in enumerate(members):
         name = m['name']
         if name in patched_members:
-            emit(f"  Compressing {name}...")
+            emit(f"Compressing {name}...", 10 + 50 * i // max(n, 1))
             member_data[name] = _comp(patched_members[name])
         else:
             member_data[name] = get_member_raw(orig_path, m)
+
+    emit("Recompression done.", 60)
 
     updated = {}
     current = 0
@@ -143,7 +146,7 @@ def write_archive(output_path, orig_path, header, members, index_marker,
     start_new = 26 + current
     idx_ptr_new = start_new - 9
 
-    emit("Building index...")
+    emit("Building index...", 65)
     new_idx_bytes = _serialize_index(archive_name, members, subdir_count, subdirs, updated)
     compressed_idx = _comp(new_idx_bytes)
 
@@ -154,7 +157,7 @@ def write_archive(output_path, orig_path, header, members, index_marker,
     new_header = bytearray(header)
     struct.pack_into('<Q', new_header, 9, idx_ptr_new)
 
-    emit(f"Writing {os.path.basename(output_path)}...")
+    emit(f"Writing {os.path.basename(output_path)}...", 75)
     with open(output_path, 'wb') as f:
         f.write(new_header)
         for m in members:
@@ -162,4 +165,4 @@ def write_archive(output_path, orig_path, header, members, index_marker,
         f.write(new_marker)
         f.write(compressed_idx)
 
-    emit(f"Done. Output: {os.path.getsize(output_path) // 1024 // 1024} MB")
+    emit(f"Done. {os.path.getsize(output_path) // 1024 // 1024} MB written.", 100)

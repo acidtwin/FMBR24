@@ -30,12 +30,17 @@ NATIONS = {
 
 class ParseWorker(QThread):
     progress = pyqtSignal(str)
+    pct = pyqtSignal(int)
     done = pyqtSignal(dict)
     error = pyqtSignal(str)
 
     def __init__(self, save_path):
         super().__init__()
         self.save_path = save_path
+
+    def _emit(self, msg, p):
+        self.progress.emit(msg)
+        self.pct.emit(p)
 
     def run(self):
         try:
@@ -46,11 +51,11 @@ class ParseWorker(QThread):
 
             cached = load_cache(self.save_path)
             if cached:
-                self.progress.emit("Loaded from cache.")
+                self._emit("Loaded from cache.", 100)
                 self.done.emit(cached)
                 return
 
-            self.progress.emit("Parsing archive...")
+            self._emit("Parsing archive...", 3)
             header, members, index_marker, archive_name, subdir_count, subdirs = \
                 parse_archive(self.save_path)
 
@@ -59,35 +64,36 @@ class ParseWorker(QThread):
                 self.error.emit("game_db.dat not found in archive.")
                 return
 
-            self.progress.emit(
-                f"Extracting game_db.dat ({gdb_m['p'] // 1024 // 1024} MB)...")
+            self._emit(
+                f"Extracting game_db.dat ({gdb_m['p'] // 1024 // 1024} MB)...", 5)
             b = get_member(self.save_path, gdb_m)
 
-            self.progress.emit("Finding name tables...")
+            self._emit("Finding name tables...", 45)
             first_names, last_names, names_start, names_end = find_names(b)
 
-            self.progress.emit("Finding clubs...")
+            self._emit("Finding clubs...", 55)
             clubs = find_clubs(b, names_start)
 
-            self.progress.emit("Finding squad memberships...")
+            self._emit("Finding squad memberships...", 65)
             squads = find_squads(b, clubs, names_start)
 
-            self.progress.emit("Finding people and matching identities...")
+            self._emit("Finding people and matching identities...", 72)
             people = find_people(b, first_names, last_names, names_end)
             match_identities(b, people, names_end)
 
-            # Annotate HGP status into people list
+            self._emit("Checking homegrown status...", 88)
             for p in people:
                 p['hgp'] = is_homegrown(b, p)
 
-            self.progress.emit("Caching results...")
+            self._emit("Caching results...", 97)
             save_cache(self.save_path, clubs, squads, people)
 
+            self.pct.emit(100)
             result = {
                 'clubs': clubs,
                 'squads': squads,
                 'people': people,
-                'b': b,  # keep bytearray in memory for patching
+                'b': b,
                 'header': header,
                 'members': members,
                 'index_marker': index_marker,
@@ -103,6 +109,7 @@ class ParseWorker(QThread):
 
 class PatchWorker(QThread):
     progress = pyqtSignal(str)
+    pct = pyqtSignal(int)
     done = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -119,11 +126,18 @@ class PatchWorker(QThread):
 
             b = self.save_data['b']
             count = 0
-            for person in self.people_to_patch:
+            n = len(self.people_to_patch)
+            for i, person in enumerate(self.people_to_patch):
                 if patch_to_homegrown(b, person):
                     count += 1
+                self.pct.emit(5 + 5 * i // max(n, 1))
 
             self.progress.emit(f"Patched {count} player(s). Writing file...")
+            self.pct.emit(10)
+
+            def _cb(msg, p):
+                self.progress.emit(msg)
+                self.pct.emit(10 + p * 90 // 100)
 
             write_archive(
                 self.output_path,
@@ -135,7 +149,7 @@ class PatchWorker(QThread):
                 self.save_data['subdir_count'],
                 self.save_data['subdirs'],
                 {'game_db.dat': b},
-                progress_cb=lambda msg: self.progress.emit(msg),
+                progress_cb=_cb,
             )
             self.done.emit()
         except Exception as e:
@@ -193,8 +207,10 @@ class MainWindow(QMainWindow):
 
         # Progress bar (hidden until loading)
         self._progress = QProgressBar()
-        self._progress.setRange(0, 0)   # indeterminate
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
         self._progress.setFixedHeight(4)
+        self._progress.setTextVisible(False)
         self._progress.setVisible(False)
         layout.addWidget(self._progress)
 
@@ -305,6 +321,7 @@ class MainWindow(QMainWindow):
         self._set_busy(True, 'Parsing save file...')
         self._worker = ParseWorker(self._save_path)
         self._worker.progress.connect(self._on_progress)
+        self._worker.pct.connect(self._progress.setValue)
         self._worker.done.connect(self._on_parse_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -443,6 +460,7 @@ class MainWindow(QMainWindow):
         self._set_busy(True, 'Patching and writing...')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch)
         self._worker.progress.connect(self._on_progress)
+        self._worker.pct.connect(self._progress.setValue)
         self._worker.done.connect(self._on_patch_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -467,6 +485,8 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f'Error: {msg}')
 
     def _set_busy(self, busy, msg=''):
+        if busy:
+            self._progress.setValue(0)
         self._progress.setVisible(busy)
         self._pick_btn.setEnabled(not busy)
         self._load_btn.setEnabled(not busy and bool(self._save_path))
