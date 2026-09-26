@@ -18,11 +18,13 @@ DEFAULT_SAVE_DIR = os.path.expanduser(
 )
 
 NATIONS = {
-    120: 'USA', 130: 'Belgium', 131: 'Croatia', 133: 'Denmark', 135: 'Germany',
-    139: 'England', 142: 'France', 150: 'Italy', 153: 'N.Ireland', 155: 'Wales',
-    158: 'Netherlands', 164: 'Netherlands', 167: 'Scotland', 171: 'Sweden',
-    176: 'Serbia', 178: 'Portugal', 187: 'Argentina', 189: 'Brazil', 191: 'Spain',
-    195: 'Uruguay',
+    11:  'Egypt',
+    120: 'USA',
+    130: 'Belgium',    131: 'Croatia',    133: 'Denmark',    135: 'Germany',
+    139: 'England',    142: 'France',     150: 'Italy',      153: 'N.Ireland',
+    155: 'Wales',      158: 'Netherlands',164: 'Netherlands',167: 'Scotland',
+    170: 'Spain',      171: 'Sweden',     176: 'Serbia',     178: 'Portugal',
+    187: 'Argentina',  189: 'Brazil',     195: 'Uruguay',
 }
 
 
