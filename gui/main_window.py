@@ -170,6 +170,12 @@ class MainWindow(QMainWindow):
         self._save_data = None   # holds parsed result dict
         self._squad = []         # current displayed squad list (people dicts)
         self._worker = None
+        self._status_base = ''   # message without animated dots
+        self._dot_phase = 0
+
+        self._dot_timer = QTimer(self)
+        self._dot_timer.setInterval(420)
+        self._dot_timer.timeout.connect(self._tick_dots)
 
         self._build_ui()
         self._update_ui_state()
@@ -487,7 +493,13 @@ class MainWindow(QMainWindow):
 
     # ── Progress / error ──────────────────────────────────────────────────────
 
+    def _tick_dots(self):
+        self._dot_phase = (self._dot_phase + 1) % 4
+        self._status.showMessage(self._status_base + '.' * self._dot_phase)
+
     def _on_progress(self, msg):
+        self._status_base = msg
+        self._dot_phase = 0
         self._status.showMessage(msg)
 
     def _on_error(self, msg):
@@ -498,10 +510,15 @@ class MainWindow(QMainWindow):
     def _set_busy(self, busy, msg=''):
         if busy:
             self._progress.setValue(0)
+            self._dot_phase = 0
+            self._status_base = msg or self._status_base
+            self._dot_timer.start()
+        else:
+            self._dot_timer.stop()
         self._progress.setVisible(busy)
         self._pick_btn.setEnabled(not busy)
         self._load_btn.setEnabled(not busy and bool(self._save_path))
         self._search_btn.setEnabled(not busy and self._save_data is not None)
         self._patch_btn.setEnabled(False)
-        if msg:
+        if msg and not busy:
             self._status.showMessage(msg)
