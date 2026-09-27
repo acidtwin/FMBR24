@@ -5,9 +5,9 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
-    QComboBox,
+    QComboBox, QStyledItemDelegate, QStyleOptionViewItem,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF
 from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction
 
 from gui.theme import COLORS
@@ -308,6 +308,77 @@ def _attr_val_color(v: int) -> str:
     if v >= 10: return COLORS['text_secondary']
     if v >= 7:  return COLORS['text_primary']
     return COLORS['non_hgp_red']
+
+
+# Nation ID → flag emoji
+_NATION_FLAG = {
+    11:  '🇪🇬', 29:  '🇲🇦', 33:  '🇳🇬',
+    97:  '🇨🇦', 120: '🇺🇸',
+    187: '🇦🇷', 189: '🇧🇷', 195: '🇺🇾',
+    61:  '🇯🇵', 80:  '🇰🇷', 177: '🇦🇺',
+    126: '🇦🇱', 129: '🇦🇹', 135: '🇭🇷',
+    146: '🇬🇷', 147: '🇭🇺', 161: '🇵🇱',
+    165: '🇷🇺', 176: '🇷🇸', 219: '🇽🇰',
+    131: '🇧🇪', 137: '🇨🇿', 138: '🇩🇰',
+    139: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 143: '🇫🇷', 145: '🇩🇪',
+    150: '🇮🇹', 158: '🇳🇱', 159: '🏴󠁧󠁢󠁮󠁩󠁲󠁿',
+    160: '🇳🇴', 162: '🇵🇹', 163: '🇮🇪',
+    167: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 170: '🇪🇸', 171: '🇸🇪',
+    172: '🇨🇭', 173: '🇹🇷', 175: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+}
+
+# Position → (background, foreground) matching mockup color scheme
+_POS_BADGE_COLORS = {
+    'GK':  ('#C07B2A', '#F5A63C'),
+    'SW':  ('#3A6BA8', '#6EB3F7'),
+    'DL':  ('#3A6BA8', '#6EB3F7'), 'DC': ('#3A6BA8', '#6EB3F7'),
+    'DR':  ('#3A6BA8', '#6EB3F7'), 'DM': ('#3A6BA8', '#6EB3F7'),
+    'WBL': ('#3A6BA8', '#6EB3F7'), 'WBR': ('#3A6BA8', '#6EB3F7'),
+    'ML':  ('#3A8A5A', '#6ADE9A'), 'MC': ('#3A8A5A', '#6ADE9A'),
+    'MR':  ('#3A8A5A', '#6ADE9A'), 'AML': ('#3A8A5A', '#6ADE9A'),
+    'AMC': ('#3A8A5A', '#6ADE9A'), 'AMR': ('#3A8A5A', '#6ADE9A'),
+    'ST':  ('#A83A3A', '#F7806A'),
+}
+
+
+class _PosBadgeDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        text = index.data(Qt.ItemDataRole.DisplayRole) or ''
+        bg, fg = _POS_BADGE_COLORS.get(text, ('#2A2D35', COLORS['text_secondary']))
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # row background
+        if option.state & 0x0002:  # State_Selected
+            painter.fillRect(option.rect, QColor(COLORS['selection_bg']))
+        elif int(option.features) & 0x0002 if hasattr(option, 'features') else False:
+            painter.fillRect(option.rect, QColor(COLORS['elevated']))
+        else:
+            painter.fillRect(option.rect, option.backgroundBrush)
+
+        if text and text != '?':
+            font = QFont(painter.font())
+            font.setPixelSize(10)
+            font.setBold(True)
+            painter.setFont(font)
+            fm = painter.fontMetrics()
+            tw = fm.horizontalAdvance(text)
+            bw = tw + 10
+            bh = 16
+            x = option.rect.x() + 8
+            y = option.rect.y() + (option.rect.height() - bh) // 2
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(bg))
+            painter.drawRoundedRect(QRectF(x, y, bw, bh), 2, 2)
+            painter.setPen(QColor(fg))
+            painter.drawText(
+                QRectF(x, y, bw, bh), Qt.AlignmentFlag.AlignCenter, text)
+
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        return QSize(68, option.rect.height() or 28)
 
 
 class PlayerDetailDialog(QDialog):
@@ -1161,6 +1232,8 @@ class MainWindow(QMainWindow):
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
+        self._pos_delegate = _PosBadgeDelegate(self._table)
+        self._table.setItemDelegateForColumn(1, self._pos_delegate)
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 
@@ -1709,7 +1782,8 @@ class MainWindow(QMainWindow):
         self._table.clearSelection()
 
         for row, p in enumerate(squad):
-            nation_name = NATIONS.get(p['nation'], f"n={p['nation']}")
+            nation_id = p.get('nation', 0)
+            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, '?'))
             hgp = p.get('hgp', False)
             hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
             pos = _primary_pos(p['positions']) if p.get('positions') else '?'
@@ -1729,12 +1803,19 @@ class MainWindow(QMainWindow):
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
                 _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
                 _SortItem(str(age), age),
-                _SortItem(nation_name),
+                _SortItem(flag),
                 _SortItem('HGP' if hgp else '-'),
                 _SortItem(hgc_text),
             ]
             for col, item in enumerate(items):
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                if col == 6:  # Nation flag — center
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
+                    f = QFont()
+                    f.setPointSize(14)
+                    item.setFont(f)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 if col == 7:
                     item.setForeground(QColor(COLORS['hgp_green'] if hgp
                                               else COLORS['text_dim']))
