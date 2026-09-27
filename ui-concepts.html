@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Save Editor — UI Concept A</title>
+<style>
+  :root {
+    --window-bg:   #14151A;
+    --surface:     #1A2226;
+    --elevated:    #292B32;
+    --border:      #343740;
+    --border-b:    #454A58;
+    --text:        #FFFFFF;
+    --text-sec:    #8B96A8;
+    --text-dim:    #525B68;
+    --accent:      #6933BD;
+    --accent-h:    #735CE4;
+    --hgp:         #5AA0D1;
+    --hgc:         #52C287;
+    --no-hg:       #D14343;
+    --sel-bg:      #2A1B4A;
+    --pos-gk:      #C07B2A;
+    --pos-def:     #3A6BA8;
+    --pos-mid:     #3A8A5A;
+    --pos-fwd:     #A83A3A;
+    --pos-gk-t:    #F5A63C;
+    --pos-def-t:   #6EB3F7;
+    --pos-mid-t:   #6ADE9A;
+    --pos-fwd-t:   #F7806A;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--window-bg);
+    font-family: "Segoe UI", "Liberation Sans", Arial, sans-serif;
+    font-size: 13px; color: var(--text);
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ── TOP BAR ───────────────────────────────────────────────────────── */
+  .topbar {
+    height: 42px; background: var(--elevated); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0;
+  }
+  .topbar .nav-btn {
+    background: none; border: none; color: var(--text-sec); cursor: pointer;
+    font-size: 13px; padding: 4px 7px; border-radius: 2px; line-height: 1;
+  }
+  .topbar .nav-btn:hover { background: var(--border); color: var(--text); }
+  .topbar .breadcrumb { font-size: 12px; color: var(--text-sec); white-space: nowrap; }
+  .topbar .breadcrumb strong { color: var(--text); }
+
+  /* search — centred, wide, like FM */
+  .topbar .search-wrap {
+    flex: 1; max-width: 440px; margin: 0 auto; position: relative;
+  }
+  .topbar .search-wrap input {
+    width: 100%; background: var(--window-bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 5px 10px 5px 30px; color: var(--text);
+    font-size: 12px; font-family: inherit;
+  }
+  .topbar .search-wrap input::placeholder { color: var(--text-dim); }
+  .topbar .search-wrap input:focus { outline: none; border-color: var(--accent); }
+  .topbar .search-wrap .search-icon {
+    position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 12px; pointer-events: none;
+  }
+  /* search dropdown */
+  .search-dropdown {
+    display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
+    background: var(--elevated); border: 1px solid var(--border-b); border-radius: 2px;
+    z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .search-dropdown.open { display: block; }
+  .search-result {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    cursor: pointer; border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .search-result:last-child { border-bottom: none; }
+  .search-result:hover { background: var(--sel-bg); }
+  .search-result .sr-name { font-weight: 600; flex: 1; }
+  .search-result .sr-meta { font-size: 11px; color: var(--text-sec); }
+
+  .topbar .right-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .topbar .save-badge {
+    font-size: 11px; color: var(--text-sec); background: var(--surface);
+    border: 1px solid var(--border); padding: 3px 10px; border-radius: 2px;
+    white-space: nowrap;
+  }
+  .topbar .save-badge strong { color: var(--hgp); }
+  .topbar-btn {
+    background: var(--accent); color: #fff; border: none; padding: 5px 14px;
+    border-radius: 2px; cursor: pointer; font-size: 12px; font-weight: 600;
+    font-family: inherit; white-space: nowrap;
+  }
+  .topbar-btn:hover { background: var(--accent-h); }
+
+  /* ── SHELL ─────────────────────────────────────────────────────────── */
+  .shell { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── SIDEBAR ───────────────────────────────────────────────────────── */
+  .sidebar {
+    width: 192px; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+  }
+  .club-header {
+    padding: 13px 15px 10px; border-bottom: 1px solid var(--border);
+  }
+  .club-header .club-name { font-size: 13px; font-weight: 700; }
+  .club-header .season { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .save-info {
+    padding: 8px 15px; border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .save-info .label { color: var(--text-dim); margin-bottom: 2px; }
+  .save-info .save-name { color: var(--hgp); font-weight: 600; font-size: 12px; }
+  .save-info .count { color: var(--text-sec); margin-top: 3px; }
+
+  .nav-section { padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .nav-section:last-child { border-bottom: none; flex: 1; }
+  .nav-section-label {
+    padding: 5px 15px 5px; font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1.2px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px; padding: 8px 15px;
+    cursor: pointer; color: var(--text-sec); font-size: 12px;
+    border-left: 2px solid transparent; transition: background 0.1s;
+  }
+  .nav-item:hover { background: var(--elevated); color: var(--text); }
+  .nav-item.active { background: var(--sel-bg); color: var(--text); border-left-color: var(--accent); }
+  .nav-item .icon { font-size: 13px; width: 17px; text-align: center; flex-shrink: 0; }
+  .nav-item .badge {
+    margin-left: auto; font-size: 10px; padding: 1px 6px;
+    border-radius: 10px; font-weight: 600; background: var(--accent); color: #fff;
+  }
+  .nav-item .badge.hgp { background: var(--hgp); color: #0d1a24; }
+  .nav-item .badge.hgc { background: var(--hgc); color: #0d2419; }
+  .nav-sub { padding-left: 32px; font-size: 11px; }
+  .nav-sub:hover { background: var(--elevated); color: var(--text); }
+
+  .sidebar-footer { padding: 12px 15px; margin-top: auto; }
+  .sidebar-footer .reload-btn {
+    width: 100%; padding: 8px; background: var(--accent); color: #fff;
+    border: none; border-radius: 2px; cursor: pointer; font-size: 12px;
+    font-weight: 600; font-family: inherit; text-align: center;
+  }
+  .sidebar-footer .reload-btn:hover { background: var(--accent-h); }
+
+  /* ── MAIN ──────────────────────────────────────────────────────────── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .content-header {
+    padding: 12px 16px 0; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    background: var(--window-bg);
+  }
+  .content-header h2 { font-size: 16px; font-weight: 700; }
+  .content-header .subtitle { font-size: 11px; color: var(--text-sec); margin-top: 2px; margin-bottom: 10px; }
+
+  /* squad switcher */
+  .squad-switcher { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .squad-switcher h2 { margin: 0; }
+  .squad-drop-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--elevated); border: 1px solid var(--border-b);
+    color: var(--text); font-size: 12px; font-family: inherit;
+    padding: 4px 10px 4px 12px; border-radius: 2px; cursor: pointer;
+    position: relative;
+  }
+  .squad-drop-btn:hover { border-color: var(--accent); }
+  .squad-drop-btn .squad-name { font-weight: 600; }
+  .squad-drop-btn .squad-count { color: var(--text-dim); font-size: 11px; }
+  .squad-drop-btn .chevron { color: var(--text-dim); font-size: 10px; margin-left: 2px; }
+
+  .squad-dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--elevated); border: 1px solid var(--border-b); border-radius: 2px;
+    z-index: 50; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .squad-dropdown.open { display: block; }
+  .squad-drop-header {
+    padding: 6px 12px; font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border);
+  }
+  .squad-drop-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px; cursor: pointer; font-size: 12px; gap: 12px;
+    border-bottom: 1px solid rgba(52,55,64,0.5);
+  }
+  .squad-drop-item:last-child { border-bottom: none; }
+  .squad-drop-item:hover { background: var(--sel-bg); }
+  .squad-drop-item.active { color: var(--accent-h); }
+  .squad-drop-item.active::before { content: '✓'; margin-right: 6px; color: var(--accent-h); }
+  .squad-drop-item:not(.active)::before { content: ''; margin-right: 18px; }
+  .squad-drop-item .sq-label { flex: 1; font-weight: 500; }
+  .squad-drop-item .sq-type { font-size: 10px; color: var(--text-dim); }
+  .squad-drop-item .sq-count { font-size: 11px; color: var(--text-dim); }
+
+  .tabs { display: flex; }
+  .tab {
+    padding: 7px 16px; font-size: 12px; color: var(--text-sec); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  /* ── TOOLBAR ───────────────────────────────────────────────────────── */
+  .toolbar {
+    display: flex; align-items: center; gap: 7px; padding: 7px 16px;
+    background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tool-btn {
+    background: var(--elevated); border: 1px solid var(--border); color: var(--text-sec);
+    padding: 5px 12px; border-radius: 2px; cursor: pointer; font-size: 12px; font-family: inherit;
+  }
+  .tool-btn:hover { background: var(--border); color: var(--text); }
+  .tool-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .tool-btn.primary:hover { background: var(--accent-h); }
+  .tool-btn.hgc-btn { background: rgba(82,194,135,0.12); border-color: var(--hgc); color: var(--hgc); font-weight: 600; }
+  .tool-btn.hgc-btn:hover { background: rgba(82,194,135,0.22); }
+  .tool-btn.disabled { color: var(--text-dim); border-color: var(--border); cursor: not-allowed; opacity: 0.5; }
+  .sep { width: 1px; height: 22px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
+  .spacer { flex: 1; }
+  .info-text { font-size: 11px; color: var(--text-sec); }
+
+  /* ── TABLE ─────────────────────────────────────────────────────────── */
+  .table-wrap { flex: 1; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--elevated); color: var(--text-dim); font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px; padding: 7px 10px;
+    border-bottom: 1px solid var(--border); text-align: left; position: sticky; top: 0; z-index: 1;
+  }
+  thead th.c { text-align: center; }
+  tbody tr { border-bottom: 1px solid rgba(52,55,64,0.6); transition: background 0.08s; cursor: pointer; }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.018); }
+  tbody tr:hover { background: rgba(105,51,189,0.1); }
+  tbody tr.selected { background: var(--sel-bg); }
+  tbody tr.selected:hover { background: rgba(105,51,189,0.25); }
+  tbody td { padding: 7px 10px; font-size: 12px; }
+  tbody td.c { text-align: center; }
+  tbody td.dim { color: var(--text-dim); font-size: 11px; }
+
+  .pos-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 2px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .gk  { background: var(--pos-gk);  color: var(--pos-gk-t); }
+  .def { background: var(--pos-def); color: var(--pos-def-t); }
+  .mid { background: var(--pos-mid); color: var(--pos-mid-t); }
+  .fwd { background: var(--pos-fwd); color: var(--pos-fwd-t); }
+
+  .hg-cell { display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .hg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-hgp { background: var(--hgp); }
+  .dot-hgc { background: var(--hgc); }
+  .dot-no  { background: var(--border-b); }
+  .hg-txt { font-size: 11px; font-weight: 600; }
+  .txt-hgp { color: var(--hgp); }
+  .txt-hgc { color: var(--hgc); }
+  .txt-no  { color: var(--text-dim); }
+
+  .ca-wrap { display: flex; align-items: center; gap: 5px; justify-content: center; }
+  .ca-bar { height: 3px; background: var(--accent); border-radius: 2px; }
+  .ca-num { font-size: 12px; color: var(--text-sec); min-width: 28px; }
+
+  /* ── STATUS BAR ────────────────────────────────────────────────────── */
+  .statusbar {
+    height: 24px; background: var(--elevated); border-top: 1px solid var(--border);
+    padding: 0 16px; display: flex; align-items: center; gap: 16px;
+    font-size: 11px; color: var(--text-sec); flex-shrink: 0;
+  }
+  .statusbar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hgc); display: inline-block; margin-right: 4px; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-b); }
+
+  /* ── ALT VIEWS ────────────────────────────────────────────────────── */
+  .view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .view.active { display: flex; }
+
+  .view-header {
+    padding: 14px 18px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .view-header h2 { font-size: 16px; font-weight: 700; }
+  .view-header .subtitle { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+
+  .view-body { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* info cards */
+  .info-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .info-card-title {
+    padding: 8px 14px; background: var(--elevated); border-bottom: 1px solid var(--border);
+    font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+  }
+  .info-card-body { padding: 12px 14px; }
+  .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .info-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .info-field { }
+  .info-field .f-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+  .info-field .f-value { font-size: 13px; color: var(--text); font-weight: 500; }
+  .info-field .f-value.hi  { color: var(--hgc); }
+  .info-field .f-value.acc { color: var(--accent-h); }
+  .info-field .f-value.warn { color: var(--warning); }
+
+  /* shortlist table */
+  .sl-empty { text-align: center; padding: 40px; color: var(--text-dim); font-size: 13px; }
+
+  /* ── PLAYER MODAL ─────────────────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(2px);
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .player-modal {
+    width: 900px; max-width: 98vw; max-height: 92vh;
+    background: var(--window-bg); border: 1px solid var(--border-b);
+    border-radius: 3px; display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.8);
+    overflow: hidden;
+  }
+
+  /* modal top bar */
+  .pm-topbar {
+    background: var(--elevated); border-bottom: 1px solid var(--border);
+    padding: 0 14px; height: 40px; display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+  }
+  .pm-topbar .pm-title { font-size: 14px; font-weight: 700; flex: 1; }
+  .pm-topbar .pm-subtitle { font-size: 11px; color: var(--text-sec); }
+  .pm-close {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 18px; line-height: 1; padding: 4px 6px; border-radius: 2px;
+  }
+  .pm-close:hover { background: var(--border); color: var(--text); }
+
+  /* modal body layout */
+  .pm-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* left panel */
+  .pm-left {
+    width: 190px; flex-shrink: 0; background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .pm-photo {
+    width: 100%; aspect-ratio: 1; background: var(--elevated);
+    display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid var(--border); font-size: 48px; color: var(--text-dim);
+  }
+  .pm-info { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .pm-info-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-size: 11px; }
+  .pm-info-row .lbl { color: var(--text-dim); }
+  .pm-info-row .val { color: var(--text); font-weight: 500; }
+  .pm-info-row .val.hi { color: var(--hgc); }
+  .pm-info-row .val.acc { color: var(--accent-h); }
+  .pm-info-row .val.warn { color: var(--warning); }
+
+  .pm-ca-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .pm-ca-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .pm-ca-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .pm-ca-name { font-size: 11px; color: var(--text-sec); width: 28px; }
+  .pm-ca-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+  .pm-ca-fill { height: 4px; border-radius: 2px; }
+  .pm-ca-fill.ca  { background: var(--accent); }
+  .pm-ca-fill.pa  { background: var(--hgc); }
+  .pm-ca-num { font-size: 12px; font-weight: 600; min-width: 28px; text-align: right; }
+
+  .pm-hg-section { padding: 10px 12px; }
+  .pm-hg-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .pm-hg-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  .pm-hg-pill {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    border: 1px solid;
+  }
+  .pm-hg-pill.hgp { color: var(--hgp); border-color: var(--hgp); background: rgba(90,160,209,0.1); }
+  .pm-hg-pill.hgc { color: var(--hgc); border-color: var(--hgc); background: rgba(82,194,135,0.1); }
+  .pm-hg-pill.no  { color: var(--text-dim); border-color: var(--border-b); }
+
+  /* right tab nav */
+  .pm-right-tabs {
+    width: 110px; flex-shrink: 0; background: var(--surface);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column;
+    padding: 6px 0;
+  }
+  .pm-rtab {
+    padding: 8px 12px; font-size: 11px; color: var(--text-sec); cursor: pointer;
+    border-left: 2px solid transparent; transition: all 0.1s;
+  }
+  .pm-rtab:hover { background: var(--elevated); color: var(--text); }
+  .pm-rtab.active { color: var(--text); border-left-color: var(--accent); background: var(--sel-bg); }
+  .pm-rtab.future { color: var(--text-dim); cursor: default; font-style: italic; }
+
+  /* center attributes */
+  .pm-center { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+
+  .attr-block-title {
+    font-size: 10px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .attr-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; }
+  .attr-cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 20px; }
+  .attr-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(52,55,64,0.4); }
+  .attr-row:last-child { border-bottom: none; }
+  .attr-name { font-size: 11px; color: var(--text-sec); }
+  .attr-val { font-size: 12px; font-weight: 600; min-width: 22px; text-align: right; }
+  .v20 { color: #FFD700; }
+  .v16 { color: var(--hgc); }
+  .v13 { color: var(--accent-h); }
+  .v10 { color: var(--text-sec); }
+  .v7  { color: var(--no-hg); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <button class="nav-btn">◀</button>
+  <button class="nav-btn" style="color:var(--text-dim)">▶</button>
+  <span class="breadcrumb">FM Save Editor &rsaquo; <strong>Squad</strong></span>
+
+  <div class="search-wrap">
+    <span class="search-icon">&#128269;</span>
+    <input id="global-search" type="text" placeholder="Search players, clubs, nations…" autocomplete="off"
+      oninput="onSearch(this.value)" onfocus="onSearchFocus()" onblur="onSearchBlur()">
+    <div class="search-dropdown" id="search-dropdown"></div>
+  </div>
+
+  <div class="right-group">
+    <div class="save-badge">Save: <strong>Spurs 2026-27.fm</strong></div>
+    <button class="topbar-btn">Load</button>
+    <button class="topbar-btn" style="background:var(--elevated);border:1px solid var(--border-b);color:var(--accent-h);font-weight:400;font-size:15px;padding:5px 10px;" title="Settings">⚙</button>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="club-header">
+      <div class="club-name">Tottenham Hotspur</div>
+      <div class="season">2026–27 · Premier League</div>
+    </div>
+    <div class="save-info">
+      <div class="label">Active save</div>
+      <div class="save-name">Spurs 2026-27.fm</div>
+      <div class="count">25 players loaded</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Main</div>
+      <div class="nav-item" id="nav-club" onclick="showView('club')">
+        <span class="icon">🏟️</span> Club
+      </div>
+      <div class="nav-item active" id="nav-squad" onclick="showView('squad')">
+        <span class="icon">👥</span> Squad
+        <span class="badge" id="squad-badge">25</span>
+      </div>
+      <div class="nav-item" id="nav-staff" onclick="showView('staff')">
+        <span class="icon">🧑‍💼</span> Staff
+      </div>
+      <div class="nav-item" id="nav-shortlist" onclick="showView('shortlist')">
+        <span class="icon">⭐</span> My Shortlist
+        <span class="badge" style="background:var(--warning)">3</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Scouting</div>
+      <div class="nav-item" onclick="toggleReports()">
+        <span class="icon">📊</span> Reports
+        <span class="chevron-nav" id="reports-chevron" style="margin-left:auto;font-size:10px;color:var(--text-dim);">▸</span>
+      </div>
+      <div id="reports-sub" style="display:none;">
+        <div class="nav-item nav-sub">
+          <span class="icon" style="color:var(--hgc)">◆</span> Best Prospects
+        </div>
+        <div class="nav-item nav-sub">
+          <span class="icon" style="color:var(--accent-h)">◆</span> Wonderkids
+        </div>
+        <div class="nav-item nav-sub">
+          <span class="icon" style="color:var(--hgp)">◆</span> Best in Position
+        </div>
+        <div class="nav-item nav-sub">
+          <span class="icon" style="color:var(--warning)">◆</span> Best by Role
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="reload-btn">↺  Reload</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main" style="position:relative;">
+
+  <!-- ── CLUB VIEW ── -->
+  <div class="view" id="view-club">
+    <div class="view-header">
+      <h2>Club</h2>
+      <div class="subtitle">Tottenham Hotspur · Premier League · Season 2026–27</div>
+    </div>
+    <div class="view-body">
+      <div style="display:flex;gap:16px;align-items:flex-start;">
+        <!-- club badge placeholder -->
+        <div style="width:80px;height:80px;background:var(--elevated);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;">🏟️</div>
+        <div style="flex:1;">
+          <div style="font-size:22px;font-weight:700;margin-bottom:4px;">Tottenham Hotspur</div>
+          <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;">Premier League · England · North London</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:var(--elevated);border:1px solid var(--border);padding:3px 10px;border-radius:2px;font-size:11px;color:var(--text-sec);">Founded 1882</span>
+            <span style="background:var(--elevated);border:1px solid var(--border);padding:3px 10px;border-radius:2px;font-size:11px;color:var(--text-sec);">Tottenham Hotspur Stadium</span>
+            <span style="background:rgba(82,194,135,0.1);border:1px solid var(--hgc);padding:3px 10px;border-radius:2px;font-size:11px;color:var(--hgc);">3rd in PL</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-card-title">Finances</div>
+          <div class="info-card-body">
+            <div class="info-grid-2">
+              <div class="info-field"><div class="f-label">Transfer Budget</div><div class="f-value hi">£85.4M</div></div>
+              <div class="info-field"><div class="f-label">Wage Budget</div><div class="f-value">£4.2M/wk</div></div>
+              <div class="info-field"><div class="f-label">Bank Balance</div><div class="f-value hi">£210M</div></div>
+              <div class="info-field"><div class="f-label">Revenue</div><div class="f-value">£380M/yr</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">Squad Registration</div>
+          <div class="info-card-body">
+            <div class="info-grid-2">
+              <div class="info-field"><div class="f-label">Slots Used</div><div class="f-value">22 / 25</div></div>
+              <div class="info-field"><div class="f-label">HGP Required</div><div class="f-value acc">8</div></div>
+              <div class="info-field"><div class="f-label">HGP in Squad</div><div class="f-value hi">18 ✓</div></div>
+              <div class="info-field"><div class="f-label">HGC in Squad</div><div class="f-value hi">12 ✓</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">Board</div>
+          <div class="info-card-body">
+            <div class="info-field" style="margin-bottom:8px;"><div class="f-label">Chairman</div><div class="f-value">Daniel Levy</div></div>
+            <div class="info-field" style="margin-bottom:8px;"><div class="f-label">Objective</div><div class="f-value acc">Win the Premier League</div></div>
+            <div class="info-field"><div class="f-label">Confidence</div><div class="f-value hi">High</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-card-title">Save File Details</div>
+        <div class="info-card-body">
+          <div class="info-grid">
+            <div class="info-field"><div class="f-label">File</div><div class="f-value">Spurs 2026-27.fm</div></div>
+            <div class="info-field"><div class="f-label">Game Date</div><div class="f-value">27 Feb 2027</div></div>
+            <div class="info-field"><div class="f-label">FM Version</div><div class="f-value">FM24</div></div>
+            <div class="info-field"><div class="f-label">Club ID</div><div class="f-value" style="color:var(--text-dim);">492</div></div>
+            <div class="info-field"><div class="f-label">Entity ID</div><div class="f-value" style="color:var(--text-dim);">493</div></div>
+            <div class="info-field"><div class="f-label">File Size</div><div class="f-value" style="color:var(--text-dim);">148 MB</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STAFF VIEW ── -->
+  <div class="view" id="view-staff">
+    <div class="view-header">
+      <h2>Staff</h2>
+      <div class="subtitle">Search and filter coaching staff across the save</div>
+    </div>
+    <div class="view-body" style="align-items:center;justify-content:center;flex:1;">
+      <div style="text-align:center;max-width:360px;margin:auto;">
+        <div style="font-size:48px;margin-bottom:16px;">🧑‍💼</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Staff Search</div>
+        <div style="font-size:12px;color:var(--text-sec);line-height:1.6;">
+          Find the best coaches for every role — filter by coaching attributes, tactical style, preferred formation, and more.<br><br>
+          <span style="color:var(--text-dim);">Coming soon.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SHORTLIST VIEW ── -->
+  <div class="view" id="view-shortlist">
+    <div class="view-header">
+      <h2>My Shortlist</h2>
+      <div class="subtitle">3 players saved locally · not stored in the save file</div>
+    </div>
+    <div class="view-body">
+      <div class="toolbar" style="margin:-2px 0 0;padding:6px 0;">
+        <button class="tool-btn" style="font-size:11px;">Clear All</button>
+        <div class="spacer"></div>
+        <span class="info-text">Double-click any squad player to add via their profile</span>
+      </div>
+      <div class="info-card">
+        <div class="info-card-body" style="padding:0;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>
+              <th style="padding:7px 14px;text-align:left;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">Name</th>
+              <th style="padding:7px 14px;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">Pos</th>
+              <th style="padding:7px 14px;text-align:center;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">Age</th>
+              <th style="padding:7px 14px;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">Nat</th>
+              <th style="padding:7px 14px;text-align:center;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">CA</th>
+              <th style="padding:7px 14px;text-align:center;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">PA</th>
+              <th style="padding:7px 14px;text-align:center;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:var(--elevated);">Note</th>
+              <th style="padding:7px 14px;text-align:center;font-size:10px;color:var(--text-dim);border-bottom:1px solid var(--border);background:var(--elevated);"></th>
+            </tr></thead>
+            <tbody>
+              ${[
+                ['Florian Wirtz','AMC',21,'🇩🇪',188,195,'Main target'],
+                ['Lamine Yamal','AMR',18,'🇪🇸',176,200,'Watch'],
+                ['Warren Zaïre-Emery','MC',20,'🇫🇷',168,190,'Backup CM'],
+              ].map(([n,p,a,f,ca,pa,note],i)=>`<tr style="border-bottom:1px solid rgba(52,55,64,0.6);cursor:pointer;${i%2?'background:rgba(255,255,255,0.018)':''}" onmouseover="this.style.background='rgba(105,51,189,0.1)'" onmouseout="this.style.background='${i%2?'rgba(255,255,255,0.018)':'transparent'}'">
+                <td style="padding:8px 14px;font-size:12px;font-weight:600;">${n}</td>
+                <td style="padding:8px 14px;"><span class="pos-badge ${p==='AMC'||p==='AMR'||p==='MC'?'mid':'def'}">${p}</span></td>
+                <td style="padding:8px 14px;font-size:12px;text-align:center;color:var(--text-dim);">${a}</td>
+                <td style="padding:8px 14px;font-size:14px;">${f}</td>
+                <td style="padding:8px 14px;font-size:12px;text-align:center;color:var(--accent-h);">${ca}</td>
+                <td style="padding:8px 14px;font-size:12px;text-align:center;color:var(--hgc);">${pa}</td>
+                <td style="padding:8px 14px;font-size:11px;color:var(--text-sec);">${note}</td>
+                <td style="padding:8px 14px;text-align:center;"><button onclick="event.stopPropagation()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;" title="Remove">✕</button></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SQUAD VIEW (existing) ── -->
+  <div class="view active" id="view-squad">
+    <div class="content-header">
+      <div class="squad-switcher">
+        <h2>Squad</h2>
+        <div style="position:relative;">
+          <button class="squad-drop-btn" id="squad-drop-btn" onclick="toggleSquadDrop()">
+            <span class="squad-name" id="squad-label">First Team</span>
+            <span class="squad-count" id="squad-player-count">· 25</span>
+            <span class="chevron">▾</span>
+          </button>
+          <div class="squad-dropdown" id="squad-dropdown">
+            <div class="squad-drop-header">Tottenham Hotspur</div>
+            <div class="squad-drop-item active" onclick="switchSquad('First Team', 25, this)">
+              <span class="sq-label">First Team</span>
+              <span class="sq-count">25 players</span>
+            </div>
+            <div class="squad-drop-item" onclick="switchSquad('Under-21s', 18, this)">
+              <span class="sq-label">Under-21s</span>
+              <span class="sq-count">18 players</span>
+            </div>
+            <div class="squad-drop-item" onclick="switchSquad('Under-18s', 22, this)">
+              <span class="sq-label">Under-18s</span>
+              <span class="sq-count">22 players</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="subtitle" id="squad-subtitle">
+        25 players &nbsp;·&nbsp;
+        <span style="color:var(--hgp)">18 HGP</span> &nbsp;·&nbsp;
+        <span style="color:var(--hgc)">12 HGC</span> &nbsp;·&nbsp;
+        Tottenham Hotspur
+      </div>
+      <div class="tabs">
+        <div class="tab active">All Players</div>
+        <div class="tab">Non-HGP</div>
+        <div class="tab">Non-HGC</div>
+        <div class="tab" id="sel-tab" style="display:none;">Selected (<span id="sel-count">0</span>)</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="tool-btn" onclick="selectNon('hgp')">Select Non-HGP</button>
+      <button class="tool-btn" onclick="selectNon('hgc')">Select Non-HGC</button>
+      <div class="sep"></div>
+      <button class="tool-btn primary" id="btn-hgp" onclick="">Make HGP</button>
+      <button class="tool-btn hgc-btn" id="btn-hgc" onclick="">Make HGC</button>
+      <div class="sep"></div>
+      <button class="tool-btn" onclick="clearSel()">Clear Selection</button>
+      <div class="spacer"></div>
+      <span class="info-text" id="sel-info" style="display:none;">0 selected</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px;" class="c">#</th>
+            <th>Name</th>
+            <th style="width:60px;">Pos</th>
+            <th style="width:48px;" class="c">Age</th>
+            <th style="width:56px;">Nat</th>
+            <th style="width:80px;" class="c">CA</th>
+            <th style="width:78px;" class="c">HGP</th>
+            <th style="width:78px;" class="c">HGC</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="statusbar">
+      <span><span class="dot"></span>Ready</span>
+      <span>Spurs 2026-27.fm · 25 players · Loaded from file</span>
+    </div>
+  </div><!-- end view-squad -->
+  </div><!-- end main -->
+</div><!-- end shell -->
+
+<script>
+const players = [
+  { num:1,  name:'Brandon Austin',      pos:'GK',  age:27, nat:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', ca:128, hgp:true,  hgc:true  },
+  { num:2,  name:'Pedro Porro',         pos:'DR',  age:26, nat:'🇪🇸', ca:163, hgp:false, hgc:false },
+  { num:3,  name:'Destiny Udogie',      pos:'DL',  age:23, nat:'🇮🇹', ca:155, hgp:false, hgc:false },
+  { num:4,  name:'Archie Gray',         pos:'DR',  age:20, nat:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', ca:154, hgp:true,  hgc:true  },
+  { num:5,  name:'Giorgio Scalvini',    pos:'DC',  age:22, nat:'🇮🇹', ca:164, hgp:false, hgc:false },
+  { num:6,  name:'Rodrigo Bentancur',   pos:'DM',  age:28, nat:'🇺🇾', ca:162, hgp:false, hgc:false },
+  { num:7,  name:'James Maddison',      pos:'AMC', age:30, nat:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', ca:168, hgp:true,  hgc:false },
+  { num:8,  name:'Lucas Bergvall',      pos:'DM',  age:19, nat:'🇸🇪', ca:148, hgp:false, hgc:true  },
+  { num:9,  name:'Dejan Kulusevski',    pos:'AMR', age:25, nat:'🇸🇪', ca:170, hgp:false, hgc:false },
+  { num:10, name:'Omar Marmoush',       pos:'AMC', age:26, nat:'🇪🇬', ca:172, hgp:false, hgc:false },
+  { num:11, name:'Callum Olusesi',      pos:'MC',  age:20, nat:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', ca:138, hgp:true,  hgc:true  },
+  { num:20, name:'Aleksandar Pavlović', pos:'MC',  age:22, nat:'🇩🇪', ca:162, hgp:false, hgc:false },
+  { num:17, name:'Nico Paz',            pos:'AMC', age:21, nat:'🇦🇷', ca:158, hgp:false, hgc:false },
+  { num:14, name:'Xavi Simons',         pos:'MC',  age:23, nat:'🇳🇱', ca:172, hgp:false, hgc:false },
+  { num:25, name:'Endrick',             pos:'STC', age:19, nat:'🇧🇷', ca:164, hgp:false, hgc:false },
+  { num:10, name:'Neymar',              pos:'AML', age:35, nat:'🇧🇷', ca:158, hgp:false, hgc:false },
+  { num:22, name:'Sávio',              pos:'AMR', age:21, nat:'🇧🇷', ca:158, hgp:false, hgc:false },
+  { num:30, name:'Gianluca Prestianni', pos:'AML', age:20, nat:'🇦🇷', ca:152, hgp:false, hgc:false },
+  { num:9,  name:'Lionel Messi',        pos:'AML', age:39, nat:'🇦🇷', ca:186, hgp:false, hgc:false },
+  { num:16, name:'Álvaro Montoro',      pos:'AML', age:20, nat:'🇪🇸', ca:148, hgp:false, hgc:false },
+];
+
+const posCls = p => {
+  if (p === 'GK') return 'gk';
+  if (['DC','DR','DL','DM','DWB'].includes(p)) return 'def';
+  if (['MC','MR','ML','AMC','AMR','AML'].includes(p)) return 'mid';
+  return 'fwd';
+};
+
+const selected = new Set();
+
+function updateSelUI() {
+  const n = selected.size;
+  const tab = document.getElementById('sel-tab');
+  const info = document.getElementById('sel-info');
+  document.getElementById('sel-count').textContent = n;
+  tab.style.display = n > 0 ? '' : 'none';
+  info.style.display = n > 0 ? '' : 'none';
+  info.textContent = `${n} selected`;
+}
+
+function buildTable(list) {
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = '';
+  list.forEach(p => {
+    const tr = document.createElement('tr');
+    if (selected.has(p.name)) tr.classList.add('selected');
+    tr.innerHTML = `
+      <td class="c dim">${p.num}</td>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="pos-badge ${posCls(p.pos)}">${p.pos}</span></td>
+      <td class="c dim">${p.age}</td>
+      <td>${p.nat}</td>
+      <td class="c"><div class="ca-wrap"><div class="ca-bar" style="width:${Math.round(p.ca/2.2)}px"></div><span class="ca-num">${p.ca}</span></div></td>
+      <td class="c"><div class="hg-cell"><div class="hg-dot ${p.hgp?'dot-hgp':'dot-no'}"></div><span class="hg-txt ${p.hgp?'txt-hgp':'txt-no'}">${p.hgp?'✓ HGP':'—'}</span></div></td>
+      <td class="c"><div class="hg-cell"><div class="hg-dot ${p.hgc?'dot-hgc':'dot-no'}"></div><span class="hg-txt ${p.hgc?'txt-hgc':'txt-no'}">${p.hgc?'✓ HGC':'—'}</span></div></td>
+    `;
+    tr.onclick = () => {
+      if (selected.has(p.name)) { selected.delete(p.name); tr.classList.remove('selected'); }
+      else { selected.add(p.name); tr.classList.add('selected'); }
+      updateSelUI();
+    };
+    tr.ondblclick = e => { e.stopPropagation(); openPlayer(p); };
+    tb.appendChild(tr);
+  });
+}
+
+function selectNon(type) {
+  players.forEach(p => {
+    if (!p[type]) selected.add(p.name);
+  });
+  buildTable(players);
+  updateSelUI();
+}
+
+function clearSel() {
+  selected.clear();
+  buildTable(players);
+  updateSelUI();
+}
+
+/* tabs */
+document.querySelectorAll('.tab').forEach((t, i) => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const views = [players, players.filter(p=>!p.hgp), players.filter(p=>!p.hgc), players.filter(p=>selected.has(p.name))];
+    buildTable(views[i] || players);
+  });
+});
+
+/* global search */
+let blurTimer;
+function onSearch(q) {
+  const dd = document.getElementById('search-dropdown');
+  const term = q.trim().toLowerCase();
+  if (!term) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
+  const hits = players.filter(p => p.name.toLowerCase().includes(term)).slice(0, 6);
+  if (!hits.length) { dd.innerHTML = '<div class="search-result" style="color:var(--text-dim)">No players found</div>'; dd.classList.add('open'); return; }
+  dd.innerHTML = hits.map(p => `
+    <div class="search-result" onclick="jumpTo('${p.name}')">
+      <span class="pos-badge ${posCls(p.pos)}" style="flex-shrink:0">${p.pos}</span>
+      <span class="sr-name">${p.name}</span>
+      <span class="sr-meta">${p.nat} · CA ${p.ca}</span>
+    </div>
+  `).join('');
+  dd.classList.add('open');
+}
+function onSearchFocus() {
+  clearTimeout(blurTimer);
+  const v = document.getElementById('global-search').value;
+  if (v.trim()) document.getElementById('search-dropdown').classList.add('open');
+}
+function onSearchBlur() {
+  blurTimer = setTimeout(() => document.getElementById('search-dropdown').classList.remove('open'), 200);
+}
+function jumpTo(name) {
+  document.getElementById('global-search').value = '';
+  document.getElementById('search-dropdown').classList.remove('open');
+  // highlight row
+  buildTable(players);
+  const rows = document.querySelectorAll('#tbody tr');
+  rows.forEach((r, i) => {
+    if (players[i] && players[i].name === name) {
+      r.classList.add('selected');
+      r.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+}
+
+buildTable(players);
+
+/* reports toggle */
+function toggleReports() {
+  const sub = document.getElementById('reports-sub');
+  const ch = document.getElementById('reports-chevron');
+  const open = sub.style.display === 'block';
+  sub.style.display = open ? 'none' : 'block';
+  ch.textContent = open ? '▸' : '▾';
+}
+
+/* squad switcher */
+function toggleSquadDrop() {
+  document.getElementById('squad-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#squad-drop-btn') && !e.target.closest('#squad-dropdown')) {
+    document.getElementById('squad-dropdown').classList.remove('open');
+  }
+});
+function switchSquad(name, count, el) {
+  document.getElementById('squad-label').textContent = name;
+  document.getElementById('squad-player-count').textContent = '· ' + count;
+  document.getElementById('squad-dropdown').querySelectorAll('.squad-drop-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('squad-dropdown').classList.remove('open');
+  const subset = players.slice(0, count);
+  selected.clear(); updateSelUI(); buildTable(subset);
+  document.getElementById('squad-subtitle').innerHTML =
+    count + ' players &nbsp;·&nbsp; <span style="color:var(--hgp)">' +
+    subset.filter(p=>p.hgp).length + ' HGP</span> &nbsp;·&nbsp; <span style="color:var(--hgc)">' +
+    subset.filter(p=>p.hgc).length + ' HGC</span> &nbsp;·&nbsp; Tottenham Hotspur — ' + name;
+}
+/* open player modal on double-click */
+function openPlayer(p) {
+  const vc = v => {
+    if (v >= 17) return 'v20';
+    if (v >= 14) return 'v16';
+    if (v >= 11) return 'v13';
+    if (v >= 8)  return 'v10';
+    return 'v7';
+  };
+  const av = (name, val) =>
+    `<div class="attr-row"><span class="attr-name">${name}</span><span class="attr-val ${vc(val)}">${val}</span></div>`;
+
+  // mock full attrs for display
+  const technical = [
+    ['Corners',12],['Crossing',13],['Dribbling',12],['Finishing',8],['First Touch',14],
+    ['Free Kicks',9],['Heading',10],['Long Shots',8],['Marking',11],['Passing',13],
+    ['Penalty Taking',10],['Tackling',14],['Technique',13],['Long Throws',6]
+  ];
+  const mental = [
+    ['Aggression',10],['Anticipation',14],['Bravery',13],['Composure',13],
+    ['Concentration',13],['Decisions',14],['Determination',17],['Flair',9],
+    ['Leadership',11],['Off The Ball',13],['Positioning',14],['Teamwork',15],
+    ['Vision',12],['Work Rate',15]
+  ];
+  const physical = [
+    ['Acceleration',17],['Agility',14],['Balance',13],['Jumping Reach',12],
+    ['Natural Fitness',15],['Pace',16],['Stamina',16],['Strength',12]
+  ];
+  const hidden = [
+    ['Consistency',13],['Dirtiness',6],['Imp. Matches',12],['Inj. Proneness',7],['Versatility',12]
+  ];
+  const personality = [
+    ['Adaptability',14],['Ambition',15],['Loyalty',16],['Pressure',13],
+    ['Professionalism',18],['Sportsmanship',14],['Temperament',15],['Controversy',6]
+  ];
+
+  document.getElementById('pm-name').textContent = p.name;
+  document.getElementById('pm-meta').textContent = `${p.pos} · ${p.nat} · Age ${p.age}`;
+  document.getElementById('pm-ca-fill').style.width = (p.ca/2)+'%';
+  document.getElementById('pm-ca-num').textContent = p.ca;
+  document.getElementById('pm-pa-fill').style.width = '90%';
+  document.getElementById('pm-pa-num').textContent = '185';
+
+  const hgHtml = [
+    p.hgp ? '<span class="pm-hg-pill hgp">HGP</span>' : '<span class="pm-hg-pill no">Not HGP</span>',
+    p.hgc ? '<span class="pm-hg-pill hgc">HGC</span>' : '<span class="pm-hg-pill no">Not HGC</span>'
+  ].join('');
+  document.getElementById('pm-hg-pills').innerHTML = hgHtml;
+
+  document.getElementById('pm-tech').innerHTML  = technical.map(([n,v])=>av(n,v)).join('');
+  document.getElementById('pm-ment').innerHTML  = mental.map(([n,v])=>av(n,v)).join('');
+  document.getElementById('pm-phys').innerHTML  = physical.map(([n,v])=>av(n,v)).join('');
+  document.getElementById('pm-hidd').innerHTML  = hidden.map(([n,v])=>av(n,v)).join('');
+  document.getElementById('pm-pers').innerHTML  = personality.map(([n,v])=>av(n,v)).join('');
+
+  document.getElementById('player-modal-overlay').classList.add('open');
+}
+function closePlayer() {
+  document.getElementById('player-modal-overlay').classList.remove('open');
+}
+
+/* view switching */
+const navIds = { club:'nav-club', squad:'nav-squad', staff:'nav-staff', shortlist:'nav-shortlist' };
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item[id^="nav-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('nav-'+v).classList.add('active');
+}
+</script>
+
+<!-- PLAYER MODAL -->
+<div class="modal-overlay" id="player-modal-overlay" onclick="if(event.target===this)closePlayer()">
+  <div class="player-modal">
+
+    <div class="pm-topbar">
+      <div style="flex:1;">
+        <div class="pm-title" id="pm-name">Player Name</div>
+        <div class="pm-subtitle" id="pm-meta"></div>
+      </div>
+      <button class="pm-close" onclick="closePlayer()">✕</button>
+    </div>
+
+    <div class="pm-body">
+      <!-- left panel -->
+      <div class="pm-left">
+        <div class="pm-photo">👤</div>
+
+        <div class="pm-info">
+          <div class="pm-info-row"><span class="lbl">Position</span><span class="val" id="pm-pos-lbl"></span></div>
+          <div class="pm-info-row"><span class="lbl">Age</span><span class="val" id="pm-age-lbl"></span></div>
+          <div class="pm-info-row"><span class="lbl">Nationality</span><span class="val" id="pm-nat-lbl"></span></div>
+          <div class="pm-info-row"><span class="lbl">Pref. Foot</span><span class="val">Right</span></div>
+          <div class="pm-info-row"><span class="lbl">Height</span><span class="val">181 cm</span></div>
+          <div class="pm-info-row"><span class="lbl">Weight</span><span class="val">75 kg</span></div>
+          <div class="pm-info-row"><span class="lbl">Value</span><span class="val hi">£28.5M</span></div>
+          <div class="pm-info-row"><span class="lbl">Wage</span><span class="val">£42k/wk</span></div>
+          <div class="pm-info-row"><span class="lbl">Contract</span><span class="val">6/2030</span></div>
+        </div>
+
+        <div class="pm-ca-section">
+          <div class="pm-ca-label">Ability</div>
+          <div class="pm-ca-row">
+            <span class="pm-ca-name" style="color:var(--text-sec)">CA</span>
+            <div class="pm-ca-bar"><div class="pm-ca-fill ca" id="pm-ca-fill" style="width:77%"></div></div>
+            <span class="pm-ca-num" id="pm-ca-num" style="color:var(--accent-h)">154</span>
+          </div>
+          <div class="pm-ca-row">
+            <span class="pm-ca-name" style="color:var(--text-sec)">PA</span>
+            <div class="pm-ca-bar"><div class="pm-ca-fill pa" id="pm-pa-fill" style="width:90%"></div></div>
+            <span class="pm-ca-num" id="pm-pa-num" style="color:var(--hgc)">185</span>
+          </div>
+          <div style="margin-top:8px;">
+            <div class="pm-info-row"><span class="lbl">Dev Rate</span><span class="val hi">★★★★★</span></div>
+            <div class="pm-info-row"><span class="lbl">Prog. Rate</span><span class="val acc">17</span></div>
+          </div>
+        </div>
+
+        <div class="pm-hg-section">
+          <div class="pm-hg-label">Homegrown</div>
+          <div class="pm-hg-pills" id="pm-hg-pills"></div>
+        </div>
+      </div>
+
+      <!-- center attrs -->
+      <div class="pm-center">
+        <!-- row 1: Technical + Mental + Physical -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0 20px;">
+          <div>
+            <div class="attr-block-title">Technical</div>
+            <div id="pm-tech"></div>
+          </div>
+          <div>
+            <div class="attr-block-title">Mental</div>
+            <div id="pm-ment"></div>
+          </div>
+          <div>
+            <div>
+              <div class="attr-block-title">Physical</div>
+              <div id="pm-phys"></div>
+            </div>
+            <div style="margin-top:14px;">
+              <div class="attr-block-title">Hidden</div>
+              <div id="pm-hidd"></div>
+            </div>
+          </div>
+        </div>
+        <!-- row 2: Personality -->
+        <div>
+          <div class="attr-block-title">Personality</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0 20px;">
+            <div id="pm-pers" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:0 20px;"></div>
+          </div>
+        </div>
+
+        <!-- action strip -->
+        <div style="display:flex;gap:8px;padding-top:4px;border-top:1px solid var(--border);margin-top:4px;">
+          <button class="tool-btn primary">Make HGP</button>
+          <button class="tool-btn hgc-btn">Make HGC</button>
+          <div style="flex:1;"></div>
+          <button class="tool-btn">Add to Shortlist</button>
+        </div>
+      </div>
+
+      <!-- right tab nav -->
+      <div class="pm-right-tabs">
+        <div class="pm-rtab active">Profile</div>
+        <div class="pm-rtab future">Transfer</div>
+        <div class="pm-rtab future">Positions</div>
+        <div class="pm-rtab future">General Rating</div>
+        <div class="pm-rtab future">Positional Rating</div>
+        <div class="pm-rtab future">Role Rating</div>
+        <div class="pm-rtab future">Training Roles</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
