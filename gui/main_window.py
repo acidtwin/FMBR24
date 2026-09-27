@@ -367,12 +367,15 @@ class _PosBadgeDelegate(QStyledItemDelegate):
             finally:
                 painter.restore()
         except Exception:
-            pass
+            import traceback
+            traceback.print_exc()
 
     def sizeHint(self, option, index):
         try:
             return QSize(68, option.rect.height() or 28)
         except Exception:
+            import traceback
+            traceback.print_exc()
             return QSize(68, 28)
 
 
@@ -2424,6 +2427,7 @@ class MainWindow(QMainWindow):
         except Exception:
             import traceback
             traceback.print_exc()
+            self._status.showMessage('Report error — see log.')
 
     def _on_table_context_menu(self, pos):
         row = self._table.rowAt(pos.y())
