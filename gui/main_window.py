@@ -1079,7 +1079,7 @@ class MainWindow(QMainWindow):
             if key == 'squad':
                 btn = self._make_nav_btn(svg, label, self._nav_to_squad_view)
             else:
-                btn = self._make_nav_btn(svg, label, lambda k=key: self._nav_to(k))
+                btn = self._make_nav_btn(svg, label, lambda checked, k=key: self._nav_to(k))
             self._nav_btns[key] = btn
             vbox.addWidget(btn)
 
@@ -1089,7 +1089,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_section_label('SCOUTING'))
 
         self._players_nav_btn = self._make_nav_btn(
-            _SVG_SQUAD, 'Players', lambda: self._open_players_view())
+            _SVG_SQUAD, 'Players', lambda checked: self._open_players_view())
         self._players_nav_btn.setEnabled(False)
         vbox.addWidget(self._players_nav_btn)
 
@@ -1102,7 +1102,7 @@ class MainWindow(QMainWindow):
             ('best_pos',   'Best in Position'),
             ('best_role',  'Best by Role'),
         ]:
-            btn = self._make_nav_btn(_SVG_REPORT, label, lambda k=key: self._run_report(k))
+            btn = self._make_nav_btn(_SVG_REPORT, label, lambda checked, k=key: self._run_report(k))
             btn.setEnabled(False)
             self._report_btns[key] = btn
             vbox.addWidget(btn)
@@ -2039,7 +2039,7 @@ class MainWindow(QMainWindow):
             for btn in self._report_btns.values():
                 btn.setChecked(False)
 
-    def _nav_to_squad_view(self):
+    def _nav_to_squad_view(self, checked=False):
         if self._squad:
             self._populate_squad_table(self._squad)
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['squad'])
@@ -2380,28 +2380,32 @@ class MainWindow(QMainWindow):
             self._do_patch_hgc()
 
     def _run_report(self, key: str):
-        if not self._save_data:
-            return
-        if key == 'best_role':
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(self, 'Best by Role', 'Coming soon: role-based ratings.')
-            return
-        _labels = {
-            'prospects': 'Best Prospects (PA 160+)',
-            'wonderkids': 'Wonderkids (U21, PA 150+)',
-            'best_pos':   'Best in Position',
-        }
-        self._current_report_key = key
-        for k, btn in self._report_btns.items():
-            btn.setChecked(k == key)
-        for btn in self._nav_btns.values():
-            btn.setChecked(False)
-        self._report_pos_bar.setVisible(key == 'best_pos')
-        pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
-        players = self._get_report_players(key, pos)
-        self._report_title_lbl.setText(_labels.get(key, key))
-        self._populate_reports_table(players)
-        self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
+        try:
+            if not self._save_data:
+                return
+            if key == 'best_role':
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.information(self, 'Best by Role', 'Coming soon: role-based ratings.')
+                return
+            _labels = {
+                'prospects': 'Best Prospects (PA 160+)',
+                'wonderkids': 'Wonderkids (U21, PA 150+)',
+                'best_pos':   'Best in Position',
+            }
+            self._current_report_key = key
+            for k, btn in self._report_btns.items():
+                btn.setChecked(k == key)
+            for btn in self._nav_btns.values():
+                btn.setChecked(False)
+            self._report_pos_bar.setVisible(key == 'best_pos')
+            pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
+            players = self._get_report_players(key, pos)
+            self._report_title_lbl.setText(_labels.get(key, key))
+            self._populate_reports_table(players)
+            self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def _on_table_context_menu(self, pos):
         row = self._table.rowAt(pos.y())
