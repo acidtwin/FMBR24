@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-27 (session 2)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,7 +9,7 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
-All changes committed on `master`. No uncommitted work.
+All changes on `master`. One uncommitted diff (gui/main_window.py) — commit pending.
 
 ---
 
@@ -21,8 +21,9 @@ All changes committed on `master`. No uncommitted work.
 4. **Player detail** — double-click a player to open their profile modal (attributes, CA/PA bars, HGP/HGC pills, Make HGP / Make HGC actions)
 5. **Patch** — select players in squad view, hit Make HGP or Make HGC; saves to a new file via file dialog (default: `SaveName-Edited-DATE.fm`)
 6. **Save Changes** — topbar button writes current binary state to file (no patching)
-7. **Reports** — Scouting → Reports sidebar section; accordion view with Best Prospects, Wonderkids, Best in Position (position picker), Best by Role (coming soon)
+7. **Reports** — Scouting → Reports sidebar section; table view with Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (position picker), Best by Role (coming soon)
 8. **Players** — Scouting → Players sidebar section; shows all parsed players sorted by CA with name/pos/nation/min-CA/nation filters; player search results land here
+9. **Staff** — Staff sidebar entry; table of all non-player people (no CA/PA) showing Name, Nation, Age; populated on save load
 
 ---
 
@@ -34,9 +35,9 @@ All changes committed on `master`. No uncommitted work.
 |-------|-----|------|
 | 0 | `club` | Club overview (name, player/HGP/HGC counts) |
 | 1 | `squad` | Squad table (QTableWidget `_table`) |
-| 2 | `staff` | Staff (stub) |
+| 2 | `staff` | Staff table (QTableWidget `_staff_table`) — Name, Nation, Age |
 | 3 | `shortlist` | My Shortlist (stub) |
-| 4 | `reports` | Scouting Reports accordion |
+| 4 | `reports` | Scouting Reports table |
 | 5 | `players` | All Players view (QTableWidget `_players_table`) |
 
 ### Topbar
@@ -67,6 +68,7 @@ Double-click a player in Players view → navigates to their club's squad.
 
 | Symbol | Location | Purpose |
 |--------|----------|---------|
+| `_populate_staff_table` | main_window.py | Fills `_staff_table` with people who have no CA/PA |
 | `ParseWorker` | main_window.py | QThread — parses .fm archive |
 | `PatchWorker` | main_window.py | QThread — patches HGP/HGC or `mode='save_only'` |
 | `PlayerDetailDialog` | main_window.py | Player profile modal (attrs, CA/PA bars, action strip) |
@@ -87,7 +89,7 @@ Double-click a player in Players view → navigates to their club's squad.
 
 | Feature | Status |
 |---------|--------|
-| Staff view | Stub — shows placeholder text |
+| Staff view | Live — table of Name/Nation/Age, no filters yet |
 | My Shortlist | Stub — wire up Add to Shortlist from player modal |
 | Best by Role report | Coming soon — role classification not yet implemented |
 | ▶ / ▼ navigation buttons | Disabled (greyed) — no back/forward history yet |

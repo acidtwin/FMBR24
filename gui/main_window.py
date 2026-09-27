@@ -100,7 +100,7 @@ _SVG_REPORT = (
 )
 
 # Ping-pong dot counts for loading animation
-_DOT_SEQ = [1, 2, 3, 4, 3, 2]
+_DOT_SEQ = [1, 2, 3, 4, 5, 4, 3, 2]
 
 
 def _svg_icon(svg_tpl: str, color: str = '#8B96A8', size: int = 16) -> QIcon:
@@ -126,12 +126,15 @@ class _SortItem(QTableWidgetItem):
         super().__init__(text)
         self._sk = sort_key
     def __lt__(self, other):
-        a = self._sk if self._sk is not None else self.text()
-        b = other._sk if isinstance(other, _SortItem) and other._sk is not None else other.text()
         try:
-            return float(a) < float(b)
-        except (ValueError, TypeError):
-            return str(a) < str(b)
+            a = self._sk if self._sk is not None else self.text()
+            b = other._sk if isinstance(other, _SortItem) and other._sk is not None else other.text()
+            try:
+                return float(a) < float(b)
+            except (ValueError, TypeError):
+                return str(a) < str(b)
+        except Exception:
+            return False
 
 
 def _primary_pos(positions):
@@ -173,23 +176,17 @@ class ParseWorker(QThread):
                                           find_people, match_identities, find_abilities)
             from fm_editor.patch import is_homegrown
 
-            cached = load_cache(self.save_path)
-            if cached:
-                self._emit("Loaded from cache.", 100)
-                self.done.emit(cached)
-                return
-
             self._emit("Parsing archive...", 3)
             header, members, index_marker, archive_name, subdir_count, subdirs = \
                 parse_archive(self.save_path)
+            gdb_m_ref = next((m for m in members if m['name'] == 'game_db.dat'), None)
 
-            gdb_m = next((m for m in members if m['name'] == 'game_db.dat'), None)
-            if not gdb_m:
+            if not gdb_m_ref:
                 self.error.emit("game_db.dat not found in archive.")
                 return
 
-            self._emit(f"Extracting game_db.dat ({gdb_m['p'] // 1024 // 1024} MB)...", 5)
-            b = get_member(self.save_path, gdb_m)
+            self._emit(f"Extracting game_db.dat ({gdb_m_ref['p'] // 1024 // 1024} MB)...", 5)
+            b = get_member(self.save_path, gdb_m_ref)
 
             self._emit("Finding name tables...", 45)
             first_names, last_names, names_start, names_end = find_names(b)
@@ -343,42 +340,40 @@ _POS_BADGE_COLORS = {
 
 class _PosBadgeDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
-        text = index.data(Qt.ItemDataRole.DisplayRole) or ''
-        bg, fg = _POS_BADGE_COLORS.get(text, ('#2A2D35', COLORS['text_secondary']))
-
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # row background
-        if option.state & 0x0002:  # State_Selected
-            painter.fillRect(option.rect, QColor(COLORS['selection_bg']))
-        elif int(option.features) & 0x0002 if hasattr(option, 'features') else False:
-            painter.fillRect(option.rect, QColor(COLORS['elevated']))
-        else:
-            painter.fillRect(option.rect, option.backgroundBrush)
-
-        if text and text != '?':
-            font = QFont(painter.font())
-            font.setPixelSize(10)
-            font.setBold(True)
-            painter.setFont(font)
-            fm = painter.fontMetrics()
-            tw = fm.horizontalAdvance(text)
-            bw = tw + 10
-            bh = 16
-            x = option.rect.x() + 8
-            y = option.rect.y() + (option.rect.height() - bh) // 2
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(bg))
-            painter.drawRoundedRect(QRectF(x, y, bw, bh), 2, 2)
-            painter.setPen(QColor(fg))
-            painter.drawText(
-                QRectF(x, y, bw, bh), Qt.AlignmentFlag.AlignCenter, text)
-
-        painter.restore()
+        try:
+            super().paint(painter, option, index)
+            text = index.data(Qt.ItemDataRole.DisplayRole) or ''
+            if not text or text == '?':
+                return
+            bg, fg = _POS_BADGE_COLORS.get(text, ('#2A2D35', COLORS['text_secondary']))
+            painter.save()
+            try:
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                font = QFont(painter.font())
+                font.setPixelSize(10)
+                font.setBold(True)
+                painter.setFont(font)
+                fm = painter.fontMetrics()
+                tw = fm.horizontalAdvance(text)
+                bw = tw + 10
+                bh = 16
+                x = option.rect.x() + 8
+                y = option.rect.y() + (option.rect.height() - bh) // 2
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(bg))
+                painter.drawRoundedRect(QRectF(x, y, bw, bh), 2, 2)
+                painter.setPen(QColor(fg))
+                painter.drawText(QRectF(x, y, bw, bh), Qt.AlignmentFlag.AlignCenter, text)
+            finally:
+                painter.restore()
+        except Exception:
+            pass
 
     def sizeHint(self, option, index):
-        return QSize(68, option.rect.height() or 28)
+        try:
+            return QSize(68, option.rect.height() or 28)
+        except Exception:
+            return QSize(68, 28)
 
 
 class PlayerDetailDialog(QDialog):
@@ -836,6 +831,7 @@ class MainWindow(QMainWindow):
         self._status_base = ''
         self._dot_phase = -1
         self._table_mode = 'squad'
+        self._current_report_key = ''
 
         self._dot_timer = QTimer(self)
         self._dot_timer.setInterval(420)
@@ -1080,7 +1076,10 @@ class MainWindow(QMainWindow):
             ('staff',     _SVG_STAFF,     'Staff'),
             ('shortlist', _SVG_SHORTLIST, 'My Shortlist'),
         ]:
-            btn = self._make_nav_btn(svg, label, lambda k=key: self._nav_to(k))
+            if key == 'squad':
+                btn = self._make_nav_btn(svg, label, self._nav_to_squad_view)
+            else:
+                btn = self._make_nav_btn(svg, label, lambda k=key: self._nav_to(k))
             self._nav_btns[key] = btn
             vbox.addWidget(btn)
 
@@ -1114,23 +1113,219 @@ class MainWindow(QMainWindow):
     def _make_view_club(self):
         w = QWidget()
         w.setObjectName('view_club')
-        vbox = QVBoxLayout(w)
-        vbox.setContentsMargins(24, 24, 24, 24)
-        vbox.setSpacing(16)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
+        scroll.setWidget(w)
 
+        outer = QWidget()
+        outer.setObjectName('view_club_outer')
+        outer_vbox = QVBoxLayout(outer)
+        outer_vbox.setContentsMargins(0, 0, 0, 0)
+        outer_vbox.setSpacing(0)
+        outer_vbox.addWidget(scroll, 1)
+
+        vbox = QVBoxLayout(w)
+        vbox.setContentsMargins(28, 28, 28, 28)
+        vbox.setSpacing(20)
+
+        # Club name
         self._club_view_name = QLabel('No save loaded')
-        self._club_view_name.setObjectName('header')
         self._club_view_name.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
+            f"color:{COLORS['text_primary']}; font-size:26px; font-weight:bold;")
         vbox.addWidget(self._club_view_name)
 
-        self._club_view_info = QLabel(
-            'Load an FM24 save file to get started.')
+        self._club_view_info = QLabel('Load an FM24 save file to get started.')
         self._club_view_info.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:13px;")
         self._club_view_info.setWordWrap(True)
         vbox.addWidget(self._club_view_info)
+
+        # Stats cards row
+        self._club_stats_frame = QFrame()
+        self._club_stats_frame.setVisible(False)
+        stats_row = QHBoxLayout(self._club_stats_frame)
+        stats_row.setContentsMargins(0, 0, 0, 0)
+        stats_row.setSpacing(12)
+
+        def _stat_card(title, attr):
+            card = QFrame()
+            card.setStyleSheet(
+                f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
+                "border-radius:4px; }")
+            card.setFixedHeight(72)
+            cvbox = QVBoxLayout(card)
+            cvbox.setContentsMargins(14, 10, 14, 10)
+            cvbox.setSpacing(2)
+            val_lbl = QLabel('--')
+            val_lbl.setStyleSheet(
+                f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
+            ttl_lbl = QLabel(title)
+            ttl_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+            cvbox.addWidget(val_lbl)
+            cvbox.addWidget(ttl_lbl)
+            setattr(self, attr, val_lbl)
+            return card
+
+        stats_row.addWidget(_stat_card('Squad size', '_cv_squad_size'))
+        stats_row.addWidget(_stat_card('Avg CA', '_cv_avg_ca'))
+        stats_row.addWidget(_stat_card('HGP', '_cv_hgp'))
+        stats_row.addWidget(_stat_card('HGC', '_cv_hgc'))
+        stats_row.addStretch()
+        vbox.addWidget(self._club_stats_frame)
+
+        # Position breakdown
+        self._club_pos_frame = QFrame()
+        self._club_pos_frame.setVisible(False)
+        self._club_pos_frame.setStyleSheet(
+            f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
+            "border-radius:4px; }")
+        pos_vbox = QVBoxLayout(self._club_pos_frame)
+        pos_vbox.setContentsMargins(14, 12, 14, 12)
+        pos_vbox.setSpacing(6)
+        pos_hdr = QLabel('SQUAD BREAKDOWN')
+        pos_hdr.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:0.8px;")
+        pos_vbox.addWidget(pos_hdr)
+        self._club_pos_grid = QHBoxLayout()
+        self._club_pos_grid.setSpacing(24)
+        pos_vbox.addLayout(self._club_pos_grid)
+        vbox.addWidget(self._club_pos_frame)
+
+        # Top players
+        self._club_top_frame = QFrame()
+        self._club_top_frame.setVisible(False)
+        self._club_top_frame.setStyleSheet(
+            f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
+            "border-radius:4px; }")
+        top_vbox = QVBoxLayout(self._club_top_frame)
+        top_vbox.setContentsMargins(14, 12, 14, 12)
+        top_vbox.setSpacing(6)
+        top_hdr = QLabel('TOP PLAYERS BY CA')
+        top_hdr.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:0.8px;")
+        top_vbox.addWidget(top_hdr)
+        self._club_top_list = QVBoxLayout()
+        self._club_top_list.setSpacing(2)
+        top_vbox.addLayout(self._club_top_list)
+        vbox.addWidget(self._club_top_frame)
+
+        # View Squad button
+        self._club_view_squad_btn = QPushButton('View Squad')
+        self._club_view_squad_btn.setFixedHeight(34)
+        self._club_view_squad_btn.setVisible(False)
+        self._club_view_squad_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _btn_ss = (f"QPushButton {{ background:{COLORS['accent']}; color:#fff; border:none;"
+                   f"padding:6px 18px; font-weight:bold; border-radius:2px; font-size:12px; }}"
+                   f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
+                   f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}")
+        self._club_view_squad_btn.setStyleSheet(_btn_ss)
+        self._club_view_squad_btn.clicked.connect(self._nav_to_squad_view)
+        vbox.addWidget(self._club_view_squad_btn, 0, Qt.AlignmentFlag.AlignLeft)
+
         vbox.addStretch()
-        return w
+        return outer
+
+    def _update_club_view(self):
+        from fm_editor.patch import is_hgc
+        squad = self._squad
+        b = self._save_data.get('b') if self._save_data else None
+        club = self._current_club
+
+        has_club = bool(club and squad is not None)
+        self._club_stats_frame.setVisible(has_club)
+        self._club_pos_frame.setVisible(has_club)
+        self._club_top_frame.setVisible(has_club)
+        self._club_view_squad_btn.setVisible(has_club)
+
+        if not has_club:
+            return
+
+        n_hgp = sum(1 for p in squad if p.get('hgp', False))
+        n_hgc = sum(1 for p in squad
+                    if b is not None and self._club_entity_id
+                    and is_hgc(b, p, self._club_entity_id))
+        cas = [p['ca'] for p in squad if p.get('ca') is not None]
+        avg_ca = round(sum(cas) / len(cas)) if cas else 0
+
+        self._cv_squad_size.setText(str(len(squad)))
+        self._cv_avg_ca.setText(str(avg_ca))
+        self._cv_hgp.setText(str(n_hgp))
+        self._cv_hgc.setText(str(n_hgc))
+
+        # Position breakdown
+        while self._club_pos_grid.count():
+            item = self._club_pos_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        groups = {'GK': 0, 'DEF': 0, 'MID': 0, 'FWD': 0}
+        _group_map = {
+            'GK': 'GK', 'SW': 'DEF', 'DL': 'DEF', 'DC': 'DEF', 'DR': 'DEF',
+            'DM': 'DEF', 'WBL': 'DEF', 'WBR': 'DEF',
+            'ML': 'MID', 'MC': 'MID', 'MR': 'MID',
+            'AML': 'MID', 'AMC': 'MID', 'AMR': 'MID',
+            'ST': 'FWD',
+        }
+        for p in squad:
+            if p.get('positions'):
+                pos = _primary_pos(p['positions'])
+                g = _group_map.get(pos, 'MID')
+                groups[g] += 1
+
+        _group_colors = {
+            'GK': COLORS.get('warning', '#C07B2A'),
+            'DEF': COLORS.get('accent', '#3A6BA8'),
+            'MID': '#3A8A5A',
+            'FWD': '#A83A3A',
+        }
+        for g, count in groups.items():
+            grp_w = QWidget()
+            grp_layout = QVBoxLayout(grp_w)
+            grp_layout.setContentsMargins(0, 0, 0, 0)
+            grp_layout.setSpacing(2)
+            cnt_lbl = QLabel(str(count))
+            cnt_lbl.setStyleSheet(
+                f"color:{_group_colors.get(g, COLORS['text_primary'])};"
+                "font-size:20px; font-weight:bold;")
+            lbl = QLabel(g)
+            lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:10px;")
+            grp_layout.addWidget(cnt_lbl)
+            grp_layout.addWidget(lbl)
+            self._club_pos_grid.addWidget(grp_w)
+
+        # Top 5 players
+        while self._club_top_list.count():
+            item = self._club_top_list.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        top = sorted([p for p in squad if p.get('ca')], key=lambda p: -p['ca'])[:5]
+        for p in top:
+            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+            ca = p.get('ca', '?')
+            pa = p.get('pa', '?')
+            row_w = QWidget()
+            row_layout = QHBoxLayout(row_w)
+            row_layout.setContentsMargins(0, 2, 0, 2)
+            row_layout.setSpacing(8)
+            name_lbl = QLabel(p['name'])
+            name_lbl.setStyleSheet(
+                f"color:{COLORS['text_primary']}; font-size:12px;")
+            pos_lbl = QLabel(pos)
+            pos_lbl.setStyleSheet(
+                f"color:{COLORS['text_secondary']}; font-size:11px;")
+            pos_lbl.setFixedWidth(36)
+            ca_lbl = QLabel(f"CA {ca}")
+            ca_lbl.setStyleSheet(
+                f"color:{COLORS['accent']}; font-size:11px; font-weight:bold;")
+            pa_lbl = QLabel(f"PA {pa}")
+            pa_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+            row_layout.addWidget(name_lbl, 1)
+            row_layout.addWidget(pos_lbl)
+            row_layout.addWidget(ca_lbl)
+            row_layout.addWidget(pa_lbl)
+            self._club_top_list.addWidget(row_w)
 
     def _make_view_squad(self):
         w = QWidget()
@@ -1198,22 +1393,37 @@ class MainWindow(QMainWindow):
         tab_row.addStretch()
 
         # Patch action buttons in tab bar (right side)
+        _accent_ss = (
+            f"QPushButton {{ background:{COLORS['accent']}; color:#fff; border:none;"
+            f" border-radius:2px; padding:4px 14px; font-size:12px; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
+            f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}"
+            f"QPushButton:disabled {{ background:{COLORS['elevated']}; color:{COLORS['text_dim']}; }}"
+        )
+        _clear_ss = (
+            f"QPushButton {{ background:transparent; color:{COLORS['text_secondary']};"
+            f" border:1px solid {COLORS['border']}; border-radius:2px;"
+            f" padding:3px 10px; font-size:11px; }}"
+            f"QPushButton:hover {{ color:{COLORS['text_primary']}; border-color:{COLORS['border_bright']}; }}"
+            f"QPushButton:disabled {{ color:{COLORS['text_dim']}; }}"
+        )
         self._patch_hgp_btn = QPushButton('Make HGP')
-        self._patch_hgp_btn.setObjectName('accent')
-        self._patch_hgp_btn.setFixedHeight(30)
+        self._patch_hgp_btn.setStyleSheet(_accent_ss)
+        self._patch_hgp_btn.setFixedHeight(28)
         self._patch_hgp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._patch_hgp_btn.setToolTip('Set selected players as Homegrown Player')
         self._patch_hgp_btn.clicked.connect(self._do_patch_hgp)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn = QPushButton('Make HGC')
-        self._patch_hgc_btn.setObjectName('accent')
-        self._patch_hgc_btn.setFixedHeight(30)
+        self._patch_hgc_btn.setStyleSheet(_accent_ss)
+        self._patch_hgc_btn.setFixedHeight(28)
         self._patch_hgc_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._patch_hgc_btn.setToolTip('Set selected players as Homegrown at Club')
         self._patch_hgc_btn.clicked.connect(self._do_patch_hgc)
         self._patch_hgc_btn.setEnabled(False)
         self._clear_sel_btn = QPushButton('Clear')
-        self._clear_sel_btn.setFixedHeight(26)
+        self._clear_sel_btn.setStyleSheet(_clear_ss)
+        self._clear_sel_btn.setFixedHeight(24)
         self._clear_sel_btn.clicked.connect(self._table.clearSelection if hasattr(self, '_table') else lambda: None)
         self._clear_sel_btn.setEnabled(False)
 
@@ -1252,195 +1462,197 @@ class MainWindow(QMainWindow):
     def _make_view_staff(self):
         w = QWidget()
         vbox = QVBoxLayout(w)
-        vbox.setContentsMargins(24, 24, 24, 24)
-        lbl = QLabel('Staff')
-        lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
-        vbox.addWidget(lbl)
-        coming = QLabel('Coming soon — staff search and filtering by role.')
-        coming.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:13px;")
-        vbox.addWidget(coming)
-        vbox.addStretch()
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        hdr = QFrame()
+        hdr.setFixedHeight(44)
+        hdr.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        hdr_row = QHBoxLayout(hdr)
+        hdr_row.setContentsMargins(16, 0, 16, 0)
+        hdr_lbl = QLabel('Staff')
+        hdr_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+        hdr_row.addWidget(hdr_lbl)
+        hdr_row.addStretch()
+        self._staff_count_lbl = QLabel('')
+        self._staff_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
+        hdr_row.addWidget(self._staff_count_lbl)
+        vbox.addWidget(hdr)
+
+        self._staff_table = QTableWidget()
+        self._staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._staff_table.setAlternatingRowColors(True)
+        self._staff_table.verticalHeader().setVisible(False)
+        self._staff_table.setShowGrid(False)
+        self._staff_table.setSortingEnabled(True)
+        shdr = self._staff_table.horizontalHeader()
+        shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = ['Name', 'Nation', 'Age']
+        self._staff_table.setColumnCount(len(cols))
+        self._staff_table.setHorizontalHeaderLabels(cols)
+        shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for i in range(1, len(cols)):
+            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        shdr.setSectionsMovable(True)
+        shdr.setFirstSectionMovable(False)
+        vbox.addWidget(self._staff_table, 1)
         return w
+
+    _STAFF_DISPLAY_LIMIT = 2000
+
+    def _populate_staff_table(self):
+        if not self._save_data:
+            return
+        people = self._save_data.get('people', [])
+        staff = [p for p in people if 'ca' not in p]
+        display = staff[:self._STAFF_DISPLAY_LIMIT]
+        self._staff_table.setSortingEnabled(False)
+        self._staff_table.setRowCount(len(display))
+        for row, p in enumerate(display):
+            name = p.get('name', '')
+            nation_id = p.get('nation', 0)
+            nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
+            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)]
+            for col, item in enumerate(items):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._staff_table.setItem(row, col, item)
+        self._staff_table.setSortingEnabled(True)
+        total = len(staff)
+        if total > self._STAFF_DISPLAY_LIMIT:
+            self._staff_count_lbl.setText(
+                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff (filters coming)')
+        else:
+            self._staff_count_lbl.setText(f'{total:,} staff')
 
     def _make_view_shortlist(self):
-        w = QWidget()
-        self._shortlist_vbox = QVBoxLayout(w)
-        self._shortlist_vbox.setContentsMargins(24, 24, 24, 24)
-        lbl = QLabel('My Shortlist')
-        lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
-        self._shortlist_vbox.addWidget(lbl)
-        self._shortlist_empty = QLabel(
-            'Your shortlist is empty.\nDouble-click a player in Squad view and choose "Add to Shortlist".')
-        self._shortlist_empty.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:13px;")
-        self._shortlist_empty.setWordWrap(True)
-        self._shortlist_vbox.addWidget(self._shortlist_empty)
-        self._shortlist_vbox.addStretch()
-        return w
-
-    def _make_view_reports(self):
         w = QWidget()
         vbox = QVBoxLayout(w)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
         hdr = QFrame()
-        hdr.setFixedHeight(40)
+        hdr.setFixedHeight(44)
         hdr.setStyleSheet(
             f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
         hdr_row = QHBoxLayout(hdr)
         hdr_row.setContentsMargins(16, 0, 16, 0)
-        title_lbl = QLabel('Scouting Reports')
-        title_lbl.setStyleSheet(
+        hdr_lbl = QLabel('My Shortlist')
+        hdr_lbl.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
-        hdr_row.addWidget(title_lbl)
+        hdr_row.addWidget(hdr_lbl)
         hdr_row.addStretch()
+        self._shortlist_count_lbl = QLabel('0 players')
+        self._shortlist_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
+        hdr_row.addWidget(self._shortlist_count_lbl)
         vbox.addWidget(hdr)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(
-            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
-        content = QWidget()
-        content.setStyleSheet(f"background:{COLORS['window_bg']};")
-        cvbox = QVBoxLayout(content)
-        cvbox.setContentsMargins(20, 20, 20, 20)
-        cvbox.setSpacing(10)
+        self._shortlist_table = QTableWidget()
+        self._shortlist_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._shortlist_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._shortlist_table.setAlternatingRowColors(True)
+        self._shortlist_table.verticalHeader().setVisible(False)
+        self._shortlist_table.setShowGrid(False)
+        self._shortlist_table.setSortingEnabled(True)
+        shdr = self._shortlist_table.horizontalHeader()
+        shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Age', 'Nation', 'HGP']
+        self._shortlist_table.setColumnCount(len(cols))
+        self._shortlist_table.setHorizontalHeaderLabels(cols)
+        shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        shdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        for i in range(2, len(cols)):
+            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        self._shortlist_table.setColumnWidth(1, 160)
+        shdr.setSectionsMovable(True)
+        shdr.setFirstSectionMovable(False)
 
-        self._report_sections = {}
-        _section_defs = [
-            ('prospects', 'Best Prospects'),
-            ('wonderkids', 'Wonderkids'),
-            ('best_pos',   'Best in Position'),
-            ('best_role',  'Best by Role'),
-        ]
-        for key, label in _section_defs:
-            sec = self._make_report_accordion(key, label)
-            self._report_sections[key] = sec
-            cvbox.addWidget(sec['frame'])
+        self._shortlist_empty_lbl = QLabel(
+            'Your shortlist is empty.\nDouble-click a player in Squad view to add them.')
+        self._shortlist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._shortlist_empty_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:13px; padding:40px;")
+        self._shortlist_empty_lbl.setWordWrap(True)
 
-        cvbox.addStretch()
-        scroll.setWidget(content)
-        vbox.addWidget(scroll, 1)
+        self._shortlist_stack = QStackedWidget()
+        self._shortlist_stack.addWidget(self._shortlist_empty_lbl)
+        self._shortlist_stack.addWidget(self._shortlist_table)
+        vbox.addWidget(self._shortlist_stack, 1)
         return w
 
-    def _make_report_accordion(self, key, label):
-        frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background:{COLORS['surface']};"
-            f"border:1px solid {COLORS['border']}; border-radius:3px; }}")
-        fvbox = QVBoxLayout(frame)
-        fvbox.setContentsMargins(0, 0, 0, 0)
-        fvbox.setSpacing(0)
+    def _make_view_reports(self):
+        from PyQt6.QtWidgets import QComboBox
+        w = QWidget()
+        vbox = QVBoxLayout(w)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
 
-        toggle = QPushButton(f'▶  {label}')
-        toggle.setCheckable(True)
-        toggle.setFixedHeight(38)
-        toggle.setStyleSheet(f"""
-            QPushButton {{
-                background:{COLORS['elevated']}; border:none; border-radius:0;
-                color:{COLORS['text_secondary']}; font-size:12px; font-weight:500;
-                text-align:left; padding:0 14px;
-            }}
-            QPushButton:hover {{ background:{COLORS['selection_bg']}; color:{COLORS['text_primary']}; }}
-            QPushButton:checked {{ background:{COLORS['selection_bg']}; color:{COLORS['text_primary']}; }}
-        """)
-        fvbox.addWidget(toggle)
+        hdr = QFrame()
+        hdr.setFixedHeight(44)
+        hdr.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        hdr_row = QHBoxLayout(hdr)
+        hdr_row.setContentsMargins(16, 0, 16, 0)
+        hdr_row.setSpacing(12)
 
-        body = QFrame()
-        body.setVisible(False)
-        body.setStyleSheet(
-            f"QFrame {{ background:{COLORS['window_bg']}; border:none; }}")
-        body_vbox = QVBoxLayout(body)
-        body_vbox.setContentsMargins(0, 0, 0, 0)
-        body_vbox.setSpacing(0)
+        self._report_title_lbl = QLabel('Scouting Reports')
+        self._report_title_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+        hdr_row.addWidget(self._report_title_lbl)
 
-        if key == 'best_pos':
-            pos_bar = QFrame()
-            pos_bar.setStyleSheet(
-                f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-            pos_row = QHBoxLayout(pos_bar)
-            pos_row.setContentsMargins(14, 6, 14, 6)
-            pos_row.setSpacing(8)
-            pos_row.addWidget(QLabel('Position:'))
-            from PyQt6.QtWidgets import QComboBox
-            pos_combo = QComboBox()
-            pos_combo.addItems(POSITIONS)
-            pos_combo.setFixedWidth(160)
-            pos_combo.setStyleSheet(
-                f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-                f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 6px;")
-            pos_row.addWidget(pos_combo)
-            run_btn = QPushButton('Run')
-            run_btn.setFixedSize(52, 26)
-            run_btn.setObjectName('accent')
-            pos_row.addWidget(run_btn)
-            pos_row.addStretch()
-            body_vbox.addWidget(pos_bar)
-        elif key == 'best_role':
-            soon_lbl = QLabel('Coming soon — role-based ratings')
-            soon_lbl.setStyleSheet(
-                f"color:{COLORS['text_dim']}; font-size:11px; font-style:italic;"
-                "padding:12px 14px;")
-            body_vbox.addWidget(soon_lbl)
-            body_vbox.addStretch()
+        self._report_pos_bar = QWidget()
+        pos_row = QHBoxLayout(self._report_pos_bar)
+        pos_row.setContentsMargins(0, 0, 0, 0)
+        pos_row.setSpacing(6)
+        pos_lbl = QLabel('Position:')
+        pos_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        pos_row.addWidget(pos_lbl)
+        self._report_pos_combo = QComboBox()
+        self._report_pos_combo.addItems(POSITIONS)
+        self._report_pos_combo.setFixedWidth(130)
+        self._report_pos_combo.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px;")
+        self._report_pos_combo.currentTextChanged.connect(self._on_report_pos_changed)
+        pos_row.addWidget(self._report_pos_combo)
+        self._report_pos_bar.setVisible(False)
+        hdr_row.addWidget(self._report_pos_bar)
 
-        list_container = QWidget()
-        list_container.setStyleSheet("background:transparent;")
-        list_vbox = QVBoxLayout(list_container)
-        list_vbox.setContentsMargins(0, 0, 0, 0)
-        list_vbox.setSpacing(0)
-        body_vbox.addWidget(list_container)
+        hdr_row.addStretch()
+        self._report_count_lbl = QLabel('')
+        self._report_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
+        hdr_row.addWidget(self._report_count_lbl)
+        vbox.addWidget(hdr)
 
-        view_all_btn = QPushButton('View full list in Squad →')
-        view_all_btn.setVisible(False)
-        view_all_btn.setFixedHeight(32)
-        view_all_btn.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                border-top:1px solid {COLORS['border']};
-                color:{COLORS['accent']}; font-size:11px;
-                text-align:left; padding:0 14px; border-radius:0;
-            }}
-            QPushButton:hover {{ color:{COLORS['accent_hover']}; }}
-        """)
-        body_vbox.addWidget(view_all_btn)
+        self._reports_table = QTableWidget()
+        self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._reports_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._reports_table.setAlternatingRowColors(True)
+        self._reports_table.verticalHeader().setVisible(False)
+        self._reports_table.setShowGrid(False)
+        self._reports_table.setSortingEnabled(True)
 
-        fvbox.addWidget(body)
+        self._reports_pos_delegate = _PosBadgeDelegate(self._reports_table)
+        self._reports_table.setItemDelegateForColumn(1, self._reports_pos_delegate)
 
-        sec = {
-            'frame': frame,
-            'toggle': toggle,
-            'body': body,
-            'list_vbox': list_vbox,
-            'view_all_btn': view_all_btn,
-            'label': label,
-            'loaded': False,
-            'players': [],
-            'pos_combo': None,
-        }
-        if key == 'best_pos':
-            sec['pos_combo'] = pos_combo
-            run_btn.clicked.connect(lambda: self._populate_report_section(
-                'best_pos', self._get_report_players('best_pos', sec['pos_combo'].currentText())))
-            pos_combo.currentTextChanged.connect(lambda pos: self._populate_report_section(
-                'best_pos', self._get_report_players('best_pos', pos)) if sec.get('loaded') else None)
-
-        def _on_toggle(checked, k=key):
-            sec_ = self._report_sections.get(k)
-            if not sec_:
-                return
-            sec_['body'].setVisible(checked)
-            arrow = '▼' if checked else '▶'
-            sec_['toggle'].setText(f"{arrow}  {sec_['label']}")
-            if checked and not sec_.get('loaded') and k not in ('best_role',):
-                players = self._get_report_players(k)
-                self._populate_report_section(k, players)
-
-        toggle.clicked.connect(_on_toggle)
-        return sec
+        rhdr = self._reports_table.horizontalHeader()
+        rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'Club']
+        self._reports_table.setColumnCount(len(cols))
+        self._reports_table.setHorizontalHeaderLabels(cols)
+        rhdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        rhdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
+        for i in range(1, 7):
+            rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        self._reports_table.setColumnWidth(7, 160)
+        rhdr.setSectionsMovable(True)
+        rhdr.setFirstSectionMovable(False)
+        self._reports_table.doubleClicked.connect(self._on_reports_table_dblclick)
+        vbox.addWidget(self._reports_table, 1)
+        return w
 
     def _get_report_players(self, key, pos_name=None):
         if not self._save_data:
@@ -1467,106 +1679,75 @@ class MainWindow(QMainWindow):
             return []
         return c[:200]
 
-    def _populate_report_section(self, key, players):
-        sec = self._report_sections.get(key)
-        if not sec:
+    def _populate_reports_table(self, players):
+        if not self._save_data:
             return
-        list_vbox = sec['list_vbox']
-        while list_vbox.count():
-            item = list_vbox.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        clubs = self._save_data.get('clubs', []) if self._save_data else []
-        squads = self._save_data.get('squads', {}) if self._save_data else {}
+        clubs = self._save_data.get('clubs', [])
+        squads = self._save_data.get('squads', {})
         club_by_id = {c['id']: c['name'] for c in clubs}
-
-        col_ss = f"color:{COLORS['text_secondary']}; font-size:11px;"
-        val_ss = f"font-size:11px; font-weight:bold;"
-        name_ss = f"color:{COLORS['text_primary']}; font-size:11px;"
-
-        # Column header
-        hdr_row = QHBoxLayout()
-        hdr_row.setContentsMargins(14, 4, 14, 4)
-        hdr_row.setSpacing(6)
-        for hdr_text, width in [('Name', 0), ('Club', 0), ('Pos', 36), ('CA', 30), ('PA', 30), ('Age', 30)]:
-            lbl = QLabel(hdr_text)
-            lbl.setStyleSheet(
-                f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:0.5px;")
-            if width:
-                lbl.setFixedWidth(width)
-                lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            else:
-                hdr_row.addWidget(lbl, 1 if hdr_text == 'Name' else 0)
-                continue
-            hdr_row.addWidget(lbl)
-        list_vbox.addLayout(hdr_row)
-
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{COLORS['border']};")
-        list_vbox.addWidget(sep)
-
-        for i, p in enumerate(players[:50]):
-            club_id = squads.get(p['id'])
-            club_name = club_by_id.get(club_id, '') if club_id else ''
-            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+        self._reports_table.setSortingEnabled(False)
+        self._reports_table.setRowCount(len(players))
+        self._reports_table.clearSelection()
+        for row, p in enumerate(players):
+            try:
+                pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+            except Exception:
+                pos = '?'
             ca = p.get('ca')
             pa = p.get('pa')
+            dev = _progress_rate(p)
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            nation_id = p.get('nation', 0)
+            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            club_id = squads.get(p.get('id'))
+            club_name = club_by_id.get(club_id, '') if club_id else ''
+            name_item = _SortItem(p.get('name', ''))
+            name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
+            items = [
+                name_item,
+                _SortItem(pos),
+                _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
+                _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
+                _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
+                _SortItem(str(age), age),
+                _SortItem(flag),
+                _SortItem(club_name),
+            ]
+            for col, item in enumerate(items):
+                if col == 6:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
+                    f = QFont()
+                    f.setPointSize(14)
+                    item.setFont(f)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._reports_table.setItem(row, col, item)
+        self._reports_table.setSortingEnabled(True)
+        self._report_count_lbl.setText(f'{len(players):,} players')
 
-            row_w = QWidget()
-            row_w.setProperty('player_id', p.get('id', -1))
-            row_bg = COLORS['surface'] if i % 2 == 0 else COLORS['window_bg']
-            row_w.setStyleSheet(f"QWidget {{ background:{row_bg}; }}"
-                                f"QWidget:hover {{ background:{COLORS['selection_bg']}; }}")
-            row_w.setCursor(Qt.CursorShape.PointingHandCursor)
-            row_layout = QHBoxLayout(row_w)
-            row_layout.setContentsMargins(14, 5, 14, 5)
-            row_layout.setSpacing(6)
+    def _on_report_pos_changed(self, pos):
+        if self._current_report_key == 'best_pos' and self._save_data:
+            players = self._get_report_players('best_pos', pos)
+            self._populate_reports_table(players)
 
-            name_lbl = QLabel(p['name'])
-            name_lbl.setStyleSheet(name_ss)
-            row_layout.addWidget(name_lbl, 1)
-
-            club_lbl = QLabel(club_name)
-            club_lbl.setStyleSheet(col_ss)
-            row_layout.addWidget(club_lbl, 1)
-
-            for text, color in [
-                (pos, COLORS['text_secondary']),
-                (str(ca) if ca is not None else '?', COLORS['accent']),
-                (str(pa) if pa is not None else '?', '#52C287'),
-                (str(age), COLORS['text_secondary']),
-            ]:
-                lbl = QLabel(text)
-                lbl.setFixedWidth(30)
-                lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                lbl.setStyleSheet(f"color:{color}; {val_ss}")
-                row_layout.addWidget(lbl)
-
-            def _open_squad(event, player=p):
-                squads_ = self._save_data.get('squads', {})
-                clubs_ = self._save_data.get('clubs', [])
-                club_id_ = squads_.get(player['id'])
-                if not club_id_:
-                    return
-                club_ = next((c for c in clubs_ if c['id'] == club_id_), None)
-                if club_:
-                    self._show_squad(club_)
-
-            row_w.mousePressEvent = _open_squad
-            list_vbox.addWidget(row_w)
-
-        sec['loaded'] = True
-        sec['players'] = players
-        n = len(players)
-        sec['view_all_btn'].setVisible(n > 0)
-        sec['view_all_btn'].setText(f'View all {n} players in Squad →')
-        sec['view_all_btn'].clicked.disconnect() if sec.get('_view_all_connected') else None
-        sec['view_all_btn'].clicked.connect(
-            lambda: self._show_scout_results(players, sec['label']))
-        sec['_view_all_connected'] = True
+    def _on_reports_table_dblclick(self, index):
+        item = self._reports_table.item(index.row(), 0)
+        if not item:
+            return
+        pid = item.data(Qt.ItemDataRole.UserRole)
+        people = self._save_data.get('people', []) if self._save_data else []
+        p = next((x for x in people if x.get('id') == pid), None)
+        if not p:
+            return
+        squads = self._save_data.get('squads', {})
+        clubs = self._save_data.get('clubs', [])
+        club_id = squads.get(p['id'])
+        if not club_id:
+            self._status.showMessage(f"{p['name']} has no club.")
+            return
+        club = next((c for c in clubs if c['id'] == club_id), None)
+        if club:
+            self._show_squad(club)
 
     def _make_view_players(self):
         w = QWidget()
@@ -1672,7 +1853,8 @@ class MainWindow(QMainWindow):
         self._players_table.setShowGrid(False)
         self._players_table.setSortingEnabled(True)
         self._players_table.setStyleSheet(self._table.styleSheet() if hasattr(self, '_table') else '')
-        self._players_table.setItemDelegateForColumn(1, _PosBadgeDelegate(self._players_table))
+        self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
+        self._players_table.setItemDelegateForColumn(1, self._players_pos_delegate)
 
         phdr = self._players_table.horizontalHeader()
         phdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -1749,7 +1931,7 @@ class MainWindow(QMainWindow):
 
         filtered = self._all_players_cache
         if name_q:
-            filtered = [p for p in filtered if name_q in p['name'].lower()]
+            filtered = [p for p in filtered if name_q in p.get('name', '').lower()]
         if pos_q:
             pos_idx = POSITIONS.index(pos_q)
             filtered = [p for p in filtered
@@ -1785,10 +1967,10 @@ class MainWindow(QMainWindow):
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             hgp = p.get('hgp', False)
-            club_id = squads.get(p['id'])
+            club_id = squads.get(p.get('id'))
             club_name = club_by_id.get(club_id, '') if club_id else ''
 
-            name_item = _SortItem(p['name'])
+            name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             items = [
                 name_item,
@@ -1820,7 +2002,7 @@ class MainWindow(QMainWindow):
         self._players_count_lbl.setText(
             f'{total:,} players' + (f' · showing {limit:,}' if total > limit else ''))
         self._status.showMessage(
-            f"Players{suffix} — double-click to view club squad")
+            f"Players{suffix}. Double-click to view a club squad.")
 
     def _on_players_table_dblclick(self, index):
         item = self._players_table.item(index.row(), 0)
@@ -1846,14 +2028,25 @@ class MainWindow(QMainWindow):
     _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5}
 
     def _nav_to(self, key: str):
+        if key == 'staff' and not getattr(self, '_staff_loaded', False):
+            self._populate_staff_table()
+            self._staff_loaded = True
         idx = self._VIEW_INDEX.get(key, 0)
         self._main_stack.setCurrentIndex(idx)
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == key)
-        # Uncheck scout report buttons unless we're going there via report
         if key not in ('squad',):
             for btn in self._report_btns.values():
                 btn.setChecked(False)
+
+    def _nav_to_squad_view(self):
+        if self._squad:
+            self._populate_squad_table(self._squad)
+        self._main_stack.setCurrentIndex(self._VIEW_INDEX['squad'])
+        for k, btn in self._nav_btns.items():
+            btn.setChecked(k == 'squad')
+        for btn in self._report_btns.values():
+            btn.setChecked(False)
 
     # -- Table configuration --------------------------------------------------
 
@@ -1861,13 +2054,13 @@ class MainWindow(QMainWindow):
         hdr = self._table.horizontalHeader()
         hdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         _TT = {
-            'CA':  'Current Ability (1–200): overall quality right now',
-            'PA':  'Potential Ability (1–200): maximum this player can reach',
-            'Dev': 'Development rate (1–20): predicted speed of improvement\n'
+            'CA':  'Current Ability (1-200): overall quality right now',
+            'PA':  'Potential Ability (1-200): maximum this player can reach',
+            'Dev': 'Development rate (1-20): predicted speed of improvement\n'
                    'Based on ambition, professionalism and determination',
             'Age': 'Age at start of FM24 season',
-            'HGP': 'Homegrown Player (nation) — trained in England for ≥3 years between ages 15–21',
-            'HGC': 'Homegrown at Club — trained at THIS club for ≥3 years between ages 15–21',
+            'HGP': 'Homegrown Player (nation): trained in England for 3+ years between ages 15-21',
+            'HGC': 'Homegrown at Club: trained at THIS club for 3+ years between ages 15-21',
         }
         if mode == 'squad':
             cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC']
@@ -1897,6 +2090,8 @@ class MainWindow(QMainWindow):
         for i, col in enumerate(cols):
             if col in _TT:
                 self._table.horizontalHeaderItem(i).setToolTip(_TT[col])
+        hdr.setSectionsMovable(True)
+        hdr.setFirstSectionMovable(False)
         self._table_mode = mode
 
     def closeEvent(self, event):
@@ -1948,7 +2143,7 @@ class MainWindow(QMainWindow):
     def _reload_save(self):
         if not self._save_path:
             return
-        self._set_busy(True, 'Parsing save file...')
+        self._set_busy(True, 'Parsing save file')
         self._worker = ParseWorker(self._save_path)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._progress.setValue)
@@ -1967,11 +2162,16 @@ class MainWindow(QMainWindow):
             self._sb_season.setText(os.path.basename(self._save_path))
         self._club_view_name.setText('Save loaded')
         self._club_view_info.setText(
-            f"{n_clubs:,} clubs · {n_people:,} players with ability data\n\n"
-            "Search for a club or player in the top bar, or use Scouting in the sidebar.")
+            f"{n_clubs:,} clubs, {n_people:,} players with ability data. "
+            "Search for a club or player in the top bar.")
+        self._club_stats_frame.setVisible(False)
+        self._club_pos_frame.setVisible(False)
+        self._club_top_frame.setVisible(False)
+        self._club_view_squad_btn.setVisible(False)
         self._status.showMessage(
-            f"Loaded — {n_clubs:,} clubs, {n_people:,} players. "
+            f"Loaded: {n_clubs:,} clubs, {n_people:,} players. "
             "Search for a club or player to get started.")
+        self._staff_loaded = False
         self._update_ui_state()
 
     # -- Search ---------------------------------------------------------------
@@ -1989,11 +2189,11 @@ class MainWindow(QMainWindow):
         if not matches:
             people = self._save_data.get('people', [])
             player_matches = [p for p in people
-                              if p.get('id', -1) != -1 and query_l in p['name'].lower()]
+                              if p.get('id', -1) != -1 and query_l in p.get('name', '').lower()]
             if not player_matches:
                 self._status.showMessage(f"No club or player matching '{query}'.")
                 return
-            player_matches.sort(key=lambda p: p['name'])
+            player_matches.sort(key=lambda p: p.get('name', ''))
             self._show_player_results(player_matches)
             return
         if len(matches) == 1:
@@ -2007,7 +2207,7 @@ class MainWindow(QMainWindow):
         names = [c['name'] for c in matches]
         chosen, ok = QInputDialog.getItem(
             self, 'Multiple matches',
-            f'{len(matches)} clubs match "{query}" — pick one:',
+            f'{len(matches)} clubs match "{query}". Pick one:',
             names, 0, False)
         if ok:
             self._show_squad(matches[names.index(chosen)])
@@ -2043,12 +2243,8 @@ class MainWindow(QMainWindow):
         self._squad_club_label.setText(club['name'])
         # Update club view
         self._club_view_name.setText(club['name'])
-        n_hgp = sum(1 for p in squad if p.get('hgp', False))
-        n_hgc = sum(1 for p in squad
-                    if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
-        self._club_view_info.setText(
-            f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC\n\n"
-            "Navigate to Squad in the sidebar to view and edit players.")
+        self._club_view_info.setText(f"{len(squad)} players in squad")
+        self._update_club_view()
 
         self._populate_squad_table(squad)
         self._nav_to('squad')
@@ -2079,7 +2275,7 @@ class MainWindow(QMainWindow):
             dev = _progress_rate(p)
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
 
-            name_item = _SortItem(p['name'])
+            name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             hgc_text = ('HGC' if hgc else '-') if hgc is not None else '?'
 
@@ -2119,7 +2315,7 @@ class MainWindow(QMainWindow):
                     if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
         self._squad_info.setText(
             f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC")
-        self._status.showMessage(f"Showing {self._current_club['name']} — {len(squad)} players")
+        self._status.showMessage(f"Showing {self._current_club['name']}: {len(squad)} players")
 
     def _show_player_results(self, players):
         """Route player search results into the Players view."""
@@ -2183,66 +2379,29 @@ class MainWindow(QMainWindow):
                     break
             self._do_patch_hgc()
 
-    # -- Scout views ----------------------------------------------------------
-
-    def _show_scout_results(self, players, title):
-        self._configure_table_for_mode('scout')
-        self._squad = []
-        clubs = self._save_data.get('clubs', [])
-        squads = self._save_data.get('squads', {})
-        club_by_id = {c['id']: c['name'] for c in clubs}
-        self._player_results = {p['id']: p for p in players}
-        self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(players))
-        self._table.clearSelection()
-        for row, p in enumerate(players):
-            club_id = squads.get(p['id'])
-            club_name = club_by_id.get(club_id, '') if club_id else ''
-            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
-            ca = p.get('ca')
-            pa = p.get('pa')
-            dev = _progress_rate(p)
-            name_item = _SortItem(p['name'])
-            name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
-            items = [
-                name_item, _SortItem(club_name), _SortItem(pos),
-                _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
-                _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
-                _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
-                _SortItem(str(FM_SEASON_YEAR - p['birth_year']) if p.get('birth_year') else '?',
-                          FM_SEASON_YEAR - p['birth_year'] if p.get('birth_year') else 0),
-            ]
-            for col, item in enumerate(items):
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                self._table.setItem(row, col, item)
-        self._table.setSortingEnabled(True)
-        self._squad_info.setText(f"{title}  ·  {len(players)} players")
-        self._status.showMessage(f"{title} — {len(players)} players — double-click to view club squad")
-        self._nav_to('squad')
-        self._squad_club_label.setText(title)
-        self._update_ui_state()
-
     def _run_report(self, key: str):
         if not self._save_data:
             return
+        if key == 'best_role':
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, 'Best by Role', 'Coming soon: role-based ratings.')
+            return
+        _labels = {
+            'prospects': 'Best Prospects (PA 160+)',
+            'wonderkids': 'Wonderkids (U21, PA 150+)',
+            'best_pos':   'Best in Position',
+        }
+        self._current_report_key = key
         for k, btn in self._report_btns.items():
             btn.setChecked(k == key)
-        for k, btn in self._nav_btns.items():
+        for btn in self._nav_btns.values():
             btn.setChecked(False)
+        self._report_pos_bar.setVisible(key == 'best_pos')
+        pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
+        players = self._get_report_players(key, pos)
+        self._report_title_lbl.setText(_labels.get(key, key))
+        self._populate_reports_table(players)
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
-        sec = self._report_sections.get(key)
-        if not sec:
-            return
-        # Expand this section, collapse others
-        for k, s in self._report_sections.items():
-            is_target = k == key
-            s['toggle'].setChecked(is_target)
-            s['body'].setVisible(is_target)
-            arrow = '▼' if is_target else '▶'
-            s['toggle'].setText(f"{arrow}  {s['label']}")
-        if key != 'best_role':
-            players = self._get_report_players(key)
-            self._populate_report_section(key, players)
 
     def _on_table_context_menu(self, pos):
         row = self._table.rowAt(pos.y())
@@ -2321,7 +2480,7 @@ class MainWindow(QMainWindow):
         out_path = self._confirm_patch_dialog(people_to_patch, 'HGP')
         if not out_path:
             return
-        self._set_busy(True, 'Patching HGP and writing...')
+        self._set_busy(True, 'Patching HGP and writing')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch, mode='hgp')
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._progress.setValue)
@@ -2347,7 +2506,7 @@ class MainWindow(QMainWindow):
         out_path = self._confirm_patch_dialog(people_to_patch, 'HGC')
         if not out_path:
             return
-        self._set_busy(True, 'Patching HGC and writing...')
+        self._set_busy(True, 'Patching HGC and writing')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch,
                                    mode='hgc', club_entity_id=self._club_entity_id)
         self._worker.progress.connect(self._on_progress)
@@ -2372,7 +2531,7 @@ class MainWindow(QMainWindow):
             f"Patch {len(people_to_patch)} player(s) as {label}?\n\n"
             f"{names}\n\n"
             f"Output: {os.path.basename(out_path)}\n\n"
-            "This may take 30–60 seconds to recompress.")
+            "This may take 30-60 seconds to recompress.")
         msg.setStandardButtons(
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
         return out_path if msg.exec() == QMessageBox.StandardButton.Ok else ''
@@ -2398,7 +2557,7 @@ class MainWindow(QMainWindow):
             self, 'Save Changes', default_name, 'FM Save Files (*.fm)')
         if not out_path:
             return
-        self._set_busy(True, 'Writing save file...')
+        self._set_busy(True, 'Writing save file')
         self._worker = PatchWorker(self._save_data, out_path, [], mode='save_only')
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._progress.setValue)
@@ -2413,9 +2572,9 @@ class MainWindow(QMainWindow):
         self._status.showMessage(self._status_base + '.' * _DOT_SEQ[self._dot_phase])
 
     def _on_progress(self, msg):
-        self._status_base = msg
+        self._status_base = msg.rstrip('.')
         self._dot_phase = -1
-        self._status.showMessage(msg)
+        self._status.showMessage(self._status_base)
 
     def _on_error(self, msg):
         self._set_busy(False)
@@ -2427,6 +2586,7 @@ class MainWindow(QMainWindow):
             self._progress.setValue(0)
             self._dot_phase = -1
             self._status_base = msg or self._status_base
+            self._status.showMessage(self._status_base)
             self._dot_timer.start()
         else:
             self._dot_timer.stop()
