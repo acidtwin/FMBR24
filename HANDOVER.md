@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-27 (session 2)
+**Last updated:** 2026-09-28 (session 3)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,7 +9,21 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
-All changes on `master`. One uncommitted diff (gui/main_window.py) — commit pending.
+All changes on `master`. Latest commit: `fded9c2` + freeze fix (uncommitted, applied this session).
+
+### Session 3 fixes (2026-09-28)
+
+**Reports CTD — fixed** (commit `fded9c2`):
+- Root cause: `clicked(bool)` in PyQt6 6.11 passes checked state as positional arg, overriding lambda default `lambda k=key:` → `_run_report(True)` → `TypeError` → `qFatal()` → crash
+- Fix: all sidebar lambdas changed to `lambda checked, k=key:` and `_nav_to_squad_view(self, checked=False)`
+
+**Crash logging — fixed** (commit `338e1dc`):
+- `Terminal=false` in desktop shortcut killed all stderr; added `sys.stderr` + `faulthandler` redirect to `/tmp/fm_editor_crash.log` in `main.py`
+
+**Report switching freeze — fixed (this session, uncommitted)**:
+- Root cause: `QHeaderView.ResizeMode.ResizeToContents` on cols 1-6 triggered O(n²) text measurement on every `setItem()` across 200 rows × 6 cols
+- Fix: switched cols 1-6 to `Interactive` with preset fixed widths (Pos=55, CA/PA/Dev=45, Age=40, Nation=50)
+- Also added `QApplication.processEvents()` after button setChecked calls so buttons repaint before populate (eliminates double-glow during any remaining latency)
 
 ---
 

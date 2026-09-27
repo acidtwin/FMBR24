@@ -1646,7 +1646,10 @@ class MainWindow(QMainWindow):
         rhdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         rhdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
         for i in range(1, 7):
-            rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        _col_widths = {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50}
+        for i, w in _col_widths.items():
+            self._reports_table.setColumnWidth(i, w)
         self._reports_table.setColumnWidth(7, 160)
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
@@ -2398,6 +2401,8 @@ class MainWindow(QMainWindow):
             for btn in self._nav_btns.values():
                 btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
+            from PyQt6.QtWidgets import QApplication
+            QApplication.processEvents()
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
             players = self._get_report_players(key, pos)
             self._report_title_lbl.setText(_labels.get(key, key))

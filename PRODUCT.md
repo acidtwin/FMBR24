@@ -37,7 +37,8 @@ The only free, open, Linux-native FM24 homegrown editor that shows you the squad
 - Detect and patch HGC (Homegrown at Club): training record `b10=0x01, b11=0x48`, bytes 0–3 = club entity ID
 - `mode='save_only'` write: archive write without patching, for Save Changes flow
 - Caching: parse results keyed by file mtime — instant on reload
-- Scouting views: Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (by CA), All Players (filtered)
+- Scouting reports: Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (by CA), Best by Role (stub)
+- All Players view: all parsed players, filterable by name/position/min-CA/nation, double-click navigates to club squad
 - Staff view: all non-player people (no CA/PA) — Name, Nation, Age table; populated on load
 - Platform: Linux desktop, PyQt6; FM24-skin UI with QSS theming
 
