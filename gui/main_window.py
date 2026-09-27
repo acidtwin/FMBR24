@@ -1495,7 +1495,9 @@ class MainWindow(QMainWindow):
         self._staff_table.setHorizontalHeaderLabels(cols)
         shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i in range(1, len(cols)):
-            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        self._staff_table.setColumnWidth(1, 50)
+        self._staff_table.setColumnWidth(2, 40)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         vbox.addWidget(self._staff_table, 1)
@@ -1565,8 +1567,10 @@ class MainWindow(QMainWindow):
         shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         shdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         for i in range(2, len(cols)):
-            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         self._shortlist_table.setColumnWidth(1, 160)
+        for i, cw in {2: 55, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
+            self._shortlist_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
 
@@ -1868,7 +1872,9 @@ class MainWindow(QMainWindow):
         phdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Interactive)
         self._players_table.setColumnWidth(8, 160)
         for i in range(1, 8):
-            phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        for i, cw in {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
+            self._players_table.setColumnWidth(i, cw)
 
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         vbox.addWidget(self._players_table)
@@ -2038,6 +2044,7 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(idx)
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == key)
+        self._players_nav_btn.setChecked(False)
         if key not in ('squad',):
             for btn in self._report_btns.values():
                 btn.setChecked(False)
@@ -2048,6 +2055,7 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['squad'])
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == 'squad')
+        self._players_nav_btn.setChecked(False)
         for btn in self._report_btns.values():
             btn.setChecked(False)
 
@@ -2400,6 +2408,7 @@ class MainWindow(QMainWindow):
                 btn.setChecked(k == key)
             for btn in self._nav_btns.values():
                 btn.setChecked(False)
+            self._players_nav_btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
             players = self._get_report_players(key, pos)
