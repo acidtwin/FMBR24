@@ -2079,7 +2079,9 @@ class MainWindow(QMainWindow):
             self._table.setHorizontalHeaderLabels(cols)
             hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             for i in range(1, len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+            for i, cw in {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45}.items():
+                self._table.setColumnWidth(i, cw)
         elif mode == 'scout':
             cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
             self._table.setColumnCount(len(cols))
@@ -2087,8 +2089,10 @@ class MainWindow(QMainWindow):
             hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
             for i in range(2, len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
             self._table.setColumnWidth(1, 180)
+            for i, cw in {2: 55, 3: 45, 4: 45, 5: 45, 6: 40}.items():
+                self._table.setColumnWidth(i, cw)
         else:  # player
             cols = ['Name', 'Club', 'Nation', 'Born', 'HGP']
             self._table.setColumnCount(len(cols))
@@ -2096,8 +2100,10 @@ class MainWindow(QMainWindow):
             hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
             for i in range(2, len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
             self._table.setColumnWidth(1, 200)
+            for i, cw in {2: 50, 3: 50, 4: 45}.items():
+                self._table.setColumnWidth(i, cw)
         for i, col in enumerate(cols):
             if col in _TT:
                 self._table.horizontalHeaderItem(i).setToolTip(_TT[col])
