@@ -32,12 +32,13 @@ The only free, open, Linux-native FM24 homegrown editor that shows you the squad
 ## Capabilities and Constraints
 
 - Read and write FMF (FM archive format) files: zstd-compressed members, binary index
-- Parse game_db.dat: name pools, club structs, squad membership, player registration records
-- Detect homegrown status: presence of England secondary nation qual record (n=0x8b, b10=0x08, b11=0x46)
-- Patch in-place (no byte insertion, no file-size change) to avoid breaking internal structure
-- Must support: file picker for any .fm save, team search, per-player HGP toggle, write to new file
-- Caching: save parse results to disk keyed by file mtime to avoid re-parsing every run
-- Platform: Linux desktop, PyQt6
+- Parse game_db.dat: name pools, club structs, squad membership, player registration records, ability blocks, personality bytes
+- Detect and patch HGP (Homegrown Player / nation): secondary nation qual record `b10=0x08, b11=0x46`
+- Detect and patch HGC (Homegrown at Club): training record `b10=0x01, b11=0x48`, bytes 0–3 = club entity ID
+- `mode='save_only'` write: archive write without patching, for Save Changes flow
+- Caching: parse results keyed by file mtime — instant on reload
+- Scouting views: Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (by CA), All Players (filtered)
+- Platform: Linux desktop, PyQt6; FM24-skin UI with QSS theming
 
 ## Evidence on Hand
 

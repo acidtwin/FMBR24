@@ -921,6 +921,7 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_staff())      # 2
         self._main_stack.addWidget(self._make_view_shortlist())  # 3
         self._main_stack.addWidget(self._make_view_reports())    # 4
+        self._main_stack.addWidget(self._make_view_players())    # 5
         shell_hbox.addWidget(self._main_stack)
         vbox.addWidget(shell)
 
@@ -1087,6 +1088,12 @@ class MainWindow(QMainWindow):
 
         # Scouting
         vbox.addWidget(self._make_section_label('SCOUTING'))
+
+        self._players_nav_btn = self._make_nav_btn(
+            _SVG_SQUAD, 'Players', lambda: self._open_players_view())
+        self._players_nav_btn.setEnabled(False)
+        vbox.addWidget(self._players_nav_btn)
+
         vbox.addWidget(self._make_section_label('Reports'))
 
         self._report_btns = {}
@@ -1562,9 +1569,282 @@ class MainWindow(QMainWindow):
             lambda: self._show_scout_results(players, sec['label']))
         sec['_view_all_connected'] = True
 
+    def _make_view_players(self):
+        w = QWidget()
+        vbox = QVBoxLayout(w)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        # Header / filter strip
+        hdr = QFrame()
+        hdr.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        hdr_vbox = QVBoxLayout(hdr)
+        hdr_vbox.setContentsMargins(0, 0, 0, 0)
+        hdr_vbox.setSpacing(0)
+
+        # Title row
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(16, 10, 16, 6)
+        title_lbl = QLabel('Players')
+        title_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+        title_row.addWidget(title_lbl)
+        title_row.addStretch()
+        self._players_count_lbl = QLabel('')
+        self._players_count_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:11px;")
+        title_row.addWidget(self._players_count_lbl)
+        hdr_vbox.addLayout(title_row)
+
+        # Filter row
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(16, 0, 16, 10)
+        filter_row.setSpacing(8)
+
+        self._players_name_filter = QLineEdit()
+        self._players_name_filter.setPlaceholderText('Filter by name...')
+        self._players_name_filter.setFixedHeight(26)
+        self._players_name_filter.setMaximumWidth(220)
+        self._players_name_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 8px; font-size:11px;")
+        self._players_name_filter.returnPressed.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_name_filter)
+
+        self._players_pos_filter = QComboBox()
+        self._players_pos_filter.addItem('All Positions')
+        self._players_pos_filter.addItems(POSITIONS)
+        self._players_pos_filter.setFixedHeight(26)
+        self._players_pos_filter.setFixedWidth(130)
+        self._players_pos_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
+        self._players_pos_filter.currentIndexChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_pos_filter)
+
+        min_ca_lbl = QLabel('Min CA:')
+        min_ca_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(min_ca_lbl)
+        self._players_ca_filter = QLineEdit()
+        self._players_ca_filter.setPlaceholderText('0')
+        self._players_ca_filter.setFixedSize(48, 26)
+        self._players_ca_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 6px; font-size:11px;")
+        self._players_ca_filter.returnPressed.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_ca_filter)
+
+        nation_lbl = QLabel('Nation:')
+        nation_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(nation_lbl)
+        self._players_nation_filter = QComboBox()
+        self._players_nation_filter.addItem('All Nations')
+        for nid in sorted(NATIONS, key=lambda k: NATIONS[k]):
+            self._players_nation_filter.addItem(NATIONS[nid], nid)
+        self._players_nation_filter.setFixedHeight(26)
+        self._players_nation_filter.setFixedWidth(120)
+        self._players_nation_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
+        self._players_nation_filter.currentIndexChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_nation_filter)
+
+        filter_row.addStretch()
+
+        clear_btn = QPushButton('Clear')
+        clear_btn.setFixedSize(52, 26)
+        clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px;")
+        clear_btn.clicked.connect(self._clear_players_filter)
+        filter_row.addWidget(clear_btn)
+
+        hdr_vbox.addLayout(filter_row)
+        vbox.addWidget(hdr)
+
+        # Players table
+        self._players_table = QTableWidget()
+        self._players_table.setColumnCount(9)
+        self._players_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._players_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._players_table.setAlternatingRowColors(True)
+        self._players_table.verticalHeader().setVisible(False)
+        self._players_table.setShowGrid(False)
+        self._players_table.setSortingEnabled(True)
+        self._players_table.setStyleSheet(self._table.styleSheet() if hasattr(self, '_table') else '')
+        self._players_table.setItemDelegateForColumn(1, _PosBadgeDelegate(self._players_table))
+
+        phdr = self._players_table.horizontalHeader()
+        phdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club']
+        self._players_table.setColumnCount(len(cols))
+        self._players_table.setHorizontalHeaderLabels(cols)
+        phdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        phdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Interactive)
+        self._players_table.setColumnWidth(8, 160)
+        for i in range(1, 8):
+            phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
+        self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
+        vbox.addWidget(self._players_table)
+
+        self._all_players_cache = []
+        return w
+
+    def _open_players_view(self, players=None, highlight_name=None):
+        """Navigate to Players view. If players list given, show those; else load all."""
+        self._main_stack.setCurrentIndex(self._VIEW_INDEX['players'])
+        for btn in self._nav_btns.values():
+            btn.setChecked(False)
+        for btn in self._report_btns.values():
+            btn.setChecked(False)
+        self._players_nav_btn.setChecked(True)
+
+        if players is not None:
+            self._all_players_cache = players
+        elif not self._all_players_cache and self._save_data:
+            people = self._save_data.get('people', [])
+            self._all_players_cache = sorted(
+                [p for p in people if p.get('ca') is not None],
+                key=lambda p: -(p.get('ca') or 0))
+
+        self._clear_players_filter(silent=True)
+        self._populate_players_table(self._all_players_cache)
+
+        if highlight_name:
+            for r in range(self._players_table.rowCount()):
+                item = self._players_table.item(r, 0)
+                if item and item.text() == highlight_name:
+                    self._players_table.scrollToItem(item)
+                    self._players_table.selectRow(r)
+                    break
+
+    def _clear_players_filter(self, silent=False):
+        self._players_name_filter.blockSignals(True)
+        self._players_pos_filter.blockSignals(True)
+        self._players_ca_filter.blockSignals(True)
+        self._players_nation_filter.blockSignals(True)
+        self._players_name_filter.clear()
+        self._players_pos_filter.setCurrentIndex(0)
+        self._players_ca_filter.clear()
+        self._players_nation_filter.setCurrentIndex(0)
+        self._players_name_filter.blockSignals(False)
+        self._players_pos_filter.blockSignals(False)
+        self._players_ca_filter.blockSignals(False)
+        self._players_nation_filter.blockSignals(False)
+
+    def _apply_players_filter(self):
+        if not self._all_players_cache:
+            return
+        name_q = self._players_name_filter.text().strip().lower()
+        pos_q = self._players_pos_filter.currentText()
+        if pos_q == 'All Positions':
+            pos_q = ''
+        try:
+            min_ca = int(self._players_ca_filter.text().strip() or '0')
+        except ValueError:
+            min_ca = 0
+        nation_idx = self._players_nation_filter.currentIndex()
+        nation_id = self._players_nation_filter.itemData(nation_idx) if nation_idx > 0 else None
+
+        filtered = self._all_players_cache
+        if name_q:
+            filtered = [p for p in filtered if name_q in p['name'].lower()]
+        if pos_q:
+            pos_idx = POSITIONS.index(pos_q)
+            filtered = [p for p in filtered
+                        if p.get('positions') and p['positions'][pos_idx] == max(p['positions'])]
+        if min_ca:
+            filtered = [p for p in filtered if (p.get('ca') or 0) >= min_ca]
+        if nation_id is not None:
+            filtered = [p for p in filtered if p.get('nation') == nation_id]
+
+        self._populate_players_table(filtered)
+
+    def _populate_players_table(self, players):
+        if not self._save_data:
+            return
+        clubs = self._save_data.get('clubs', [])
+        squads = self._save_data.get('squads', {})
+        club_by_id = {c['id']: c['name'] for c in clubs}
+
+        limit = 3000
+        display = players[:limit]
+        total = len(players)
+
+        self._players_table.setSortingEnabled(False)
+        self._players_table.setRowCount(len(display))
+        self._players_table.clearSelection()
+
+        for row, p in enumerate(display):
+            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+            ca = p.get('ca')
+            pa = p.get('pa')
+            dev = _progress_rate(p)
+            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            nation_id = p.get('nation', 0)
+            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            hgp = p.get('hgp', False)
+            club_id = squads.get(p['id'])
+            club_name = club_by_id.get(club_id, '') if club_id else ''
+
+            name_item = _SortItem(p['name'])
+            name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
+            items = [
+                name_item,
+                _SortItem(pos),
+                _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
+                _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
+                _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
+                _SortItem(str(age), age),
+                _SortItem(flag),
+                _SortItem('HGP' if hgp else '-'),
+                _SortItem(club_name),
+            ]
+            for col, item in enumerate(items):
+                if col == 6:
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
+                    f = QFont()
+                    f.setPointSize(14)
+                    item.setFont(f)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                if col == 7:
+                    item.setForeground(QColor(COLORS['hgp_green'] if hgp else COLORS['text_dim']))
+                self._players_table.setItem(row, col, item)
+
+        self._players_table.setSortingEnabled(True)
+        shown = len(display)
+        suffix = f' (showing {shown:,} of {total:,})' if total > limit else f' ({total:,})'
+        self._players_count_lbl.setText(
+            f'{total:,} players' + (f' · showing {limit:,}' if total > limit else ''))
+        self._status.showMessage(
+            f"Players{suffix} — double-click to view club squad")
+
+    def _on_players_table_dblclick(self, index):
+        item = self._players_table.item(index.row(), 0)
+        if not item:
+            return
+        pid = item.data(Qt.ItemDataRole.UserRole)
+        people = self._save_data.get('people', []) if self._save_data else []
+        p = next((x for x in people if x.get('id') == pid), None)
+        if not p:
+            return
+        squads = self._save_data.get('squads', {})
+        clubs = self._save_data.get('clubs', [])
+        club_id = squads.get(p['id'])
+        if not club_id:
+            self._status.showMessage(f"{p['name']} has no club.")
+            return
+        club = next((c for c in clubs if c['id'] == club_id), None)
+        if club:
+            self._show_squad(club)
+
     # -- Navigation -----------------------------------------------------------
 
-    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4}
+    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5}
 
     def _nav_to(self, key: str):
         idx = self._VIEW_INDEX.get(key, 0)
@@ -1638,6 +1918,7 @@ class MainWindow(QMainWindow):
             'ca' in p for p in self._save_data.get('people', []))
         for btn in self._report_btns.values():
             btn.setEnabled(has_abilities)
+        self._players_nav_btn.setEnabled(has_abilities)
         self._table.setEnabled(has_data)
         has_squad = bool(self._squad) and self._table_mode == 'squad'
         has_b = has_data and 'b' in self._save_data
@@ -1679,6 +1960,7 @@ class MainWindow(QMainWindow):
     def _on_parse_done(self, result):
         self._save_data = result
         self._save_data['save_path'] = self._save_path
+        self._all_players_cache = []  # invalidate on new load
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
         if self._save_path:
@@ -1835,38 +2117,11 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"Showing {self._current_club['name']} — {len(squad)} players")
 
     def _show_player_results(self, players):
-        self._configure_table_for_mode('player')
-        self._squad = []
-        clubs = self._save_data.get('clubs', [])
-        squads = self._save_data.get('squads', {})
-        club_by_id = {c['id']: c['name'] for c in clubs}
-        self._player_results = {p['id']: p for p in players}
-        self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(players))
-        self._table.clearSelection()
-        for row, p in enumerate(players):
-            club_id = squads.get(p['id'])
-            club_name = club_by_id.get(club_id, '') if club_id else ''
-            nation_name = NATIONS.get(p['nation'], f"n={p['nation']}")
-            hgp = p.get('hgp', False)
-            name_item = _SortItem(p['name'])
-            name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
-            items = [
-                name_item, _SortItem(club_name), _SortItem(nation_name),
-                _SortItem(str(p.get('birth_year', '?')), p.get('birth_year', 0)),
-                _SortItem('HGP' if hgp else '-'),
-            ]
-            for col, item in enumerate(items):
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 4:
-                    item.setForeground(QColor(COLORS['hgp_green'] if hgp
-                                              else COLORS['text_dim']))
-                self._table.setItem(row, col, item)
-        self._table.setSortingEnabled(True)
-        self._squad_info.setText(f"{len(players)} players found")
-        self._status.showMessage(f"{len(players)} players — double-click to view club squad")
-        self._nav_to('squad')
-        self._update_ui_state()
+        """Route player search results into the Players view."""
+        highlight = players[0]['name'] if len(players) == 1 else None
+        self._open_players_view(players=players, highlight_name=highlight)
+        if len(players) == 1:
+            self._players_name_filter.setText(players[0]['name'])
 
     def _on_row_double_clicked(self, index):
         if self._table_mode == 'squad':
