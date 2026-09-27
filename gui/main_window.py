@@ -272,7 +272,10 @@ class PatchWorker(QThread):
             self.pct.emit(10)
 
             members = self.save_data['members']
-            gdb_m = next(m for m in members if m['name'] == 'game_db.dat')
+            gdb_m = next((m for m in members if m['name'] == 'game_db.dat'), None)
+            if gdb_m is None:
+                self.error.emit('game_db.dat member not found in archive')
+                return
             gdb_m['p'] = len(b)
 
             def _cb(msg, p):
@@ -1944,10 +1947,11 @@ class MainWindow(QMainWindow):
         filtered = self._all_players_cache
         if name_q:
             filtered = [p for p in filtered if name_q in p.get('name', '').lower()]
-        if pos_q:
+        if pos_q and pos_q in POSITIONS:
             pos_idx = POSITIONS.index(pos_q)
             filtered = [p for p in filtered
-                        if p.get('positions') and p['positions'][pos_idx] == max(p['positions'])]
+                        if p.get('positions') and pos_idx < len(p['positions'])
+                        and p['positions'][pos_idx] == max(p['positions'])]
         if min_ca:
             filtered = [p for p in filtered if (p.get('ca') or 0) >= min_ca]
         if nation_id is not None:
