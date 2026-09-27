@@ -255,7 +255,9 @@ class PatchWorker(QThread):
             count = 0
             n = len(self.people_to_patch)
 
-            if self.mode == 'hgp':
+            if self.mode == 'save_only':
+                pass  # just write current b state
+            elif self.mode == 'hgp':
                 for i, person in enumerate(self.people_to_patch):
                     if patch_to_homegrown(b, person):
                         count += 1
@@ -296,15 +298,25 @@ class PatchWorker(QThread):
 
 # -- Player detail modal -------------------------------------------------------
 
+def _attr_val_color(v: int) -> str:
+    if v >= 17: return '#FFD700'
+    if v >= 16: return '#52C287'
+    if v >= 13: return COLORS['accent_hover']
+    if v >= 10: return COLORS['text_secondary']
+    if v >= 7:  return COLORS['text_primary']
+    return COLORS['non_hgp_red']
+
+
 class PlayerDetailDialog(QDialog):
     def __init__(self, person, save_data, club_entity_id, parent=None):
         super().__init__(parent)
         self.setWindowTitle(person['name'])
-        self.setMinimumSize(700, 520)
-        self.resize(780, 580)
+        self.setMinimumSize(860, 560)
+        self.resize(920, 640)
         self._person = person
         self._save_data = save_data
         self._club_entity_id = club_entity_id
+        self._patch_mode = None
         self._build()
 
     def _build(self):
@@ -312,261 +324,411 @@ class PlayerDetailDialog(QDialog):
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc as _is_hgc
 
+        nation_name = NATIONS.get(p['nation'], f"n={p['nation']}")
+        age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+        pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+        ca = p.get('ca')
+        pa = p.get('pa')
+        raw = p.get('raw_attrs', [])
+        personality = p.get('personality', [])
+        hgp = p.get('hgp', False)
+        hgc = _is_hgc(b, p, self._club_entity_id) if (b and self._club_entity_id) else None
+        dev = _progress_rate(p)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Modal top bar
+        # ── Top bar ─────────────────────────────────────────────────────────
         topbar = QFrame()
         topbar.setFixedHeight(40)
-        topbar.setStyleSheet(f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        topbar.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
         tb_row = QHBoxLayout(topbar)
-        tb_row.setContentsMargins(14, 0, 12, 0)
+        tb_row.setContentsMargins(14, 0, 10, 0)
+        tb_row.setSpacing(8)
+
+        title_wrap = QWidget()
+        title_wrap.setStyleSheet("background:transparent;")
+        tw_vbox = QVBoxLayout(title_wrap)
+        tw_vbox.setContentsMargins(0, 4, 0, 4)
+        tw_vbox.setSpacing(0)
         name_lbl = QLabel(p['name'])
-        name_lbl.setStyleSheet(f"color:{COLORS['text_primary']}; font-size:14px; font-weight:bold;")
-        tb_row.addWidget(name_lbl)
-        tb_row.addStretch()
-        close_btn = QPushButton('Close')
-        close_btn.setFixedHeight(26)
+        name_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:14px; font-weight:bold;")
+        sub_lbl = QLabel(f"{pos}  ·  {nation_name}  ·  Age {age}")
+        sub_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        tw_vbox.addWidget(name_lbl)
+        tw_vbox.addWidget(sub_lbl)
+        tb_row.addWidget(title_wrap, 1)
+
+        close_btn = QPushButton('✕')
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: none; border: none;
+                color: {COLORS['text_dim']}; font-size: 16px; border-radius: 2px;
+            }}
+            QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_primary']}; }}
+        """)
         close_btn.clicked.connect(self.accept)
         tb_row.addWidget(close_btn)
         layout.addWidget(topbar)
 
-        # Body
+        # ── Body (left | center | right) ────────────────────────────────────
         body = QWidget()
         body.setStyleSheet(f"background:{COLORS['window_bg']};")
-        body_row = QHBoxLayout(body)
-        body_row.setContentsMargins(16, 16, 16, 16)
-        body_row.setSpacing(16)
+        body_hbox = QHBoxLayout(body)
+        body_hbox.setContentsMargins(0, 0, 0, 0)
+        body_hbox.setSpacing(0)
 
-        # Left panel: personal info + CA/PA + HGP/HGC
+        # ── Left panel (190px) ───────────────────────────────────────────────
         left = QFrame()
-        left.setFixedWidth(200)
-        left.setStyleSheet(f"background:{COLORS['surface']}; border:1px solid {COLORS['border']}; border-radius:3px;")
+        left.setFixedWidth(190)
+        left.setStyleSheet(
+            f"background:{COLORS['surface']}; border-right:1px solid {COLORS['border']};")
         left_vbox = QVBoxLayout(left)
-        left_vbox.setContentsMargins(12, 14, 12, 14)
-        left_vbox.setSpacing(6)
+        left_vbox.setContentsMargins(0, 0, 0, 0)
+        left_vbox.setSpacing(0)
 
-        nation_name = NATIONS.get(p['nation'], f"n={p['nation']}")
-        age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-        pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+        # Photo placeholder
+        photo = QFrame()
+        photo.setFixedSize(190, 140)
+        photo.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        photo_inner = QVBoxLayout(photo)
+        photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        photo_icon = QLabel()
+        photo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        photo_icon.setPixmap(_svg_icon(_SVG_STAFF, COLORS['text_dim'], 56).pixmap(56, 56))
+        photo_inner.addWidget(photo_icon)
+        left_vbox.addWidget(photo)
 
-        for txt, color in [
-            (pos, COLORS['text_secondary']),
-            (nation_name, COLORS['text_secondary']),
-            (f"Age {age}", COLORS['text_dim']),
-            (f"Born {p.get('birth_year', '?')}", COLORS['text_dim']),
-        ]:
-            lbl = QLabel(txt)
-            lbl.setStyleSheet(f"color:{color}; font-size:12px;")
-            left_vbox.addWidget(lbl)
+        # Info rows
+        info_frame = QFrame()
+        info_frame.setStyleSheet(
+            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
+        info_vbox = QVBoxLayout(info_frame)
+        info_vbox.setContentsMargins(12, 8, 12, 8)
+        info_vbox.setSpacing(0)
 
-        left_vbox.addSpacing(8)
-
-        # CA / PA bars
-        ca = p.get('ca')
-        pa = p.get('pa')
-        for label, val, color in [
-            ('CA', ca, COLORS['accent_hover']),
-            ('PA', pa, COLORS['hgp_green']),
-        ]:
+        def _info_row(label: str, value: str, val_color: str = None):
             row = QHBoxLayout()
+            row.setContentsMargins(0, 3, 0, 3)
             lbl = QLabel(label)
-            lbl.setFixedWidth(26)
-            lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-            val_lbl = QLabel(str(val) if val else '?')
-            val_lbl.setFixedWidth(30)
-            val_lbl.setStyleSheet(f"color:{color}; font-size:11px; font-weight:bold;")
-            bar = QFrame()
-            bar.setFixedHeight(4)
-            pct = int((val or 0) / 200 * 100)
-            bar.setStyleSheet(
-                f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
-                f" stop:0 {color}, stop:{pct/100:.2f} {color},"
-                f" stop:{pct/100:.2f} {COLORS['border']},"
-                f" stop:1 {COLORS['border']});"
-                "border-radius:2px;"
-            )
+            lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+            val = QLabel(value)
+            val.setStyleSheet(
+                f"color:{val_color or COLORS['text_primary']}; font-size:11px; font-weight:500;")
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             row.addWidget(lbl)
-            row.addWidget(val_lbl)
-            row.addWidget(bar, 1)
-            left_vbox.addLayout(row)
+            row.addStretch()
+            row.addWidget(val)
+            return row
 
-        left_vbox.addSpacing(10)
+        info_vbox.addLayout(_info_row('Position', pos))
+        info_vbox.addLayout(_info_row('Age', str(age)))
+        info_vbox.addLayout(_info_row('Nationality', nation_name))
+        info_vbox.addLayout(_info_row('Born', str(p.get('birth_year', '?'))))
+        left_vbox.addWidget(info_frame)
+
+        # CA / PA section
+        ca_frame = QFrame()
+        ca_frame.setStyleSheet(
+            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
+        ca_vbox = QVBoxLayout(ca_frame)
+        ca_vbox.setContentsMargins(12, 8, 12, 8)
+        ca_vbox.setSpacing(4)
+
+        ca_title = QLabel('ABILITY')
+        ca_title.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;")
+        ca_vbox.addWidget(ca_title)
+
+        for name, val, color in [('CA', ca, COLORS['accent']), ('PA', pa, '#52C287')]:
+            bar_row = QHBoxLayout()
+            bar_row.setSpacing(6)
+            n_lbl = QLabel(name)
+            n_lbl.setFixedWidth(24)
+            n_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+            bar_bg = QFrame()
+            bar_bg.setFixedHeight(4)
+            bar_bg.setStyleSheet(
+                f"background:{COLORS['border']}; border-radius:2px;")
+            bar_fill = QFrame(bar_bg)
+            bar_fill.setFixedHeight(4)
+            pct = max(0, min(100, int((val or 0) / 200 * 100)))
+            bar_fill.setStyleSheet(f"background:{color}; border-radius:2px;")
+            bar_fill.resize(0, 4)
+            bar_fill.setMaximumWidth(int(166 * pct / 100))
+            num_lbl = QLabel(str(val) if val else '?')
+            num_lbl.setFixedWidth(28)
+            num_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            num_lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:bold;")
+            bar_row.addWidget(n_lbl)
+            bar_row.addWidget(bar_bg, 1)
+            bar_row.addWidget(num_lbl)
+            ca_vbox.addLayout(bar_row)
+
+        if dev is not None:
+            ca_vbox.addLayout(_info_row('Dev Rate', str(dev), COLORS['accent_hover']))
+
+        left_vbox.addWidget(ca_frame)
 
         # HGP / HGC pills
-        hgp = p.get('hgp', False)
-        hgc = _is_hgc(b, p, self._club_entity_id) if (b and self._club_entity_id) else None
+        hg_frame = QFrame()
+        hg_frame.setStyleSheet("background:transparent;")
+        hg_vbox = QVBoxLayout(hg_frame)
+        hg_vbox.setContentsMargins(12, 8, 12, 8)
+        hg_vbox.setSpacing(4)
+        hg_title = QLabel('HOMEGROWN')
+        hg_title.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;")
+        hg_vbox.addWidget(hg_title)
+        pills_row = QHBoxLayout()
+        pills_row.setSpacing(5)
 
-        for label, active, color in [
+        for label, active, border_color in [
             ('HGP', hgp, COLORS['hgp_green']),
-            ('HGC', hgc, COLORS['hgp_green']),
+            ('HGC', hgc, '#52C287'),
         ]:
             pill = QLabel(label)
+            pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
             if active:
                 pill.setStyleSheet(
-                    f"color:{COLORS['window_bg']}; background:{color};"
-                    "border-radius:3px; padding:2px 8px; font-size:11px; font-weight:bold;")
+                    f"color:{border_color}; border:1px solid {border_color};"
+                    f"background:rgba(82,194,135,0.12); border-radius:10px;"
+                    "padding:2px 8px; font-size:10px; font-weight:bold;")
             elif active is False:
                 pill.setStyleSheet(
-                    f"color:{COLORS['text_dim']}; background:{COLORS['elevated']};"
-                    f"border:1px solid {COLORS['border']};"
-                    "border-radius:3px; padding:2px 8px; font-size:11px;")
+                    f"color:{COLORS['text_dim']}; border:1px solid {COLORS['border_bright']};"
+                    "background:transparent; border-radius:10px;"
+                    "padding:2px 8px; font-size:10px;")
             else:
-                pill.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
-                pill.setText(f"{label}: ?")
-            left_vbox.addWidget(pill)
+                pill.setStyleSheet(
+                    f"color:{COLORS['text_dim']}; font-size:10px;")
+                pill.setText(f"{label}?")
+            pills_row.addWidget(pill)
+        pills_row.addStretch()
+        hg_vbox.addLayout(pills_row)
+        left_vbox.addWidget(hg_frame)
 
         left_vbox.addStretch()
-        body_row.addWidget(left)
+        body_hbox.addWidget(left)
 
-        # Center: attributes
-        attrs_scroll = QScrollArea()
-        attrs_scroll.setWidgetResizable(True)
-        attrs_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        attrs_widget = QWidget()
-        attrs_widget.setStyleSheet(f"background:{COLORS['window_bg']};")
-        attrs_vbox = QVBoxLayout(attrs_widget)
-        attrs_vbox.setContentsMargins(0, 0, 8, 0)
-        attrs_vbox.setSpacing(10)
+        # ── Center: attributes + action strip ───────────────────────────────
+        center_scroll = QScrollArea()
+        center_scroll.setWidgetResizable(True)
+        center_scroll.setStyleSheet(
+            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
+        center_w = QWidget()
+        center_w.setStyleSheet(f"background:{COLORS['window_bg']};")
+        center_vbox = QVBoxLayout(center_w)
+        center_vbox.setContentsMargins(14, 14, 14, 14)
+        center_vbox.setSpacing(14)
 
-        raw = p.get('raw_attrs', [])
-        personality = p.get('personality', [])
+        def _display_val(raw_v):
+            return max(1, min(20, round(raw_v / 5)))
 
-        def _display_val(raw_v, scale=5):
-            return max(1, min(20, round(raw_v / scale)))
-
-        def _val_color(v):
-            if v >= 17: return '#52C287'
-            if v >= 13: return COLORS['hgp_green']
-            if v >= 9:  return COLORS['text_primary']
-            if v >= 5:  return COLORS['text_secondary']
-            return COLORS['non_hgp_red']
-
-        ATTR_GROUPS = [
-            ('Technical', [
-                ('Crossing', 0), ('Dribbling', 1), ('Finishing', 2), ('Heading', 3),
-                ('Long Shots', 4), ('Marking', 5), ('Off Ball', 6), ('Passing', 7),
-                ('Pen Taking', 8), ('Tackling', 9), ('Vision', 10),
-                ('First Touch', 22), ('Technique', 23), ('Corners', 27),
-                ('Long Throws', 30), ('Free Kick', 35),
-            ]),
-            ('Mental', [
-                ('Anticipation', 17), ('Decisions', 18), ('Positioning', 20),
-                ('Teamwork', 28), ('Work Rate', 29), ('Leadership', 40),
-                ('Bravery', 43), ('Consistency', 44), ('Aggression', 45),
-                ('Important Matches', 47), ('Composure', 52), ('Concentration', 53),
-            ]),
-            ('Physical', [
-                ('Acceleration', 34), ('Pace', 38), ('Strength', 36), ('Stamina', 37),
-                ('Balance', 42), ('Agility', 46), ('Jumping Reach', 39),
-                ('Natural Fitness', 50),
-            ]),
-            ('Personality', None),  # special - uses personality[]
-        ]
-
-        PERSONALITY_ATTRS = [
-            ('Adaptability', 0), ('Ambition', 1), ('Loyalty', 2), ('Pressure', 3),
-            ('Professionalism', 4), ('Sportsmanship', 5), ('Temperament', 6),
-        ]
-
-        for group_name, group_attrs in ATTR_GROUPS:
-            grp_frame = QFrame()
-            grp_frame.setStyleSheet(
-                f"background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
-                "border-radius:3px;")
-            grp_vbox = QVBoxLayout(grp_frame)
-            grp_vbox.setContentsMargins(10, 8, 10, 8)
-            grp_vbox.setSpacing(3)
-
-            grp_lbl = QLabel(group_name.upper())
-            grp_lbl.setStyleSheet(
-                f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;")
-            grp_vbox.addWidget(grp_lbl)
-
-            if group_name == 'Personality':
-                items = PERSONALITY_ATTRS
-                for attr_name, idx in items:
-                    if not personality or idx >= len(personality):
-                        continue
-                    v = personality[idx]
-                    row = QHBoxLayout()
-                    row.setSpacing(0)
-                    n_lbl = QLabel(attr_name)
-                    n_lbl.setFixedWidth(130)
-                    n_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
-                    v_lbl = QLabel(str(v))
-                    v_lbl.setFixedWidth(28)
-                    v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                    v_lbl.setStyleSheet(f"color:{_val_color(v)}; font-size:12px; font-weight:bold;")
-                    row.addWidget(n_lbl)
-                    row.addStretch()
-                    row.addWidget(v_lbl)
-                    grp_vbox.addLayout(row)
-            else:
-                if not raw:
+        def _attr_col(attrs_list):
+            col = QVBoxLayout()
+            col.setSpacing(0)
+            for attr_name, idx in attrs_list:
+                if not raw or idx >= len(raw):
                     continue
-                cols_layout = QHBoxLayout()
-                cols_layout.setSpacing(12)
-                col1 = QVBoxLayout()
-                col2 = QVBoxLayout()
-                for i, (attr_name, idx) in enumerate(group_attrs):
-                    if idx >= len(raw):
-                        continue
-                    v = _display_val(raw[idx])
-                    row = QHBoxLayout()
-                    row.setSpacing(0)
-                    n_lbl = QLabel(attr_name)
-                    n_lbl.setFixedWidth(100)
-                    n_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
-                    v_lbl = QLabel(str(v))
-                    v_lbl.setFixedWidth(28)
-                    v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                    v_lbl.setStyleSheet(f"color:{_val_color(v)}; font-size:12px; font-weight:bold;")
-                    row.addWidget(n_lbl)
-                    row.addStretch()
-                    row.addWidget(v_lbl)
-                    if i % 2 == 0:
-                        col1.addLayout(row)
-                    else:
-                        col2.addLayout(row)
-                cols_layout.addLayout(col1)
-                cols_layout.addLayout(col2)
-                grp_vbox.addLayout(cols_layout)
+                v = _display_val(raw[idx])
+                row = QHBoxLayout()
+                row.setContentsMargins(0, 3, 0, 2)
+                n = QLabel(attr_name)
+                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+                v_lbl = QLabel(str(v))
+                v_lbl.setFixedWidth(22)
+                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                v_lbl.setStyleSheet(
+                    f"color:{_attr_val_color(v)}; font-size:12px; font-weight:bold;")
+                row.addWidget(n)
+                row.addStretch()
+                row.addWidget(v_lbl)
+                sep = QFrame()
+                sep.setFixedHeight(1)
+                sep.setStyleSheet(f"background:rgba(52,55,64,0.4);")
+                col.addLayout(row)
+                col.addWidget(sep)
+            return col
 
-            attrs_vbox.addWidget(grp_frame)
+        def _block_title(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;"
+                f"border-bottom:1px solid {COLORS['border']}; padding-bottom:4px;"
+                "margin-bottom:4px;")
+            return lbl
 
-        attrs_vbox.addStretch()
-        attrs_scroll.setWidget(attrs_widget)
-        body_row.addWidget(attrs_scroll, 1)
+        # Row 1: Technical | Mental | Physical + Hidden
+        top_grid = QHBoxLayout()
+        top_grid.setSpacing(20)
+
+        TECH = [
+            ('Crossing', 0), ('Dribbling', 1), ('Finishing', 2), ('Heading', 3),
+            ('Long Shots', 4), ('Marking', 5), ('Off Ball', 6), ('Passing', 7),
+            ('Pen Taking', 8), ('Tackling', 9), ('Vision', 10),
+            ('First Touch', 22), ('Technique', 23), ('Corners', 27),
+            ('Long Throws', 30), ('Free Kick', 35),
+        ]
+        MENT = [
+            ('Anticipation', 17), ('Decisions', 18), ('Positioning', 20),
+            ('Teamwork', 28), ('Work Rate', 29), ('Leadership', 40),
+            ('Bravery', 43), ('Consistency', 44), ('Aggression', 45),
+            ('Composure', 52), ('Concentration', 53), ('Important Matches', 47),
+        ]
+        PHYS = [
+            ('Acceleration', 34), ('Pace', 38), ('Strength', 36), ('Stamina', 37),
+            ('Balance', 42), ('Agility', 46), ('Jumping Reach', 39),
+            ('Natural Fitness', 50),
+        ]
+        HIDD = [
+            ('Dirtiness', 41), ('Versatility', 49), ('Injury Prone', 48),
+            ('Determination', 51),
+        ]
+
+        for title, attrs in [('Technical', TECH), ('Mental', MENT)]:
+            col_w = QWidget()
+            col_w.setStyleSheet("background:transparent;")
+            col_vbox = QVBoxLayout(col_w)
+            col_vbox.setContentsMargins(0, 0, 0, 0)
+            col_vbox.setSpacing(0)
+            col_vbox.addWidget(_block_title(title))
+            col_vbox.addLayout(_attr_col(attrs))
+            col_vbox.addStretch()
+            top_grid.addWidget(col_w, 1)
+
+        # Physical + Hidden stacked in third column
+        phys_col = QWidget()
+        phys_col.setStyleSheet("background:transparent;")
+        phys_vbox = QVBoxLayout(phys_col)
+        phys_vbox.setContentsMargins(0, 0, 0, 0)
+        phys_vbox.setSpacing(0)
+        phys_vbox.addWidget(_block_title('Physical'))
+        phys_vbox.addLayout(_attr_col(PHYS))
+        phys_vbox.addSpacing(14)
+        phys_vbox.addWidget(_block_title('Hidden'))
+        phys_vbox.addLayout(_attr_col(HIDD))
+        phys_vbox.addStretch()
+        top_grid.addWidget(phys_col, 1)
+        center_vbox.addLayout(top_grid)
+
+        # Row 2: Personality (4 columns)
+        if personality:
+            PERS = [
+                ('Adaptability', 0), ('Ambition', 1), ('Loyalty', 2), ('Pressure', 3),
+                ('Professionalism', 4), ('Sportsmanship', 5), ('Temperament', 6),
+            ]
+            pers_w = QWidget()
+            pers_w.setStyleSheet("background:transparent;")
+            pers_vbox = QVBoxLayout(pers_w)
+            pers_vbox.setContentsMargins(0, 0, 0, 0)
+            pers_vbox.setSpacing(0)
+            pers_vbox.addWidget(_block_title('Personality'))
+            pers_grid = QHBoxLayout()
+            pers_grid.setSpacing(20)
+            cols = [QVBoxLayout() for _ in range(4)]
+            for i, (attr_name, idx) in enumerate(PERS):
+                if idx >= len(personality):
+                    continue
+                v = personality[idx]
+                row = QHBoxLayout()
+                row.setContentsMargins(0, 3, 0, 2)
+                n = QLabel(attr_name)
+                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+                v_lbl = QLabel(str(v))
+                v_lbl.setFixedWidth(22)
+                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                v_lbl.setStyleSheet(
+                    f"color:{_attr_val_color(v)}; font-size:12px; font-weight:bold;")
+                row.addWidget(n)
+                row.addStretch()
+                row.addWidget(v_lbl)
+                cols[i % 4].addLayout(row)
+            for c in cols:
+                w = QWidget()
+                w.setStyleSheet("background:transparent;")
+                wv = QVBoxLayout(w)
+                wv.setContentsMargins(0, 0, 0, 0)
+                wv.addLayout(c)
+                wv.addStretch()
+                pers_grid.addWidget(w, 1)
+            pers_vbox.addLayout(pers_grid)
+            center_vbox.addWidget(pers_w)
+
+        center_vbox.addStretch()
+
+        # Action strip (Make HGP / Make HGC / Add to Shortlist)
+        action_frame = QFrame()
+        action_frame.setStyleSheet(
+            f"border-top:1px solid {COLORS['border']}; background:transparent;")
+        action_row = QHBoxLayout(action_frame)
+        action_row.setContentsMargins(0, 8, 0, 4)
+        action_row.setSpacing(8)
+
+        if b is not None and not hgp:
+            make_hgp = QPushButton('Make HGP')
+            make_hgp.setObjectName('accent')
+            make_hgp.clicked.connect(lambda: (self._emit_patch('hgp'), self.accept()))
+            action_row.addWidget(make_hgp)
+        if b is not None and hgc is False and self._club_entity_id:
+            make_hgc = QPushButton('Make HGC')
+            make_hgc.setObjectName('accent')
+            make_hgc.clicked.connect(lambda: (self._emit_patch('hgc'), self.accept()))
+            action_row.addWidget(make_hgc)
+
+        action_row.addStretch()
+        add_shortlist = QPushButton('Add to Shortlist')
+        add_shortlist.setEnabled(False)
+        add_shortlist.setToolTip('Shortlist coming soon')
+        action_row.addWidget(add_shortlist)
+        center_vbox.addWidget(action_frame)
+
+        center_scroll.setWidget(center_w)
+        body_hbox.addWidget(center_scroll, 1)
+
+        # ── Right tab nav (110px) ────────────────────────────────────────────
+        right_tabs = QFrame()
+        right_tabs.setFixedWidth(110)
+        right_tabs.setStyleSheet(
+            f"background:{COLORS['surface']}; border-left:1px solid {COLORS['border']};")
+        rt_vbox = QVBoxLayout(right_tabs)
+        rt_vbox.setContentsMargins(0, 6, 0, 6)
+        rt_vbox.setSpacing(0)
+
+        _rtab_active = f"""
+            QPushButton {{
+                background: {COLORS['selection_bg']};
+                border: none; border-left: 2px solid {COLORS['accent']};
+                color: {COLORS['text_primary']}; text-align: left;
+                padding: 8px 10px; font-size: 11px; border-radius: 0;
+            }}
+        """
+        _rtab_future = f"""
+            QPushButton {{
+                background: transparent; border: none; border-left: 2px solid transparent;
+                color: {COLORS['text_dim']}; text-align: left;
+                padding: 8px 10px; font-size: 11px; font-style: italic; border-radius: 0;
+            }}
+        """
+        for tab_label, active in [
+            ('Profile', True), ('Transfer', False), ('Positions', False),
+            ('General Rating', False), ('Positional Rating', False),
+            ('Role Rating', False), ('Training Roles', False),
+        ]:
+            tb = QPushButton(tab_label)
+            tb.setEnabled(active)
+            tb.setStyleSheet(_rtab_active if active else _rtab_future)
+            rt_vbox.addWidget(tb)
+
+        rt_vbox.addStretch()
+        body_hbox.addWidget(right_tabs)
 
         layout.addWidget(body)
-
-        # Footer action row
-        footer = QFrame()
-        footer.setFixedHeight(50)
-        footer.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-top:1px solid {COLORS['border']};")
-        foot_row = QHBoxLayout(footer)
-        foot_row.setContentsMargins(14, 0, 14, 0)
-        foot_row.setSpacing(8)
-        foot_row.addStretch()
-
-        if b is not None:
-            if not hgp:
-                make_hgp = QPushButton('Make HGP')
-                make_hgp.setObjectName('accent')
-                make_hgp.clicked.connect(lambda: (self._emit_patch('hgp'), self.accept()))
-                foot_row.addWidget(make_hgp)
-            if hgc is False and self._club_entity_id:
-                make_hgc = QPushButton('Make HGC')
-                make_hgc.setObjectName('accent')
-                make_hgc.clicked.connect(lambda: (self._emit_patch('hgc'), self.accept()))
-                foot_row.addWidget(make_hgc)
-
-        layout.addWidget(footer)
-
-        self._patch_mode = None
 
     def _emit_patch(self, mode):
         self._patch_mode = mode
@@ -693,8 +855,35 @@ class MainWindow(QMainWindow):
             }}
         """)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 0, 12, 0)
+        layout.setSpacing(6)
+
+        # Back / forward nav + breadcrumb
+        _nav_ss = f"""
+            QPushButton {{
+                background: transparent; border: none;
+                color: {COLORS['text_dim']}; font-size: 13px;
+                padding: 4px 6px; border-radius: 2px;
+            }}
+            QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_secondary']}; }}
+        """
+        back_btn = QPushButton('◀')
+        back_btn.setFixedSize(26, 26)
+        back_btn.setEnabled(False)
+        back_btn.setStyleSheet(_nav_ss)
+        fwd_btn = QPushButton('▶')
+        fwd_btn.setFixedSize(26, 26)
+        fwd_btn.setEnabled(False)
+        fwd_btn.setStyleSheet(_nav_ss)
+
+        self._breadcrumb = QLabel('FM Save Editor')
+        self._breadcrumb.setStyleSheet(
+            f"color:{COLORS['text_secondary']}; font-size:12px; background:transparent;")
+
+        layout.addWidget(back_btn)
+        layout.addWidget(fwd_btn)
+        layout.addWidget(self._breadcrumb)
+        layout.addSpacing(4)
 
         # Centred search
         self._search_box = QLineEdit()
@@ -723,12 +912,26 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._search_box, 2)
         layout.addStretch(1)
 
+        # Save button (left of Load)
+        self._save_btn = QPushButton('Save Changes')
+        self._save_btn.setFixedHeight(28)
+        self._save_btn.setEnabled(False)
+        self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
+        self._save_btn.clicked.connect(self._do_save)
+
         # Load button
         self._load_btn = QPushButton('Load')
         self._load_btn.setFixedHeight(28)
         self._load_btn.setObjectName('accent')
         self._load_btn.setToolTip('Open and load an FM24 save file')
         self._load_btn.clicked.connect(self._load_file)
+
+        # Reload button (right of Load, greyed when no file)
+        self._reload_btn = QPushButton('Reload')
+        self._reload_btn.setFixedHeight(28)
+        self._reload_btn.setEnabled(False)
+        self._reload_btn.setToolTip('Re-parse the current save file')
+        self._reload_btn.clicked.connect(self._reload_save)
 
         # Settings cog
         self._settings_btn = QPushButton()
@@ -749,7 +952,9 @@ class MainWindow(QMainWindow):
             }}
         """)
 
+        layout.addWidget(self._save_btn)
         layout.addWidget(self._load_btn)
+        layout.addWidget(self._reload_btn)
         layout.addWidget(self._settings_btn)
         return bar
 
@@ -767,8 +972,8 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        # Club header
-        self._sb_club_name = QLabel('FM24 Editor')
+        # Club/save header
+        self._sb_club_name = QLabel('FM Save Editor')
         self._sb_club_name.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;"
             "padding: 13px 15px 2px; background:transparent;")
@@ -778,23 +983,6 @@ class MainWindow(QMainWindow):
             "padding:0 15px 10px; background:transparent;")
         vbox.addWidget(self._sb_club_name)
         vbox.addWidget(self._sb_season)
-        vbox.addWidget(self._make_hline())
-
-        # Save info
-        save_frame = QFrame()
-        save_frame.setStyleSheet("background:transparent;")
-        sf_vbox = QVBoxLayout(save_frame)
-        sf_vbox.setContentsMargins(15, 8, 15, 8)
-        sf_vbox.setSpacing(2)
-        self._sb_save_name = QLabel('')
-        self._sb_save_name.setStyleSheet(
-            f"color:{COLORS['hgp_green']}; font-size:12px; font-weight:bold;")
-        self._sb_club_count = QLabel('')
-        self._sb_club_count.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:11px;")
-        sf_vbox.addWidget(self._sb_save_name)
-        sf_vbox.addWidget(self._sb_club_count)
-        vbox.addWidget(save_frame)
         vbox.addWidget(self._make_hline())
 
         # Main nav
@@ -829,31 +1017,6 @@ class MainWindow(QMainWindow):
             vbox.addWidget(btn)
 
         vbox.addStretch()
-        vbox.addWidget(self._make_hline())
-
-        # Reload button
-        self._reload_btn = QPushButton()
-        self._reload_btn.setEnabled(False)
-        self._reload_btn.setIcon(_svg_icon(_SVG_RELOAD, COLORS['text_secondary'], 14))
-        self._reload_btn.setIconSize(QSize(14, 14))
-        self._reload_btn.setText('  Reload Save')
-        self._reload_btn.clicked.connect(self._reload_save)
-        self._reload_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
-                color: {COLORS['text_secondary']};
-                text-align: left;
-                padding: 9px 15px;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background: {COLORS['border']};
-                color: {COLORS['text_primary']};
-            }}
-            QPushButton:disabled {{ color: {COLORS['text_dim']}; }}
-        """)
-        vbox.addWidget(self._reload_btn)
         return sidebar
 
     def _make_view_club(self):
@@ -898,12 +1061,6 @@ class MainWindow(QMainWindow):
         self._squad_club_label.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:14px; font-weight:bold;")
         header_row.addWidget(self._squad_club_label)
-
-        self._squad_switcher = QComboBox()
-        self._squad_switcher.setFixedWidth(160)
-        self._squad_switcher.setFixedHeight(28)
-        self._squad_switcher.currentIndexChanged.connect(self._on_squad_switched)
-        header_row.addWidget(self._squad_switcher)
         header_row.addStretch()
 
         self._squad_info = QLabel('')
@@ -911,7 +1068,7 @@ class MainWindow(QMainWindow):
         header_row.addWidget(self._squad_info)
         vbox.addWidget(header_bar)
 
-        # Filter tab row
+        # Squad tab row — shows "First Team" + sub-squads when loaded
         tab_bar = QFrame()
         tab_bar.setFixedHeight(36)
         tab_bar.setStyleSheet(
@@ -920,32 +1077,32 @@ class MainWindow(QMainWindow):
         tab_row.setContentsMargins(12, 0, 12, 0)
         tab_row.setSpacing(0)
 
-        self._filter_btns = {}
-        for key, label in [('all', 'All'), ('non_hgp', 'Non-HGP'), ('non_hgc', 'Non-HGC')]:
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setChecked(key == 'all')
-            btn.setFixedHeight(36)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    border: none;
-                    border-bottom: 2px solid transparent;
-                    color: {COLORS['text_secondary']};
-                    padding: 0 14px;
-                    font-size: 12px;
-                    border-radius: 0;
-                }}
-                QPushButton:hover {{ color: {COLORS['text_primary']}; }}
-                QPushButton:checked {{
-                    color: {COLORS['text_primary']};
-                    border-bottom: 2px solid {COLORS['accent']};
-                    font-weight: bold;
-                }}
-            """)
-            btn.clicked.connect(lambda _, k=key: self._set_filter(k))
-            self._filter_btns[key] = btn
-            tab_row.addWidget(btn)
+        _squad_tab_ss = f"""
+            QPushButton {{
+                background: transparent; border: none;
+                border-bottom: 2px solid transparent;
+                color: {COLORS['text_secondary']};
+                padding: 0 14px; font-size: 12px; border-radius: 0;
+            }}
+            QPushButton:hover {{ color: {COLORS['text_primary']}; }}
+            QPushButton:checked {{
+                color: {COLORS['text_primary']};
+                border-bottom: 2px solid {COLORS['accent']};
+                font-weight: bold;
+            }}
+        """
+        self._squad_tab_bar = tab_row   # keep reference to add dynamic tabs later
+        self._squad_tab_frame = tab_bar
+        self._squad_tab_btns = []
+
+        # First Team tab always present
+        ft_btn = QPushButton('First Team')
+        ft_btn.setCheckable(True)
+        ft_btn.setChecked(True)
+        ft_btn.setFixedHeight(36)
+        ft_btn.setStyleSheet(_squad_tab_ss)
+        tab_row.addWidget(ft_btn)
+        self._squad_tab_btns.append(ft_btn)
 
         tab_row.addStretch()
 
@@ -1096,7 +1253,9 @@ class MainWindow(QMainWindow):
     def _update_ui_state(self):
         has_file = bool(self._save_path)
         has_data = self._save_data is not None
+        has_b = has_data and 'b' in self._save_data
         self._reload_btn.setEnabled(has_file)
+        self._save_btn.setEnabled(has_b)
         self._search_box.setEnabled(has_data)
         has_abilities = has_data and any(
             'ca' in p for p in self._save_data.get('people', []))
@@ -1125,8 +1284,7 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
-        self._sb_save_name.setText(os.path.basename(path))
-        self._sb_club_count.setText('Loading...')
+        self._sb_season.setText(os.path.basename(path))
         self._update_ui_state()
         self._reload_save()
 
@@ -1146,9 +1304,8 @@ class MainWindow(QMainWindow):
         self._save_data['save_path'] = self._save_path
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
-        self._sb_club_count.setText(f'{n_clubs} clubs loaded')
         if self._save_path:
-            self._sb_save_name.setText(os.path.basename(self._save_path))
+            self._sb_season.setText(os.path.basename(self._save_path))
         self._status.showMessage(
             f"Loaded {n_clubs} clubs. Search for a team to view their squad.")
         self._update_ui_state()
@@ -1213,13 +1370,13 @@ class MainWindow(QMainWindow):
 
         # Update sidebar + header
         self._sb_club_name.setText(club['name'])
-        self._sb_season.setText('First Team')
+        dim = COLORS['text_dim']
+        self._breadcrumb.setText(
+            f"FM Save Editor <span style='color:{dim}'> &rsaquo; </span>"
+            f"<b>{club['name']}</b>"
+            f"<span style='color:{dim}'> &rsaquo; </span><b>Squad</b>")
+        self._breadcrumb.setTextFormat(Qt.TextFormat.RichText)
         self._squad_club_label.setText(club['name'])
-        self._squad_switcher.blockSignals(True)
-        self._squad_switcher.clear()
-        self._squad_switcher.addItem('First Team')
-        self._squad_switcher.blockSignals(False)
-
         # Update club view
         self._club_view_name.setText(club['name'])
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
@@ -1291,21 +1448,6 @@ class MainWindow(QMainWindow):
         self._squad_info.setText(
             f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC")
         self._status.showMessage(f"Showing {self._current_club['name']} — {len(squad)} players")
-
-    def _set_filter(self, key: str):
-        for k, btn in self._filter_btns.items():
-            btn.setChecked(k == key)
-        if not self._squad:
-            return
-        if key == 'non_hgp':
-            self._select_all_non_hgp()
-        elif key == 'non_hgc':
-            self._select_all_non_hgc()
-        else:
-            self._table.clearSelection()
-
-    def _on_squad_switched(self, idx):
-        pass  # ponytail: no-op until sub-squad data available
 
     def _show_player_results(self, players):
         self._configure_table_for_mode('player')
@@ -1632,6 +1774,26 @@ class MainWindow(QMainWindow):
             'over the original save.')
         self._status.showMessage('Patch complete.')
 
+    def _do_save(self):
+        if not self._save_data or 'b' not in self._save_data:
+            return
+        import datetime
+        stem = os.path.splitext(os.path.basename(self._save_path))[0]
+        date = datetime.date.today().strftime('%Y-%m-%d')
+        default_name = os.path.join(
+            os.path.dirname(self._save_path), f'{stem}-Edited-{date}.fm')
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, 'Save Changes', default_name, 'FM Save Files (*.fm)')
+        if not out_path:
+            return
+        self._set_busy(True, 'Writing save file...')
+        self._worker = PatchWorker(self._save_data, out_path, [], mode='save_only')
+        self._worker.progress.connect(self._on_progress)
+        self._worker.pct.connect(self._progress.setValue)
+        self._worker.done.connect(self._on_patch_done)
+        self._worker.error.connect(self._on_error)
+        self._worker.start()
+
     # -- Progress / error -----------------------------------------------------
 
     def _tick_dots(self):
@@ -1659,6 +1821,7 @@ class MainWindow(QMainWindow):
         self._progress.setVisible(busy)
         self._load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
+        self._save_btn.setEnabled(not busy and bool(self._save_data) and 'b' in (self._save_data or {}))
         self._search_box.setEnabled(not busy and self._save_data is not None)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn.setEnabled(False)
