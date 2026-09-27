@@ -2401,8 +2401,6 @@ class MainWindow(QMainWindow):
             for btn in self._nav_btns.values():
                 btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
-            from PyQt6.QtWidgets import QApplication
-            QApplication.processEvents()
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
             players = self._get_report_players(key, pos)
             self._report_title_lbl.setText(_labels.get(key, key))
