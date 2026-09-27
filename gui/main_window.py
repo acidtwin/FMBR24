@@ -973,7 +973,7 @@ class MainWindow(QMainWindow):
 
         # Centred search
         self._search_box = QLineEdit()
-        self._search_box.setPlaceholderText('Search players, clubs, nations...')
+        self._search_box.setPlaceholderText('Search clubs or players...')
         self._search_box.setEnabled(False)
         self._search_box.returnPressed.connect(self._do_search)
         self._search_box.setFixedHeight(28)
@@ -1118,15 +1118,14 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(24, 24, 24, 24)
         vbox.setSpacing(16)
 
-        self._club_view_name = QLabel('No club selected')
+        self._club_view_name = QLabel('No save loaded')
         self._club_view_name.setObjectName('header')
         self._club_view_name.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
         vbox.addWidget(self._club_view_name)
 
         self._club_view_info = QLabel(
-            'Search for a club in the top bar to load their squad.\n'
-            'Then navigate to Squad in the sidebar to view and edit players.')
+            'Load an FM24 save file to get started.')
         self._club_view_info.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:13px;")
         self._club_view_info.setWordWrap(True)
         vbox.addWidget(self._club_view_info)
@@ -1963,10 +1962,16 @@ class MainWindow(QMainWindow):
         self._all_players_cache = []  # invalidate on new load
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
+        n_people = len([p for p in result.get('people', []) if p.get('ca') is not None])
         if self._save_path:
             self._sb_season.setText(os.path.basename(self._save_path))
+        self._club_view_name.setText('Save loaded')
+        self._club_view_info.setText(
+            f"{n_clubs:,} clubs · {n_people:,} players with ability data\n\n"
+            "Search for a club or player in the top bar, or use Scouting in the sidebar.")
         self._status.showMessage(
-            f"Loaded {n_clubs} clubs. Search for a team to view their squad.")
+            f"Loaded — {n_clubs:,} clubs, {n_people:,} players. "
+            "Search for a club or player to get started.")
         self._update_ui_state()
 
     # -- Search ---------------------------------------------------------------
