@@ -1,4 +1,4 @@
-"""FMF archive read/write — zstd-compressed member container."""
+"""FMF archive read/write - zstd-compressed member container."""
 import struct, io, os
 import zstandard as zstd
 

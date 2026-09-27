@@ -6,7 +6,7 @@ def _u16(b, p): return struct.unpack_from('<H', b, p)[0]
 def _u32(b, p): return struct.unpack_from('<I', b, p)[0]
 
 
-# ── Name pools ────────────────────────────────────────────────────────────────
+# -- Name pools ----------------------------------------------------------------
 
 def _read_pool(b, start):
     if start + 16 >= len(b): return None, start
@@ -54,7 +54,7 @@ def find_names(b):
     raise RuntimeError("Name tables not found in game_db.dat")
 
 
-# ── Clubs ─────────────────────────────────────────────────────────────────────
+# -- Clubs ---------------------------------------------------------------------
 
 def find_clubs(b, names_start):
     """Return list of club dicts with id/uid/name/short/offset."""
@@ -90,7 +90,7 @@ def find_clubs(b, names_start):
     return clubs
 
 
-# ── Squads ────────────────────────────────────────────────────────────────────
+# -- Squads --------------------------------------------------------------------
 
 def find_squads(b, clubs, names_start):
     """Return dict: person_id (int) -> club_id (int)."""
@@ -132,14 +132,14 @@ def find_squads(b, clubs, names_start):
             if len(set(ids)) != count or any(i > 3_000_000 for i in ids):
                 q += 1; continue
             kind = b[at - 3] if b[at - 4] == 1 and b[at - 2] == 0xFF else 100
-            for pid in ids:
-                if kind == 100 or pid not in squads:
+            if kind == 100:  # main squad only; skip reserve/youth (kinds 18-23)
+                for pid in ids:
                     squads[pid] = club['id']
             break
     return squads
 
 
-# ── People ────────────────────────────────────────────────────────────────────
+# -- People --------------------------------------------------------------------
 
 def find_people(b, first_names, last_names, names_end):
     """Return list of person dicts with offset/end/name/nation/birth_year/id."""
@@ -162,10 +162,51 @@ def find_people(b, first_names, last_names, names_end):
         fname = first_names[f] if f != 0xFFFFFFFF else ''
         lname = last_names[l] if l != 0xFFFFFFFF else ''
         name = f"{fname} {lname}".strip() or fn
+        personality = list(b[end + 17:end + 25])  # adaptability,ambition,loyalty,pressure,professionalism,sportsmanship,temperament,controversy
         people.append({'offset': start, 'end': end, 'name': name,
-                       'nation': nation, 'birth_year': year, 'id': -1})
+                       'nation': nation, 'birth_year': year, 'id': -1,
+                       'personality': personality})
         p = end + 25
     return people
+
+
+POSITIONS = ['GK','SW','DL','DC','DR','DM','ML','MC','MR','AML','AMC','AMR','ST','WBL','WBR']
+
+
+def find_abilities(b, names_end):
+    """Return dict: person_id -> {ca, pa, positions, raw_attrs}.
+    Uses FM-SaveLens-24's FM24 ability-block algorithm (u8 CA/PA, not u16).
+    """
+    abilities = {}
+    blen = len(b)
+    p = names_end + 57
+    while p < blen - 54:
+        at = p
+        p += 1
+        if b[at - 37] != 0 or b[at - 35] != 0:
+            continue
+        ca = b[at - 38]; pa = b[at - 36]
+        if not (1 <= ca <= 200) or not (1 <= pa <= 200):
+            continue
+        positions = list(b[at - 15:at])
+        if not all(1 <= v <= 20 for v in positions) or 20 not in positions:
+            continue
+        attrs = list(b[at:at + 54])
+        if not all(1 <= v <= 100 for v in attrs):
+            continue
+        uid = _u32(b, at - 53); source = _u32(b, at - 49)
+        if uid == 0 or uid == 0xFFFFFFFF or source == 0 or source == 0xFFFFFFFF:
+            continue
+        owner_id = _u32(b, at - 57) + 1
+        if owner_id not in abilities:
+            abilities[owner_id] = {'ca': ca, 'pa': pa, 'positions': positions, 'raw_attrs': attrs}
+        p = at + 54
+    return abilities
+
+
+def primary_position(positions):
+    """Return POSITIONS abbreviation for the player's best position (highest rating)."""
+    return POSITIONS[positions.index(max(positions))]
 
 
 def match_identities(b, people, names_end):

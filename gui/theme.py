@@ -1,4 +1,4 @@
-"""FM24 default skin QSS stylesheet — colours extracted from game files.
+"""FM24 default skin QSS stylesheet - colours extracted from game files.
 
 Sources (settings.fmf → settings/fm colours.xml):
   alt_box_background     rgb(20,21,26)   → window_bg
@@ -13,13 +13,13 @@ Sources (settings.fmf → settings/fm colours.xml):
 """
 
 COLORS = {
-    # backgrounds — from fm colours.xml box_background tokens
+    # backgrounds - from fm colours.xml box_background tokens
     'window_bg':     '#14151A',  # alt_box_background
     'surface':       '#1A2226',  # alt_dark_box_background
     'elevated':      '#292B32',  # alpha_box_background
     'border':        '#343740',
     'border_bright': '#454A58',
-    # text — default foreground is white in the fm skin
+    # text - default foreground is white in the fm skin
     'text_primary':  '#FFFFFF',
     'text_secondary':'#8B96A8',
     'text_dim':      '#525B68',
@@ -35,7 +35,7 @@ COLORS = {
 }
 
 QSS = f"""
-/* ── Base ─────────────────────────────────────────────────────────── */
+/* -- Base ----------------------------------------------------------- */
 QWidget {{
     background-color: {COLORS['window_bg']};
     color: {COLORS['text_primary']};
@@ -49,14 +49,14 @@ QMainWindow {{
     background-color: {COLORS['window_bg']};
 }}
 
-/* ── Panels / frames ─────────────────────────────────────────────── */
+/* -- Panels / frames ----------------------------------------------- */
 QFrame#panel {{
     background-color: {COLORS['surface']};
     border: 1px solid {COLORS['border']};
     border-radius: 3px;
 }}
 
-/* ── Labels ──────────────────────────────────────────────────────── */
+/* -- Labels -------------------------------------------------------- */
 QLabel {{
     color: {COLORS['text_primary']};
     background: transparent;
@@ -85,7 +85,7 @@ QLabel#hgp_no {{
     color: {COLORS['text_secondary']};
 }}
 
-/* ── Buttons ─────────────────────────────────────────────────────── */
+/* -- Buttons ------------------------------------------------------- */
 QPushButton {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
@@ -125,7 +125,7 @@ QPushButton#accent:disabled {{
     color: {COLORS['text_dim']};
 }}
 
-/* ── Line edit / search ──────────────────────────────────────────── */
+/* -- Line edit / search -------------------------------------------- */
 QLineEdit {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
@@ -141,7 +141,7 @@ QLineEdit:disabled {{
     color: {COLORS['text_dim']};
 }}
 
-/* ── Table ───────────────────────────────────────────────────────── */
+/* -- Table --------------------------------------------------------- */
 QTableWidget {{
     background-color: {COLORS['surface']};
     color: {COLORS['text_primary']};
@@ -174,7 +174,7 @@ QHeaderView::section:last {{
     border-right: none;
 }}
 
-/* ── Scrollbars ──────────────────────────────────────────────────── */
+/* -- Scrollbars ---------------------------------------------------- */
 QScrollBar:vertical {{
     background: {COLORS['surface']};
     width: 8px;
@@ -210,7 +210,7 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     width: 0;
 }}
 
-/* ── Combo box ───────────────────────────────────────────────────── */
+/* -- Combo box ----------------------------------------------------- */
 QComboBox {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
@@ -232,7 +232,7 @@ QComboBox QAbstractItemView {{
     selection-background-color: {COLORS['selection_bg']};
 }}
 
-/* ── Progress bar ────────────────────────────────────────────────── */
+/* -- Progress bar -------------------------------------------------- */
 QProgressBar {{
     background-color: {COLORS['elevated']};
     border: 1px solid {COLORS['border']};
@@ -246,7 +246,7 @@ QProgressBar::chunk {{
     border-radius: 1px;
 }}
 
-/* ── Splitter ────────────────────────────────────────────────────── */
+/* -- Splitter ------------------------------------------------------ */
 QSplitter::handle {{
     background: {COLORS['border']};
 }}
@@ -257,7 +257,7 @@ QSplitter::handle:vertical {{
     height: 1px;
 }}
 
-/* ── Checkboxes ──────────────────────────────────────────────────── */
+/* -- Checkboxes ---------------------------------------------------- */
 QCheckBox {{
     color: {COLORS['text_primary']};
     spacing: 6px;
@@ -274,7 +274,7 @@ QCheckBox::indicator:checked {{
     border-color: {COLORS['accent']};
 }}
 
-/* ── Tooltip ─────────────────────────────────────────────────────── */
+/* -- Tooltip ------------------------------------------------------- */
 QToolTip {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_primary']};
@@ -283,7 +283,7 @@ QToolTip {{
     border-radius: 2px;
 }}
 
-/* ── Status bar ──────────────────────────────────────────────────── */
+/* -- Status bar ---------------------------------------------------- */
 QStatusBar {{
     background-color: {COLORS['elevated']};
     color: {COLORS['text_secondary']};

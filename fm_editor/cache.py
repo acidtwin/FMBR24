@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 2  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 6  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -41,15 +41,30 @@ def load_cache(save_path):
         return None
 
 
+def clear_cache(save_path):
+    """Delete the cache file for a save, if it exists."""
+    try:
+        os.remove(_cache_path(save_path))
+    except FileNotFoundError:
+        pass
+
+
 def save_cache(save_path, clubs, squads, people):
     os.makedirs(_CACHE_DIR, exist_ok=True)
     cp = _cache_path(save_path)
-    slim_people = [
-        {'id': p['id'], 'name': p['name'], 'nation': p['nation'],
-         'birth_year': p['birth_year'], 'end': p['end'], 'offset': p['offset'],
-         'hgp': p.get('hgp', False)}
-        for p in people if p.get('id', -1) != -1
-    ]
+    slim_people = []
+    for p in people:
+        if p.get('id', -1) == -1:
+            continue
+        entry = {'id': p['id'], 'name': p['name'], 'nation': p['nation'],
+                 'birth_year': p['birth_year'], 'end': p['end'], 'offset': p['offset'],
+                 'hgp': p.get('hgp', False), 'personality': p.get('personality', [])}
+        if 'ca' in p:
+            entry['ca'] = p['ca']
+            entry['pa'] = p['pa']
+            entry['positions'] = p['positions']
+            entry['raw_attrs'] = p['raw_attrs']
+        slim_people.append(entry)
     data = {
         'version': _CACHE_VERSION,
         'mtime': os.path.getmtime(save_path),
