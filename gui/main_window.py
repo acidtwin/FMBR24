@@ -1324,11 +1324,20 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         root = QWidget()
         self.setCentralWidget(root)
-        vbox = QVBoxLayout(root)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(0)
+        root_hbox = QHBoxLayout(root)
+        root_hbox.setContentsMargins(0, 0, 0, 0)
+        root_hbox.setSpacing(0)
 
-        vbox.addWidget(self._make_topbar())
+        # Sidebar spans full window height
+        root_hbox.addWidget(self._make_sidebar())
+
+        # Right side: topbar + progress + content
+        right = QWidget()
+        right_vbox = QVBoxLayout(right)
+        right_vbox.setContentsMargins(0, 0, 0, 0)
+        right_vbox.setSpacing(0)
+
+        right_vbox.addWidget(self._make_topbar())
 
         self._progress = QProgressBar()
         self._progress.setRange(0, 10000)
@@ -1340,13 +1349,7 @@ class MainWindow(QMainWindow):
             QProgressBar {{ background:{COLORS['elevated']}; border:none; }}
             QProgressBar::chunk {{ background:{COLORS['accent']}; }}
         """)
-        vbox.addWidget(self._progress)
-
-        shell = QWidget()
-        shell_hbox = QHBoxLayout(shell)
-        shell_hbox.setContentsMargins(0, 0, 0, 0)
-        shell_hbox.setSpacing(0)
-        shell_hbox.addWidget(self._make_sidebar())
+        right_vbox.addWidget(self._progress)
 
         self._main_stack = QStackedWidget()
         self._main_stack.addWidget(self._make_view_club())       # 0
@@ -1355,8 +1358,8 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_shortlist())  # 3
         self._main_stack.addWidget(self._make_view_reports())    # 4
         self._main_stack.addWidget(self._make_view_players())    # 5
-        shell_hbox.addWidget(self._main_stack)
-        vbox.addWidget(shell)
+        right_vbox.addWidget(self._main_stack)
+        root_hbox.addWidget(right)
 
         self._status = QStatusBar()
         self._status.setSizeGripEnabled(False)
@@ -1402,8 +1405,6 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(back_btn)
         layout.addWidget(fwd_btn)
-        layout.addWidget(self._breadcrumb)
-        layout.addSpacing(4)
 
         # Centred search
         self._search_box = QLineEdit()
@@ -1968,6 +1969,7 @@ class MainWindow(QMainWindow):
             self._staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
+        shdr.setStretchLastSection(False)
         vbox.addWidget(self._staff_table, 1)
         return w
 
@@ -2040,6 +2042,7 @@ class MainWindow(QMainWindow):
             self._shortlist_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
+        shdr.setStretchLastSection(False)
 
         self._shortlist_empty_lbl = QLabel(
             'Your shortlist is empty.\nDouble-click a player in Squad view to add them.')
@@ -2182,6 +2185,7 @@ class MainWindow(QMainWindow):
             self._reports_table.setColumnWidth(i, cw)
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
+        rhdr.setStretchLastSection(False)
         self._reports_table.doubleClicked.connect(self._on_reports_table_dblclick)
         self._reports_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._reports_table.customContextMenuRequested.connect(
@@ -2442,6 +2446,7 @@ class MainWindow(QMainWindow):
             phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 160}.items():
             self._players_table.setColumnWidth(i, cw)
+        phdr.setStretchLastSection(False)
 
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -2657,6 +2662,7 @@ class MainWindow(QMainWindow):
                     hdr_item.setToolTip(_TT[col])
         hdr.setSectionsMovable(True)
         hdr.setFirstSectionMovable(False)
+        hdr.setStretchLastSection(False)
         self._table_mode = mode
 
     def closeEvent(self, event):
