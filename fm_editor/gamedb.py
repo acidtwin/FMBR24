@@ -213,6 +213,29 @@ def find_abilities(b, names_end):
     return abilities
 
 
+def find_employment(b, people):
+    """Return {person_id: club_entity_id} from b11=0x6a employment records."""
+    result = {}
+    for p in people:
+        pid = p.get('id', -1)
+        if pid == -1:
+            continue
+        end = p['end']
+        if end + 35 > len(b):
+            continue
+        count = b[end + 34]
+        for k in range(min(count, 40)):
+            roff = end + 35 + k * 16
+            if roff + 16 > len(b):
+                break
+            if b[roff + 10] == 0x01 and b[roff + 11] == 0x6a:
+                entity_id = int.from_bytes(b[roff:roff + 4], 'little')
+                if entity_id > 0:
+                    result[pid] = entity_id
+                    break
+    return result
+
+
 def primary_position(positions):
     """Return POSITIONS abbreviation for the player's best position (highest rating)."""
     return POSITIONS[positions.index(max(positions))]

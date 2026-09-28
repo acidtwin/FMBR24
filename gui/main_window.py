@@ -203,7 +203,8 @@ class ParseWorker(QThread):
         try:
             from fm_editor.archive import parse_archive, get_member
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
-                                          find_people, match_identities, find_abilities)
+                                          find_people, match_identities, find_abilities,
+                                          find_employment)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -245,12 +246,17 @@ class ParseWorker(QThread):
                     p['positions'] = ab['positions']
                     p['raw_attrs'] = ab['raw_attrs']
 
+            self._emit("Scanning employment records...", 94)
+            employment = find_employment(b, people)
+            print(f"[diag] employment records: {len(employment)} people have employment link", flush=True)
+
             self._emit("Caching results...", 97)
-            save_cache(self.save_path, clubs, squads, sub_squads, people)
+            save_cache(self.save_path, clubs, squads, sub_squads, people, employment)
 
             self.pct.emit(100)
             result = {
                 'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
+                'employment': employment,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
@@ -1360,16 +1366,20 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_players())     # 5
         self._main_stack.addWidget(self._make_view_club_staff())  # 6
         right_vbox.addWidget(self._main_stack)
-        root_hbox.addWidget(right)
 
         self._status = QStatusBar()
         self._status.setSizeGripEnabled(False)
-        self.setStatusBar(self._status)
+        self._status_ready_lbl = QLabel('Open an FM24 save file to get started.')
+        self._status_ready_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._status_ready_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        self._status.addWidget(self._status_ready_lbl, 1)
         self._status_info_lbl = QLabel('')
-        self._status_info_lbl.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; padding: 0 6px;")
+        self._status_info_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._status_info_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px; padding-right:8px;")
         self._status.addPermanentWidget(self._status_info_lbl)
-        self._status.showMessage('Open an FM24 save file to get started.')
+        right_vbox.addWidget(self._status)
+        root_hbox.addWidget(right)
+        self.statusBar().hide()
         self._save_path = None
 
     def _make_topbar(self):
@@ -1417,7 +1427,7 @@ class MainWindow(QMainWindow):
         self._search_box.setEnabled(False)
         self._search_box.returnPressed.connect(self._do_search)
         self._search_box.setFixedHeight(28)
-        self._search_box.setMaximumWidth(700)
+        self._search_box.setMaximumWidth(16777215)  # no cap
         self._search_box.setStyleSheet(f"""
             QLineEdit {{
                 background: {COLORS['window_bg']};
@@ -1434,9 +1444,7 @@ class MainWindow(QMainWindow):
             _svg_icon(_SVG_SEARCH, COLORS['text_dim'], 14), '', self._search_box)
         self._search_box.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
 
-        layout.addStretch(1)
-        layout.addWidget(self._search_box, 2)
-        layout.addStretch(1)
+        layout.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
             f"QPushButton {{ background:{COLORS['elevated']}; color:{COLORS['text_secondary']};"
@@ -2009,10 +2017,10 @@ class MainWindow(QMainWindow):
             self._staff_count_lbl.setText(
                 f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
             self._status_info_lbl.setText(
-                f'[showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff]')
+                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
         else:
             self._staff_count_lbl.setText(f'{total:,} staff')
-            self._status_info_lbl.setText(f'[{total:,} staff]')
+            self._status_info_lbl.setText(f'{total:,} staff')
 
     def _make_view_club_staff(self):
         w = QWidget()
@@ -2060,19 +2068,19 @@ class MainWindow(QMainWindow):
         if not self._save_data or not self._current_club:
             return
         club = self._current_club
-        squads = self._save_data.get('squads', {})
-        sub_squads = self._save_data.get('sub_squads', {})
         people = self._save_data.get('people', [])
+        employment = self._save_data.get('employment', {})
 
-        club_pids = {pid for pid, cid in squads.items() if cid == club['id']}
-        for kind_pids in sub_squads.get(club['id'], {}).values():
-            club_pids.update(kind_pids)
+        # Staff are linked via b11=0x6a employment records, not squad records.
+        # Entity ID = club_id + 1 in FM24 saves.
+        club_entity_id = club['id'] + 1
+        employed_pids = {pid for pid, eid in employment.items() if eid == club_entity_id}
 
-        abilities_pids = {p.get('id') for p in people if 'ca' in p}
         staff = [p for p in people
-                 if p.get('id') in club_pids and p.get('id') not in abilities_pids]
+                 if p.get('id') in employed_pids and 'ca' not in p]
         staff.sort(key=lambda p: p.get('name', ''))
 
+        print(f"[diag] club '{club['name']}' entity_id={club_entity_id} employed={len(employed_pids)} staff(no-ca)={len(staff)}", flush=True)
         self._club_staff_title_lbl.setText(f'{club["name"]} - Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
@@ -2088,7 +2096,7 @@ class MainWindow(QMainWindow):
         self._club_staff_table.setSortingEnabled(True)
         for i in range(self._club_staff_table.columnCount()):
             self._club_staff_table.resizeColumnToContents(i)
-        self._status_info_lbl.setText(f'[{len(staff):,} staff]')
+        self._status_info_lbl.setText(f'{len(staff):,} staff')
 
     def _make_view_shortlist(self):
         w = QWidget()
@@ -2373,11 +2381,11 @@ class MainWindow(QMainWindow):
         for i in range(self._reports_table.columnCount()):
             self._reports_table.resizeColumnToContents(i)
         self._report_count_lbl.setText(f'{len(players):,} players')
-        info = f'[{len(players):,} players]'
+        info = f'{len(players):,} players'
         if self._current_report_key == 'best_role':
-            preset = self._weights_lbl.text()
+            preset = self._weights_lbl.text().strip('[]')
             if preset:
-                info += f'  {preset}'
+                info += f'  ·  {preset}'
         self._status_info_lbl.setText(info)
 
     def _on_report_pos_changed(self, pos):
@@ -2671,7 +2679,7 @@ class MainWindow(QMainWindow):
         suffix = f' (showing {shown:,} of {total:,})' if total > limit else f' ({total:,})'
         count_text = f'{total:,} players' + (f' - showing {limit:,}' if total > limit else '')
         self._players_count_lbl.setText(count_text)
-        info = f'[{total:,} players]' + (f'  [showing {limit:,}]' if total > limit else '')
+        info = f'{total:,} players' + (f'  ·  showing {limit:,}' if total > limit else '')
         self._status_info_lbl.setText(info)
 
     def _on_players_table_dblclick(self, index):
@@ -2800,7 +2808,8 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
-        self._sb_season.setText(
+        self._sb_season.setText(os.path.basename(path))
+        self._status_ready_lbl.setText(
             f'<span style="color:{COLORS["text_dim"]};">&#9679;</span> Loading...')
         self._update_ui_state()
         self._reload_save()
@@ -2823,21 +2832,19 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
         n_people = len([p for p in result.get('people', []) if p.get('ca') is not None])
-        if self._save_path:
-            fname = os.path.basename(self._save_path)
-            self._sb_season.setText(
-                f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}')
+        fname = os.path.basename(self._save_path) if self._save_path else ''
+        if fname:
+            self._sb_season.setText(fname)
+        self._status_ready_lbl.setText(
+            f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}'
+            f' &nbsp;&middot;&nbsp; {n_clubs:,} clubs, {n_people:,} players')
         self._club_view_name.setText('Save loaded')
         self._club_view_info.setText(
-            f"{n_clubs:,} clubs, {n_people:,} players with ability data. "
-            "Search for a club or player in the top bar.")
+            f"{n_clubs:,} clubs, {n_people:,} players with ability data.")
         self._club_stats_frame.setVisible(False)
         self._club_pos_frame.setVisible(False)
         self._club_top_frame.setVisible(False)
         self._club_view_squad_btn.setVisible(False)
-        self._status.showMessage(
-            f"Loaded: {n_clubs:,} clubs, {n_people:,} players. "
-            "Search for a club or player to get started.")
         self._staff_loaded = False
         self._update_ui_state()
 
@@ -3089,7 +3096,6 @@ class MainWindow(QMainWindow):
                     if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
         self._squad_info.setText(
             f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC")
-        self._status.showMessage(f"Showing {self._current_club['name']}: {len(squad)} players")
 
     def _show_player_results(self, players):
         """Route player search results into the Players view."""
@@ -3467,6 +3473,7 @@ class MainWindow(QMainWindow):
                 f"QProgressBar::chunk {{ background:{COLORS['accent']}; }}"
             )
             self._dot_timer.stop()
+            self._status.clearMessage()
         self._progress.setVisible(busy)
         self._load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))

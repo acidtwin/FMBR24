@@ -9,6 +9,7 @@ try:
     _log_file = open(_log_path, 'w', buffering=1)
     faulthandler.enable(file=_log_file)
     sys.stderr = _log_file
+    sys.stdout = _log_file
 except Exception:
     faulthandler.enable()
 from PyQt6.QtWidgets import QApplication
