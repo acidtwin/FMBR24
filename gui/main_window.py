@@ -1366,7 +1366,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status)
         self._status_info_lbl = QLabel('')
         self._status_info_lbl.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:12px; padding: 0 6px;")
+            f"color:{COLORS['text_secondary']}; padding: 0 6px;")
         self._status.addPermanentWidget(self._status_info_lbl)
         self._status.showMessage('Open an FM24 save file to get started.')
         self._save_path = None
@@ -2590,8 +2590,6 @@ class MainWindow(QMainWindow):
         self._players_count_lbl.setText(count_text)
         info = f'[{total:,} players]' + (f'  [showing {limit:,}]' if total > limit else '')
         self._status_info_lbl.setText(info)
-        self._status.showMessage(
-            f"Players{suffix}. Double-click to view a club squad.")
 
     def _on_players_table_dblclick(self, index):
         item = self._players_table.item(index.row(), 0)
