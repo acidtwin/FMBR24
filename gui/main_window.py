@@ -920,7 +920,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_topbar())
 
         self._progress = QProgressBar()
-        self._progress.setRange(0, 100)
+        self._progress.setRange(0, 10000)
         self._progress.setValue(0)
         self._progress.setFixedHeight(3)
         self._progress.setTextVisible(False)
@@ -2677,20 +2677,18 @@ class MainWindow(QMainWindow):
         self._progress_target = float(pct)
 
     def _tick_shimmer(self):
-        # Smooth progress: lerp toward target, slow creep between chunks
+        # Smooth progress: lerp toward target, constant slow creep between chunks
         target = self._progress_target
         disp = self._progress_displayed
         if target > disp:
             disp += (target - disp) * 0.10
-            if target - disp < 0.05:
+            if target - disp < 0.005:
                 disp = target
         else:
-            # Creep up to 3% ahead of target, never past 99 without explicit signal
-            headroom = min(target + 3.0, 99.0)
-            if disp < headroom:
-                disp = min(disp + 0.12, headroom)
+            # Always creep forward slowly — never stops, never auto-fills past 99
+            disp = min(disp + 0.04, 99.0)
         self._progress_displayed = disp
-        self._progress.setValue(round(disp))
+        self._progress.setValue(round(disp * 100))
 
         self._shimmer_phase = (self._shimmer_phase + 0.017) % 1.0
         # peak sweeps -0.25 → 1.25 so shimmer fully enters and exits
