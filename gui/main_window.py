@@ -192,6 +192,7 @@ class _HoverTable(QTableWidget):
         return super().eventFilter(obj, event)
 
     def drawRow(self, painter, option, index):
+        super().drawRow(painter, option, index)
         if index.row() == self._hovered_row:
             color = (self._SEL_HOVER_COLOR
                      if self.selectionModel().isRowSelected(index.row())
@@ -199,7 +200,6 @@ class _HoverTable(QTableWidget):
             painter.save()
             painter.fillRect(option.rect, color)
             painter.restore()
-        super().drawRow(painter, option, index)
 
 
 def _primary_pos(positions):
