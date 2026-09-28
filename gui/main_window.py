@@ -1987,6 +1987,7 @@ class MainWindow(QMainWindow):
         self._table.setShowGrid(False)
         self._table.setEnabled(False)
         self._table.setSortingEnabled(True)
+        self._table.horizontalHeader().setHighlightSections(False)
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
@@ -2029,6 +2030,7 @@ class MainWindow(QMainWindow):
         self._staff_table.setShowGrid(False)
         self._staff_table.setSortingEnabled(True)
         shdr = self._staff_table.horizontalHeader()
+        shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cols = ['Name', 'Nation', 'Age']
         self._staff_table.setColumnCount(len(cols))
@@ -2103,6 +2105,7 @@ class MainWindow(QMainWindow):
         self._club_staff_table.setSortingEnabled(True)
         self._club_staff_table.setStyleSheet(self._staff_table.styleSheet())
         shdr = self._club_staff_table.horizontalHeader()
+        shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cols = ['Name', 'Nation', 'Age']
         self._club_staff_table.setColumnCount(len(cols))
@@ -2182,6 +2185,7 @@ class MainWindow(QMainWindow):
         self._shortlist_table.setShowGrid(False)
         self._shortlist_table.setSortingEnabled(True)
         shdr = self._shortlist_table.horizontalHeader()
+        shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Age', 'Nation', 'HGP']
         self._shortlist_table.setColumnCount(len(cols))
@@ -2327,6 +2331,7 @@ class MainWindow(QMainWindow):
         self._reports_table.setItemDelegateForColumn(1, self._reports_pos_delegate)
 
         rhdr = self._reports_table.horizontalHeader()
+        rhdr.setHighlightSections(False)
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'Club']
         self._reports_table.setColumnCount(len(cols))
@@ -2593,6 +2598,7 @@ class MainWindow(QMainWindow):
         self._players_table.setItemDelegateForColumn(1, self._players_pos_delegate)
 
         phdr = self._players_table.horizontalHeader()
+        phdr.setHighlightSections(False)
         phdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club']
         self._players_table.setColumnCount(len(cols))
