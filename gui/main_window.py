@@ -1559,11 +1559,10 @@ class MainWindow(QMainWindow):
         cols = ['Name', 'Nation', 'Age']
         self._staff_table.setColumnCount(len(cols))
         self._staff_table.setHorizontalHeaderLabels(cols)
-        shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for i in range(1, len(cols)):
+        for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        self._staff_table.setColumnWidth(1, 50)
-        self._staff_table.setColumnWidth(2, 40)
+        for i, cw in {0: 200, 1: 50, 2: 40}.items():
+            self._staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         vbox.addWidget(self._staff_table, 1)
@@ -1592,7 +1591,7 @@ class MainWindow(QMainWindow):
         total = len(staff)
         if total > self._STAFF_DISPLAY_LIMIT:
             self._staff_count_lbl.setText(
-                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff (filters coming)')
+                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
         else:
             self._staff_count_lbl.setText(f'{total:,} staff')
 
@@ -1630,12 +1629,9 @@ class MainWindow(QMainWindow):
         cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Age', 'Nation', 'HGP']
         self._shortlist_table.setColumnCount(len(cols))
         self._shortlist_table.setHorizontalHeaderLabels(cols)
-        shdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        shdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        for i in range(2, len(cols)):
+        for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        self._shortlist_table.setColumnWidth(1, 160)
-        for i, cw in {2: 55, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
+        for i, cw in {0: 150, 1: 160, 2: 55, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
             self._shortlist_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
