@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF
 from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction
 
 from gui.theme import COLORS
+from gui.roles import role_rating, role_names_by_group, FM_ROLES
 from fm_editor.cache import load_cache, save_cache, clear_cache
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
@@ -838,6 +839,7 @@ class MainWindow(QMainWindow):
         self._dot_phase = -1
         self._table_mode = 'squad'
         self._current_report_key = ''
+        self._report_ratings = {}
 
         self._dot_timer = QTimer(self)
         self._dot_timer.setInterval(420)
@@ -1631,6 +1633,31 @@ class MainWindow(QMainWindow):
         self._report_pos_bar.setVisible(False)
         hdr_row.addWidget(self._report_pos_bar)
 
+        # Role picker bar (best_role mode)
+        self._report_role_bar = QWidget()
+        role_row = QHBoxLayout(self._report_role_bar)
+        role_row.setContentsMargins(0, 0, 0, 0)
+        role_row.setSpacing(6)
+        role_lbl = QLabel('Role:')
+        role_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        role_row.addWidget(role_lbl)
+        self._report_role_combo = QComboBox()
+        self._report_role_combo.setFixedWidth(220)
+        self._report_role_combo.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px;")
+        for group, names in role_names_by_group():
+            sep = self._report_role_combo.count()
+            self._report_role_combo.addItem(f'── {group} ──')
+            self._report_role_combo.model().item(sep).setEnabled(False)
+            for name in names:
+                self._report_role_combo.addItem(name)
+        self._report_role_combo.setCurrentIndex(1)  # first real role, skip group header
+        self._report_role_combo.currentTextChanged.connect(self._on_report_role_changed)
+        role_row.addWidget(self._report_role_combo)
+        self._report_role_bar.setVisible(False)
+        hdr_row.addWidget(self._report_role_bar)
+
         hdr_row.addStretch()
         self._report_count_lbl = QLabel('')
         self._report_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
@@ -1667,7 +1694,8 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._reports_table, 1)
         return w
 
-    def _get_report_players(self, key, pos_name=None):
+    def _get_report_players(self, key, pos_name=None, role_name=None):
+        self._report_ratings = {}
         if not self._save_data:
             return []
         people = self._save_data.get('people', [])
@@ -1688,6 +1716,17 @@ class MainWindow(QMainWindow):
             c = [p for p in people if p.get('positions')
                  and p['positions'][idx] == max(p['positions'])]
             c.sort(key=lambda p: -p.get('ca', 0))
+        elif key == 'best_role':
+            rname = role_name or ''
+            rated = []
+            for p in people:
+                r = role_rating(p, rname)
+                if r is not None:
+                    rated.append((p, r))
+            rated.sort(key=lambda x: -x[1])
+            rated = rated[:200]
+            self._report_ratings = {p.get('id', -1): r for p, r in rated}
+            return [p for p, _ in rated]
         else:
             return []
         return c[:200]
@@ -1698,6 +1737,12 @@ class MainWindow(QMainWindow):
         clubs = self._save_data.get('clubs', [])
         squads = self._save_data.get('squads', {})
         club_by_id = {c['id']: c['name'] for c in clubs}
+        is_role = self._current_report_key == 'best_role'
+        ratings = getattr(self, '_report_ratings', {})
+        rhdr = self._reports_table.horizontalHeader()
+        self._reports_table.setHorizontalHeaderItem(
+            4, _SortItem('Rating' if is_role else 'Dev'))
+        rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._reports_table.setSortingEnabled(False)
         self._reports_table.setRowCount(len(players))
         self._reports_table.clearSelection()
@@ -1708,7 +1753,7 @@ class MainWindow(QMainWindow):
                 pos = '?'
             ca = p.get('ca')
             pa = p.get('pa')
-            dev = _progress_rate(p)
+            col4_val = ratings.get(p.get('id'), None) if is_role else _progress_rate(p)
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
@@ -1721,7 +1766,8 @@ class MainWindow(QMainWindow):
                 _SortItem(pos),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
-                _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
+                _SortItem(str(col4_val) if col4_val is not None else '?',
+                          col4_val if col4_val is not None else -1),
                 _SortItem(str(age), age),
                 _SortItem(flag),
                 _SortItem(club_name),
@@ -1741,6 +1787,14 @@ class MainWindow(QMainWindow):
     def _on_report_pos_changed(self, pos):
         if self._current_report_key == 'best_pos' and self._save_data:
             players = self._get_report_players('best_pos', pos)
+            self._populate_reports_table(players)
+
+    def _on_report_role_changed(self, role):
+        if self._current_report_key == 'best_role' and self._save_data:
+            if not role or role.startswith('──'):
+                return
+            players = self._get_report_players('best_role', role_name=role)
+            self._report_title_lbl.setText(f'Best by Role')
             self._populate_reports_table(players)
 
     def _on_reports_table_dblclick(self, index):
@@ -2407,14 +2461,11 @@ class MainWindow(QMainWindow):
         try:
             if not self._save_data:
                 return
-            if key == 'best_role':
-                from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.information(self, 'Best by Role', 'Coming soon: role-based ratings.')
-                return
             _labels = {
                 'prospects': 'Best Prospects (PA 160+)',
                 'wonderkids': 'Wonderkids (U21, PA 150+)',
                 'best_pos':   'Best in Position',
+                'best_role':  'Best by Role',
             }
             self._current_report_key = key
             for k, btn in self._report_btns.items():
@@ -2423,8 +2474,10 @@ class MainWindow(QMainWindow):
                 btn.setChecked(False)
             self._players_nav_btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
+            self._report_role_bar.setVisible(key == 'best_role')
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
-            players = self._get_report_players(key, pos)
+            role = self._report_role_combo.currentText() if key == 'best_role' else None
+            players = self._get_report_players(key, pos, role)
             self._report_title_lbl.setText(_labels.get(key, key))
             self._populate_reports_table(players)
             self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
