@@ -2153,6 +2153,9 @@ class MainWindow(QMainWindow):
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
         self._reports_table.doubleClicked.connect(self._on_reports_table_dblclick)
+        self._reports_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._reports_table.customContextMenuRequested.connect(
+            lambda pos: self._on_list_table_context_menu(self._reports_table, pos))
         vbox.addWidget(self._reports_table, 1)
         return w
 
@@ -2265,22 +2268,8 @@ class MainWindow(QMainWindow):
 
     def _on_reports_table_dblclick(self, index):
         item = self._reports_table.item(index.row(), 0)
-        if not item:
-            return
-        pid = item.data(Qt.ItemDataRole.UserRole)
-        people = self._save_data.get('people', []) if self._save_data else []
-        p = next((x for x in people if x.get('id') == pid), None)
-        if not p:
-            return
-        squads = self._save_data.get('squads', {})
-        clubs = self._save_data.get('clubs', [])
-        club_id = squads.get(p['id'])
-        if not club_id:
-            self._status.showMessage(f"{p['name']} has no club.")
-            return
-        club = next((c for c in clubs if c['id'] == club_id), None)
-        if club:
-            self._show_squad(club)
+        if item:
+            self._open_player_detail_by_pid(item.data(Qt.ItemDataRole.UserRole))
 
     def _make_view_players(self):
         w = QWidget()
@@ -2403,6 +2392,9 @@ class MainWindow(QMainWindow):
             self._players_table.setColumnWidth(i, cw)
 
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
+        self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._players_table.customContextMenuRequested.connect(
+            lambda pos: self._on_list_table_context_menu(self._players_table, pos))
         vbox.addWidget(self._players_table)
 
         self._all_players_cache = []
@@ -2544,22 +2536,8 @@ class MainWindow(QMainWindow):
 
     def _on_players_table_dblclick(self, index):
         item = self._players_table.item(index.row(), 0)
-        if not item:
-            return
-        pid = item.data(Qt.ItemDataRole.UserRole)
-        people = self._save_data.get('people', []) if self._save_data else []
-        p = next((x for x in people if x.get('id') == pid), None)
-        if not p:
-            return
-        squads = self._save_data.get('squads', {})
-        clubs = self._save_data.get('clubs', [])
-        club_id = squads.get(p['id'])
-        if not club_id:
-            self._status.showMessage(f"{p['name']} has no club.")
-            return
-        club = next((c for c in clubs if c['id'] == club_id), None)
-        if club:
-            self._show_squad(club)
+        if item:
+            self._open_player_detail_by_pid(item.data(Qt.ItemDataRole.UserRole))
 
     # -- Navigation -----------------------------------------------------------
 
@@ -3023,6 +3001,43 @@ class MainWindow(QMainWindow):
                     self._table.selectRow(r)
                     break
             self._do_patch_hgc()
+
+    def _open_player_detail_by_pid(self, pid):
+        """Open PlayerDetailDialog for any player by ID (reports/players views)."""
+        if not self._save_data or pid is None:
+            return
+        people = self._save_data.get('people', [])
+        person = next((p for p in people if p.get('id') == pid), None)
+        if not person:
+            return
+        squads = self._save_data.get('squads', {})
+        clubs = self._save_data.get('clubs', [])
+        club_id = squads.get(pid)
+        club_entity_id = None
+        if club_id:
+            club = next((c for c in clubs if c['id'] == club_id), None)
+            if club and club_id == getattr(self, '_current_club', {}).get('id') \
+                    if isinstance(getattr(self, '_current_club', None), dict) else False:
+                club_entity_id = self._club_entity_id
+        dlg = PlayerDetailDialog(person, self._save_data, club_entity_id, self)
+        dlg.exec()
+
+    def _on_list_table_context_menu(self, table, pos):
+        """Shared context menu for reports and players tables."""
+        row = table.rowAt(pos.y())
+        if row < 0:
+            return
+        item = table.item(row, 0)
+        if not item:
+            return
+        name = item.text()
+        menu = QMenu(self)
+        copy_action = menu.addAction(f'Copy name: {name}')
+        action = menu.exec(table.viewport().mapToGlobal(pos))
+        if action == copy_action:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(name)
+            self._status.showMessage(f'Copied: {name}')
 
     def _open_settings(self):
         dlg = SettingsDialog(self)
