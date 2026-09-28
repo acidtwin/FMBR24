@@ -1352,12 +1352,13 @@ class MainWindow(QMainWindow):
         right_vbox.addWidget(self._progress)
 
         self._main_stack = QStackedWidget()
-        self._main_stack.addWidget(self._make_view_club())       # 0
-        self._main_stack.addWidget(self._make_view_squad())      # 1
-        self._main_stack.addWidget(self._make_view_staff())      # 2
-        self._main_stack.addWidget(self._make_view_shortlist())  # 3
-        self._main_stack.addWidget(self._make_view_reports())    # 4
-        self._main_stack.addWidget(self._make_view_players())    # 5
+        self._main_stack.addWidget(self._make_view_club())        # 0
+        self._main_stack.addWidget(self._make_view_squad())       # 1
+        self._main_stack.addWidget(self._make_view_staff())       # 2
+        self._main_stack.addWidget(self._make_view_shortlist())   # 3
+        self._main_stack.addWidget(self._make_view_reports())     # 4
+        self._main_stack.addWidget(self._make_view_players())     # 5
+        self._main_stack.addWidget(self._make_view_club_staff())  # 6
         right_vbox.addWidget(self._main_stack)
         root_hbox.addWidget(right)
 
@@ -1542,10 +1543,10 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_section_label('MAIN'))
         self._nav_btns = {}
         for key, svg, label in [
-            ('club',      _SVG_CLUB,      'Club'),
-            ('squad',     _SVG_SQUAD,     'Squad'),
-            ('staff',     _SVG_STAFF,     'Staff'),
-            ('shortlist', _SVG_SHORTLIST, 'My Shortlist'),
+            ('club',       _SVG_CLUB,      'Club'),
+            ('squad',      _SVG_SQUAD,     'Squad'),
+            ('club_staff', _SVG_STAFF,     'Staff'),
+            ('shortlist',  _SVG_SHORTLIST, 'My Shortlist'),
         ]:
             if key == 'squad':
                 btn = self._make_nav_btn(svg, label, self._nav_to_squad_view)
@@ -1563,6 +1564,11 @@ class MainWindow(QMainWindow):
             _SVG_SQUAD, 'Players', lambda checked: self._open_players_view())
         self._players_nav_btn.setEnabled(False)
         vbox.addWidget(self._players_nav_btn)
+
+        self._scouting_staff_nav_btn = self._make_nav_btn(
+            _SVG_STAFF, 'Staff', lambda checked: self._nav_to('staff'))
+        self._scouting_staff_nav_btn.setEnabled(False)
+        vbox.addWidget(self._scouting_staff_nav_btn)
 
         vbox.addWidget(self._make_section_label('REPORTS'))
 
@@ -2007,6 +2013,82 @@ class MainWindow(QMainWindow):
         else:
             self._staff_count_lbl.setText(f'{total:,} staff')
             self._status_info_lbl.setText(f'[{total:,} staff]')
+
+    def _make_view_club_staff(self):
+        w = QWidget()
+        vbox = QVBoxLayout(w)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        hdr = QFrame()
+        hdr.setFixedHeight(44)
+        hdr.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        hdr_row = QHBoxLayout(hdr)
+        hdr_row.setContentsMargins(16, 0, 16, 0)
+        self._club_staff_title_lbl = QLabel('Staff')
+        self._club_staff_title_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+        hdr_row.addWidget(self._club_staff_title_lbl)
+        hdr_row.addStretch()
+        vbox.addWidget(hdr)
+
+        self._club_staff_table = QTableWidget()
+        self._club_staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._club_staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._club_staff_table.setAlternatingRowColors(True)
+        self._club_staff_table.verticalHeader().setVisible(False)
+        self._club_staff_table.setShowGrid(False)
+        self._club_staff_table.setSortingEnabled(True)
+        self._club_staff_table.setStyleSheet(self._staff_table.styleSheet())
+        shdr = self._club_staff_table.horizontalHeader()
+        shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = ['Name', 'Nation', 'Age']
+        self._club_staff_table.setColumnCount(len(cols))
+        self._club_staff_table.setHorizontalHeaderLabels(cols)
+        for i in range(len(cols)):
+            shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        for i, cw in {0: 200, 1: 50, 2: 40}.items():
+            self._club_staff_table.setColumnWidth(i, cw)
+        shdr.setSectionsMovable(True)
+        shdr.setFirstSectionMovable(False)
+        shdr.setStretchLastSection(True)
+        vbox.addWidget(self._club_staff_table, 1)
+        return w
+
+    def _populate_club_staff_table(self):
+        if not self._save_data or not self._current_club:
+            return
+        club = self._current_club
+        squads = self._save_data.get('squads', {})
+        sub_squads = self._save_data.get('sub_squads', {})
+        people = self._save_data.get('people', [])
+
+        club_pids = {pid for pid, cid in squads.items() if cid == club['id']}
+        for kind_pids in sub_squads.get(club['id'], {}).values():
+            club_pids.update(kind_pids)
+
+        abilities_pids = {p.get('id') for p in people if 'ca' in p}
+        staff = [p for p in people
+                 if p.get('id') in club_pids and p.get('id') not in abilities_pids]
+        staff.sort(key=lambda p: p.get('name', ''))
+
+        self._club_staff_title_lbl.setText(f'{club["name"]} - Staff')
+        self._club_staff_table.setSortingEnabled(False)
+        self._club_staff_table.setRowCount(len(staff))
+        for row, p in enumerate(staff):
+            name = p.get('name', '')
+            nation_id = p.get('nation', 0)
+            nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
+            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)]
+            for col, item in enumerate(items):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._club_staff_table.setItem(row, col, item)
+        self._club_staff_table.setSortingEnabled(True)
+        for i in range(self._club_staff_table.columnCount()):
+            self._club_staff_table.resizeColumnToContents(i)
+        self._status_info_lbl.setText(f'[{len(staff):,} staff]')
 
     def _make_view_shortlist(self):
         w = QWidget()
@@ -2465,6 +2547,7 @@ class MainWindow(QMainWindow):
         for btn in self._report_btns.values():
             btn.setChecked(False)
         self._players_nav_btn.setChecked(True)
+        self._scouting_staff_nav_btn.setChecked(False)
 
         if players is not None:
             self._all_players_cache = players
@@ -2598,12 +2681,14 @@ class MainWindow(QMainWindow):
 
     # -- Navigation -----------------------------------------------------------
 
-    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5}
+    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6}
 
     def _nav_to(self, key: str):
         if key == 'staff' and not getattr(self, '_staff_loaded', False):
             self._populate_staff_table()
             self._staff_loaded = True
+        if key == 'club_staff':
+            self._populate_club_staff_table()
         if key in ('club', 'squad', 'shortlist'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
@@ -2611,6 +2696,7 @@ class MainWindow(QMainWindow):
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == key)
         self._players_nav_btn.setChecked(False)
+        self._scouting_staff_nav_btn.setChecked(key == 'staff')
         if key not in ('squad',):
             for btn in self._report_btns.values():
                 btn.setChecked(False)
@@ -2622,6 +2708,7 @@ class MainWindow(QMainWindow):
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == 'squad')
         self._players_nav_btn.setChecked(False)
+        self._scouting_staff_nav_btn.setChecked(False)
         for btn in self._report_btns.values():
             btn.setChecked(False)
 
@@ -2687,8 +2774,9 @@ class MainWindow(QMainWindow):
             btn.setEnabled(has_abilities)
         self._players_nav_btn.setEnabled(has_abilities)
         self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
-        self._nav_btns['staff'].setEnabled(has_data)
+        self._nav_btns['club_staff'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['shortlist'].setEnabled(has_data)
+        self._scouting_staff_nav_btn.setEnabled(has_data)
         self._table.setEnabled(has_data)
         has_squad = bool(self._squad) and self._table_mode == 'squad'
         has_b = has_data and 'b' in self._save_data
@@ -3132,6 +3220,7 @@ class MainWindow(QMainWindow):
             for btn in self._nav_btns.values():
                 btn.setChecked(False)
             self._players_nav_btn.setChecked(False)
+            self._scouting_staff_nav_btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
             self._report_role_bar.setVisible(key == 'best_role')
             if key == 'best_role':
