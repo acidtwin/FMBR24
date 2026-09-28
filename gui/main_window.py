@@ -1364,6 +1364,10 @@ class MainWindow(QMainWindow):
         self._status = QStatusBar()
         self._status.setSizeGripEnabled(False)
         self.setStatusBar(self._status)
+        self._status_info_lbl = QLabel('')
+        self._status_info_lbl.setStyleSheet(
+            f"color:{COLORS['text_secondary']}; font-size:12px; padding: 0 6px;")
+        self._status.addPermanentWidget(self._status_info_lbl)
         self._status.showMessage('Open an FM24 save file to get started.')
         self._save_path = None
 
@@ -1412,7 +1416,7 @@ class MainWindow(QMainWindow):
         self._search_box.setEnabled(False)
         self._search_box.returnPressed.connect(self._do_search)
         self._search_box.setFixedHeight(28)
-        self._search_box.setMaximumWidth(440)
+        self._search_box.setMaximumWidth(700)
         self._search_box.setStyleSheet(f"""
             QLineEdit {{
                 background: {COLORS['window_bg']};
@@ -1947,8 +1951,6 @@ class MainWindow(QMainWindow):
         hdr_row.addWidget(hdr_lbl)
         hdr_row.addStretch()
         self._staff_count_lbl = QLabel('')
-        self._staff_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
-        hdr_row.addWidget(self._staff_count_lbl)
         vbox.addWidget(hdr)
 
         self._staff_table = QTableWidget()
@@ -1999,8 +2001,11 @@ class MainWindow(QMainWindow):
         if total > self._STAFF_DISPLAY_LIMIT:
             self._staff_count_lbl.setText(
                 f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
+            self._status_info_lbl.setText(
+                f'[showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff]')
         else:
             self._staff_count_lbl.setText(f'{total:,} staff')
+            self._status_info_lbl.setText(f'[{total:,} staff]')
 
     def _make_view_shortlist(self):
         w = QWidget()
@@ -2020,8 +2025,6 @@ class MainWindow(QMainWindow):
         hdr_row.addWidget(hdr_lbl)
         hdr_row.addStretch()
         self._shortlist_count_lbl = QLabel('0 players')
-        self._shortlist_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
-        hdr_row.addWidget(self._shortlist_count_lbl)
         vbox.addWidget(hdr)
 
         self._shortlist_table = QTableWidget()
@@ -2118,9 +2121,6 @@ class MainWindow(QMainWindow):
         self._report_role_combo.currentTextChanged.connect(self._on_report_role_changed)
         role_row.addWidget(self._report_role_combo)
         self._weights_lbl = QLabel()
-        self._weights_lbl.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; padding-left:6px;")
-        role_row.addWidget(self._weights_lbl)
         self._report_role_bar.setVisible(False)
         hdr_row.addWidget(self._report_role_bar)
 
@@ -2140,9 +2140,8 @@ class MainWindow(QMainWindow):
         self._report_age_min.setValue(15)
         self._report_age_min.setFixedWidth(46)
         self._report_age_min.setStyleSheet(_spin_ss)
-        self._report_age_min.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         hdr_row.addWidget(self._report_age_min)
-        dash_lbl = QLabel('–')
+        dash_lbl = QLabel('-')
         dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
         hdr_row.addWidget(dash_lbl)
         self._report_age_max = QSpinBox()
@@ -2150,14 +2149,11 @@ class MainWindow(QMainWindow):
         self._report_age_max.setValue(45)
         self._report_age_max.setFixedWidth(46)
         self._report_age_max.setStyleSheet(_spin_ss)
-        self._report_age_max.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         hdr_row.addWidget(self._report_age_max)
         self._report_age_min.valueChanged.connect(self._on_report_age_changed)
         self._report_age_max.valueChanged.connect(self._on_report_age_changed)
 
         self._report_count_lbl = QLabel('')
-        self._report_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
-        hdr_row.addWidget(self._report_count_lbl)
         vbox.addWidget(hdr)
 
         self._reports_table = QTableWidget()
@@ -2294,6 +2290,12 @@ class MainWindow(QMainWindow):
         for i in range(self._reports_table.columnCount()):
             self._reports_table.resizeColumnToContents(i)
         self._report_count_lbl.setText(f'{len(players):,} players')
+        info = f'[{len(players):,} players]'
+        if self._current_report_key == 'best_role':
+            preset = self._weights_lbl.text()
+            if preset:
+                info += f'  {preset}'
+        self._status_info_lbl.setText(info)
 
     def _on_report_pos_changed(self, pos):
         if self._current_report_key == 'best_pos' and self._save_data:
@@ -2350,9 +2352,6 @@ class MainWindow(QMainWindow):
         title_row.addWidget(title_lbl)
         title_row.addStretch()
         self._players_count_lbl = QLabel('')
-        self._players_count_lbl.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:11px;")
-        title_row.addWidget(self._players_count_lbl)
         hdr_vbox.addLayout(title_row)
 
         # Filter row
@@ -2586,8 +2585,10 @@ class MainWindow(QMainWindow):
             self._players_table.resizeColumnToContents(i)
         shown = len(display)
         suffix = f' (showing {shown:,} of {total:,})' if total > limit else f' ({total:,})'
-        self._players_count_lbl.setText(
-            f'{total:,} players' + (f' · showing {limit:,}' if total > limit else ''))
+        count_text = f'{total:,} players' + (f' - showing {limit:,}' if total > limit else '')
+        self._players_count_lbl.setText(count_text)
+        info = f'[{total:,} players]' + (f'  [showing {limit:,}]' if total > limit else '')
+        self._status_info_lbl.setText(info)
         self._status.showMessage(
             f"Players{suffix}. Double-click to view a club squad.")
 
@@ -2604,6 +2605,8 @@ class MainWindow(QMainWindow):
         if key == 'staff' and not getattr(self, '_staff_loaded', False):
             self._populate_staff_table()
             self._staff_loaded = True
+        if key in ('club', 'squad', 'shortlist'):
+            self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
         self._main_stack.setCurrentIndex(idx)
         for k, btn in self._nav_btns.items():
@@ -2684,7 +2687,7 @@ class MainWindow(QMainWindow):
         for btn in self._report_btns.values():
             btn.setEnabled(has_abilities)
         self._players_nav_btn.setEnabled(has_abilities)
-        self._nav_btns['squad'].setEnabled(has_data)
+        self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['staff'].setEnabled(has_data)
         self._nav_btns['shortlist'].setEnabled(has_data)
         self._table.setEnabled(has_data)
