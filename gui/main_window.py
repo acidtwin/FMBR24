@@ -122,7 +122,7 @@ _COL_TT = {
     'Pos':    'Primary playing position',
     'CA':     'Current Ability (1–200)\nOverall quality right now',
     'PA':     'Potential Ability (1–200)\nMaximum this player can reach',
-    'Dev':    'Development rate (1–20)\nPredicted speed of improvement — based on ambition, professionalism and determination',
+    'Dev':    'Development rate (1–20)\nPredicted improvement speed, based on ambition, professionalism and determination',
     'Rating': 'Role suitability (1–20)\nMean of key attributes for the selected role',
     'HGP':    'Homegrown Player (nation)\nTrained in England for 3+ years between ages 15–21',
     'HGC':    'Homegrown at Club\nTrained at this club for 3+ years between ages 15–21',
@@ -1065,7 +1065,7 @@ class MainWindow(QMainWindow):
         self._load_btn = QPushButton('Load')
         self._load_btn.setFixedHeight(28)
         self._load_btn.setObjectName('accent')
-        self._load_btn.setToolTip('Open and load an FM24 save file')
+        self._load_btn.setToolTip('Open an FM24 save file')
         self._load_btn.setIcon(_svg_icon(_SVG_LOAD, '#fff', 13))
         self._load_btn.setIconSize(QSize(13, 13))
         self._load_btn.setStyleSheet(_tbtn_accent_ss)
@@ -1159,7 +1159,7 @@ class MainWindow(QMainWindow):
         self._players_nav_btn.setEnabled(False)
         vbox.addWidget(self._players_nav_btn)
 
-        vbox.addWidget(self._make_section_label('Reports'))
+        vbox.addWidget(self._make_section_label('REPORTS'))
 
         self._report_btns = {}
         for key, label in [
@@ -1852,7 +1852,7 @@ class MainWindow(QMainWindow):
             if not role or role.startswith('──'):
                 return
             players = self._get_report_players('best_role', role_name=role)
-            self._report_title_lbl.setText(f'Best by Role')
+            self._report_title_lbl.setText('Best by Role')
             self._populate_reports_table(players)
 
     def _on_reports_table_dblclick(self, index):
@@ -2529,7 +2529,7 @@ class MainWindow(QMainWindow):
         except Exception:
             import traceback
             traceback.print_exc()
-            self._status.showMessage('Report error — see log.')
+            self._status.showMessage('Report error. See log.')
 
     def _on_table_context_menu(self, pos):
         row = self._table.rowAt(pos.y())
@@ -2599,16 +2599,16 @@ class MainWindow(QMainWindow):
                            if not p.get('hgp', False)]
         if not people_to_patch:
             QMessageBox.information(self, 'Nothing to patch',
-                                    'All selected players already have HGP status.')
+                                    'All selected players are already HGP.')
             return
         if 'b' not in self._save_data:
             QMessageBox.warning(self, 'Reload required',
-                                'Please click "Reload Save" before patching.')
+                                'Click Reload before patching.')
             return
         out_path = self._confirm_patch_dialog(people_to_patch, 'HGP')
         if not out_path:
             return
-        self._set_busy(True, 'Patching HGP and writing')
+        self._set_busy(True, 'Applying HGP patch')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch, mode='hgp')
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
@@ -2621,7 +2621,7 @@ class MainWindow(QMainWindow):
             return
         if 'b' not in self._save_data:
             QMessageBox.warning(self, 'Reload required',
-                                'Please click "Reload Save" before patching.')
+                                'Click Reload before patching.')
             return
         from fm_editor.patch import is_hgc
         b = self._save_data['b']
@@ -2629,12 +2629,12 @@ class MainWindow(QMainWindow):
                            if not is_hgc(b, p, self._club_entity_id)]
         if not people_to_patch:
             QMessageBox.information(self, 'Nothing to patch',
-                                    'All selected players already have HGC status.')
+                                    'All selected players are already HGC.')
             return
         out_path = self._confirm_patch_dialog(people_to_patch, 'HGC')
         if not out_path:
             return
-        self._set_busy(True, 'Patching HGC and writing')
+        self._set_busy(True, 'Applying HGC patch')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch,
                                    mode='hgc', club_entity_id=self._club_entity_id)
         self._worker.progress.connect(self._on_progress)
