@@ -1,7 +1,7 @@
 """JSON cache for parsed save data, keyed by file mtime.
 
 Cache file: ~/.cache/fm24_editor/<sha256_of_path>.json
-Stores: mtime, clubs list, squad dict, people list (id/name/nation/birth_year/end).
+Stores: mtime, clubs list, squads dict, sub_squads dict, people list.
 Re-parse if mtime changed or cache missing.
 """
 import json
@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 6  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 7  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -33,9 +33,14 @@ def load_cache(save_path):
         mtime = os.path.getmtime(save_path)
         if abs(data.get('mtime', 0) - mtime) > 1:
             return None
-        # JSON dict keys are always strings; normalize squads back to int keys
+        # JSON dict keys are always strings; normalize back to int keys
         if 'squads' in data:
             data['squads'] = {int(k): int(v) for k, v in data['squads'].items()}
+        if 'sub_squads' in data:
+            data['sub_squads'] = {
+                int(cid): {int(kind): pids for kind, pids in kinds.items()}
+                for cid, kinds in data['sub_squads'].items()
+            }
         return data
     except Exception:
         return None
@@ -49,7 +54,7 @@ def clear_cache(save_path):
         pass
 
 
-def save_cache(save_path, clubs, squads, people):
+def save_cache(save_path, clubs, squads, sub_squads, people):
     os.makedirs(_CACHE_DIR, exist_ok=True)
     cp = _cache_path(save_path)
     slim_people = []
@@ -70,6 +75,7 @@ def save_cache(save_path, clubs, squads, people):
         'mtime': os.path.getmtime(save_path),
         'clubs': clubs,
         'squads': squads,
+        'sub_squads': sub_squads,
         'people': slim_people,
     }
     try:

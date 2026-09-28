@@ -221,7 +221,7 @@ class ParseWorker(QThread):
             clubs = find_clubs(b, names_start)
 
             self._emit("Finding squad memberships...", 65)
-            squads = find_squads(b, clubs, names_start)
+            squads, sub_squads = find_squads(b, clubs, names_start)
 
             self._emit("Finding people and matching identities...", 72)
             people = find_people(b, first_names, last_names, names_end)
@@ -242,11 +242,11 @@ class ParseWorker(QThread):
                     p['raw_attrs'] = ab['raw_attrs']
 
             self._emit("Caching results...", 97)
-            save_cache(self.save_path, clubs, squads, people)
+            save_cache(self.save_path, clubs, squads, sub_squads, people)
 
             self.pct.emit(100)
             result = {
-                'clubs': clubs, 'squads': squads, 'people': people,
+                'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
@@ -1430,11 +1430,11 @@ class MainWindow(QMainWindow):
 
         # Squad tab row — shows "First Team" + sub-squads when loaded
         tab_bar = QFrame()
-        tab_bar.setFixedHeight(36)
+        tab_bar.setFixedHeight(40)
         tab_bar.setStyleSheet(
             f"background:{COLORS['surface']}; border-bottom:1px solid {COLORS['border']};")
         tab_row = QHBoxLayout(tab_bar)
-        tab_row.setContentsMargins(12, 0, 12, 0)
+        tab_row.setContentsMargins(12, 3, 12, 0)
         tab_row.setSpacing(0)
 
         _squad_tab_ss = f"""
@@ -1442,7 +1442,8 @@ class MainWindow(QMainWindow):
                 background: transparent; border: none;
                 border-bottom: 2px solid transparent;
                 color: {COLORS['text_secondary']};
-                padding: 6px 14px; font-size: 12px; border-radius: 0;
+                padding: 0px 16px; font-size: 12px; border-radius: 0;
+                min-width: 80px;
             }}
             QPushButton:hover {{ color: {COLORS['text_primary']}; }}
             QPushButton:checked {{
@@ -1451,15 +1452,18 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """
+        self._squad_tab_ss_str = _squad_tab_ss
         self._squad_tab_bar = tab_row   # keep reference to add dynamic tabs later
         self._squad_tab_frame = tab_bar
         self._squad_tab_btns = []
+        self._squad_tab_dynamic_btns = []
 
         # First Team tab always present
         ft_btn = QPushButton('First Team')
         ft_btn.setCheckable(True)
         ft_btn.setChecked(True)
-        ft_btn.setFixedHeight(36)
+        ft_btn.setSizePolicy(
+            QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         ft_btn.setStyleSheet(_squad_tab_ss)
         tab_row.addWidget(ft_btn)
         self._squad_tab_btns.append(ft_btn)
@@ -2393,14 +2397,85 @@ class MainWindow(QMainWindow):
         self._update_club_view()
 
         self._populate_squad_table(squad)
+        self._build_squad_tabs(club, squad)
         self._nav_to('squad')
         self._nav_btns['squad'].setChecked(True)
         self._update_ui_state()
         try:
             self._table.itemSelectionChanged.disconnect()
-        except RuntimeError:
+        except (RuntimeError, TypeError):
             pass
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
+
+    def _build_squad_tabs(self, main_club, main_squad):
+        """Detect sub-clubs (e.g. U21, U18, B team) and populate tab bar."""
+        # Remove old dynamic tabs
+        for btn in self._squad_tab_dynamic_btns:
+            self._squad_tab_bar.removeWidget(btn)
+            btn.deleteLater()
+        self._squad_tab_dynamic_btns = []
+        # Reset btn list to ft_btn only
+        ft_btn = self._squad_tab_btns[0]
+        self._squad_tab_btns = [ft_btn]
+        ft_btn.setChecked(True)
+        try:
+            ft_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        ft_btn.clicked.connect(lambda checked: self._switch_sub_squad(0, main_squad))
+
+        clubs = self._save_data.get('clubs', [])
+        squads = self._save_data.get('squads', {})
+        people = self._save_data.get('people', [])
+        prefix = main_club['name'] + ' '
+
+        # Kind-based sub-squads (English clubs: same club_id, different kind byte)
+        _KIND_LABEL = {21: 'U21', 23: 'U23', 20: 'Reserves', 19: 'U19', 18: 'U18'}
+        _KIND_ORDER = {21: 1, 23: 2, 20: 3, 19: 4, 18: 5}
+        sub_squads = self._save_data.get('sub_squads', {})
+        people_by_id = {p['id']: p for p in people if 'id' in p}
+
+        sub_entries = []
+        kind_map = sub_squads.get(main_club['id'], {})
+        for kind, pids in kind_map.items():
+            sub_squad = [people_by_id[pid] for pid in pids if pid in people_by_id]
+            if sub_squad:
+                label = _KIND_LABEL.get(kind, f'Squad {kind}')
+                order = _KIND_ORDER.get(kind, 99)
+                sub_entries.append((label, sub_squad, order))
+
+        # Prefix-based sub-clubs (German/Spanish B teams: separate club entity)
+        for c in clubs:
+            if not c['name'].startswith(prefix):
+                continue
+            club_pids = {pid for pid, cid in squads.items() if cid == c['id']}
+            sub_squad = [p for p in people if p.get('id', -1) in club_pids]
+            if sub_squad:
+                label = c['name'][len(prefix):]
+                sub_entries.append((label, sub_squad, 0))  # B teams sort first
+
+        sub_entries.sort(key=lambda x: (x[2], x[0]))
+
+        for i, (label, sub_squad, _order) in enumerate(sub_entries):
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setSizePolicy(
+                QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+            btn.setStyleSheet(self._squad_tab_ss_str)
+            tab_idx = i + 1
+            btn.clicked.connect(
+                lambda checked, idx=tab_idx, sq=sub_squad: self._switch_sub_squad(idx, sq))
+            self._squad_tab_bar.insertWidget(1 + i, btn)
+            self._squad_tab_dynamic_btns.append(btn)
+            self._squad_tab_btns.append(btn)
+
+    def _switch_sub_squad(self, tab_idx, sub_squad):
+        """Switch squad tab: update check state, repopulate table."""
+        for i, btn in enumerate(self._squad_tab_btns):
+            btn.setChecked(i == tab_idx)
+        self._squad = sub_squad
+        self._configure_table_for_mode('squad')
+        self._populate_squad_table(sub_squad)
 
     def _populate_squad_table(self, squad):
         from fm_editor.patch import is_hgc

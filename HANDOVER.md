@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-28 (session 3)
+**Last updated:** 2026-09-28 (session 4)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,7 +9,33 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
-All changes on `master`. Latest commit: `fded9c2` + freeze fix (uncommitted, applied this session).
+All changes on `master`.
+
+### Session 4 fixes/features (2026-09-28)
+
+**Sub-squad tabs** — squad view now shows First Team + youth/reserve tabs:
+- Two detection strategies combined:
+  - **Kind-based** (English clubs): `find_squads` now also captures kinds 18-23 into `sub_squads = {club_id: {kind: [pids]}}`. Kind 100 = first team; 21=U21, 23=U23, 20=Reserves, 19=U19, 18=U18.
+  - **Prefix-based** (German/Spanish B teams): clubs named `"Main Club X"` (e.g. "FC Bayern München II") detected by name prefix match, kind 100 squad used.
+- `_build_squad_tabs(club, squad)` called from `_show_squad` — removes old dynamic tabs, detects sub-squads, inserts clickable tab buttons before the stretch.
+- `_switch_sub_squad(tab_idx, sub_squad)` — updates checked state across all tab buttons, swaps `self._squad`, repopulates table.
+- Cache version bumped to 7 (adds `sub_squads` field).
+
+**"First Team" text clipping fixed**:
+- Tab bar height 36→40, margins `(12,3,12,0)`, QSS padding `6px→0px` with `min-width:80px`.
+- `ft_btn` uses `setSizePolicy(Minimum, Expanding)` instead of `setFixedHeight` — lets Qt compute correct minimum width.
+
+**PyQt6 disconnect() TypeError fixed**:
+- `signal.disconnect()` raises `TypeError` (not `RuntimeError`) in PyQt6 6.11 when no connections — all disconnect guards now catch `(RuntimeError, TypeError)`.
+
+**Search crash fixed**:
+- `_do_search` wraps `_do_search_inner` in try/except; exceptions show status message instead of crashing to desktop.
+
+**Nav button locking**:
+- Squad, Staff, My Shortlist buttons disabled until a save is loaded.
+
+**Column auto-fit**:
+- `resizeColumnToContents(i)` called once after populate on all four tables (squad, staff, reports, players).
 
 ### Session 3 fixes (2026-09-28)
 
@@ -109,7 +135,7 @@ Double-click a player in Players view → navigates to their club's squad.
 | ▶ / ▼ navigation buttons | Disabled (greyed) — no back/forward history yet |
 | Right tab nav in player modal | Only Profile tab active; Transfer/Positions/Ratings are future |
 | Squad number (#) column | Not implemented — mockup had it, excluded by design |
-| Sub-squads (U21/B team) | Sidebar Players squad-version tabs — First Team tab exists, sub-teams need squad parsing to identify them |
+| Sub-squads (U21/B team) | Live — tabs generated from kind-based (English) and prefix-based (German/Spanish) detection. English clubs with no kind-18/21 records in squads won't show sub-tabs. |
 | Players view: load all | Currently loads all people with CA data (no explicit limit enforced in filter; display caps at 3000 rows); slow on first open for large saves |
 | HGP/HGC patching from cache | Disabled — requires binary `b` in memory; user must Load (not use cached version) |
 | Player photo | Placeholder person icon; FM save doesn't store player photos |
@@ -131,7 +157,7 @@ See memory file: `~/.claude/projects/-run-media-acidtwin-Gaming-SSD-1-Claude-Cod
 
 - Wire **Add to Shortlist** in player modal → My Shortlist view
 - **Back/forward** navigation history (`_nav_history` stack)
-- **Sub-squad tabs** (U21, B team) — needs squad grouping by team entity ID in parser
+- **Sub-squad tabs** — working for clubs with kind data; investigate if kind 18-23 presence varies by league setup or save age
 - **Best by Role** report — map positions to FM roles, rank by relevant attributes
 - **Player photo** — if FM24 image packs can be located on disk, load by player ID
 - **Bulk export** — export squad CSV

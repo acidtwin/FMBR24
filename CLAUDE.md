@@ -9,7 +9,7 @@ PyQt6 6.11.0 desktop app, Linux, Python 3.12. Single file: `gui/main_window.py`.
 - `QApplication.processEvents()` in a slot → re-entrant event loop → qFatal abort — never call it mid-populate
 - Loop var name `w` in dict iteration overwrites widget ref → GC RuntimeError — rename loop vars to `cw`/`idx`/etc
 - Qt QSS has no keyframe animations — motion effects need QTimer + stylesheet update (see `_tick_shimmer`)
-- Signal `disconnect()` raises `RuntimeError` (not Exception) when nothing connected — catch specifically
+- Signal `disconnect()` raises `RuntimeError` or `TypeError` depending on PyQt6 version — catch both: `except (RuntimeError, TypeError)`
 - `next()` without default → bare StopIteration crash — always `next(..., None)` + guard
 
 ## Run

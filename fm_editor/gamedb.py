@@ -93,9 +93,14 @@ def find_clubs(b, names_start):
 # -- Squads --------------------------------------------------------------------
 
 def find_squads(b, clubs, names_start):
-    """Return dict: person_id (int) -> club_id (int)."""
+    """Return (squads, sub_squads).
+
+    squads: {person_id: club_id} for first-team (kind 100).
+    sub_squads: {club_id: {kind: [person_ids]}} for youth/reserve (kinds 18-23).
+    """
     club_by_id = {c['id']: c for c in clubs}
     squads = {}
+    sub_squads = {}
     p = 4
     while p + 70 < names_start:
         at = p; p += 1
@@ -116,7 +121,6 @@ def find_squads(b, clubs, names_start):
                     club = club_by_id[oid]
         if club is None: continue
         limit = min(at + 10000, names_start)
-        # bytearray.find for the 0xFFFFFFFF squad-list marker (was byte-by-byte loop)
         q = at + 30
         while True:
             q = b.find(b'\xff\xff\xff\xff', q, limit - 14)
@@ -132,11 +136,16 @@ def find_squads(b, clubs, names_start):
             if len(set(ids)) != count or any(i > 3_000_000 for i in ids):
                 q += 1; continue
             kind = b[at - 3] if b[at - 4] == 1 and b[at - 2] == 0xFF else 100
-            if kind == 100:  # main squad only; skip reserve/youth (kinds 18-23)
+            if kind == 100:
                 for pid in ids:
                     squads[pid] = club['id']
+            else:
+                cid = club['id']
+                if cid not in sub_squads:
+                    sub_squads[cid] = {}
+                sub_squads[cid][kind] = ids
             break
-    return squads
+    return squads, sub_squads
 
 
 # -- People --------------------------------------------------------------------
