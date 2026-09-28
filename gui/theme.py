@@ -143,21 +143,21 @@ QLineEdit:disabled {{
 
 /* -- Table --------------------------------------------------------- */
 QTableWidget {{
-    background-color: {COLORS['window_bg']};
+    background-color: #14151A;
     color: {COLORS['text_primary']};
     gridline-color: transparent;
     border: none;
-    selection-background-color: {COLORS['selection_bg']};
+    selection-background-color: #2A1B4A;
     selection-color: {COLORS['text_primary']};
-    alternate-background-color: {COLORS['surface']};
+    alternate-background-color: #161721;
 }}
 QTableWidget::item {{
     padding: 7px 10px;
     border: none;
-    border-bottom: 1px solid rgba(52,55,64,160);
+    border-bottom: 1px solid rgba(52,55,64,153);
 }}
 QTableWidget::item:selected {{
-    background-color: {COLORS['selection_bg']};
+    background-color: #2A1B4A;
 }}
 QTableWidget::item:hover {{
     background-color: rgba(105,51,189,26);
@@ -166,11 +166,11 @@ QTableWidget::item:selected:hover {{
     background-color: rgba(105,51,189,64);
 }}
 QHeaderView::section {{
-    background-color: {COLORS['elevated']};
-    color: {COLORS['text_dim']};
+    background-color: #292B32;
+    color: #525B68;
     border: none;
-    border-bottom: 1px solid {COLORS['border']};
-    border-right: 1px solid {COLORS['border']};
+    border-bottom: 1px solid #343740;
+    border-right: 1px solid #343740;
     padding: 6px 10px;
     font-size: 10px;
     text-transform: uppercase;

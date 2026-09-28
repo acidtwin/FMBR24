@@ -250,6 +250,22 @@ class ParseWorker(QThread):
             employment = find_employment(b, people)
             print(f"[diag] employment records: {len(employment)} people have employment link", flush=True)
 
+            # Scan record blocks for known staff (Bertelli) to find club-link record type
+            for p in people:
+                if 'bertelli' in p.get('name', '').lower() and 'ca' not in p:
+                    end = p['end']
+                    count = b[end + 34] if end + 35 <= len(b) else 0
+                    recs = []
+                    for k in range(min(count, 60)):
+                        roff = end + 35 + k * 16
+                        if roff + 16 > len(b): break
+                        b10, b11 = b[roff + 10], b[roff + 11]
+                        val0 = int.from_bytes(b[roff:roff+4], 'little')
+                        recs.append(f"b10={hex(b10)} b11={hex(b11)} val0={val0}")
+                    print(f"[diag] {p['name']} id={p['id']} end={end} record_count={count}", flush=True)
+                    for r in recs:
+                        print(f"  {r}", flush=True)
+
             self._emit("Caching results...", 97)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment)
 
