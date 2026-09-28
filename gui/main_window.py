@@ -103,6 +103,17 @@ _SVG_REPORT = (
 # Ping-pong dot counts for loading animation
 _DOT_SEQ = [1, 2, 3, 4, 5, 4, 3, 2]
 
+# Column header tooltips shared across all player tables
+_COL_TT = {
+    'Pos':    'Primary playing position',
+    'CA':     'Current Ability (1–200)\nOverall quality right now',
+    'PA':     'Potential Ability (1–200)\nMaximum this player can reach',
+    'Dev':    'Development rate (1–20)\nPredicted speed of improvement — based on ambition, professionalism and determination',
+    'Rating': 'Role suitability (1–20)\nMean of key attributes for the selected role',
+    'HGP':    'Homegrown Player (nation)\nTrained in England for 3+ years between ages 15–21',
+    'HGC':    'Homegrown at Club\nTrained at this club for 3+ years between ages 15–21',
+}
+
 
 def _svg_icon(svg_tpl: str, color: str = '#8B96A8', size: int = 16) -> QIcon:
     """Render an SVG template string (with {c} color placeholder) to QIcon."""
@@ -1680,6 +1691,9 @@ class MainWindow(QMainWindow):
         cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'Club']
         self._reports_table.setColumnCount(len(cols))
         self._reports_table.setHorizontalHeaderLabels(cols)
+        for i, col in enumerate(cols):
+            if col in _COL_TT:
+                self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         rhdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         rhdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
         for i in range(1, 7):
@@ -1740,8 +1754,9 @@ class MainWindow(QMainWindow):
         is_role = self._current_report_key == 'best_role'
         ratings = getattr(self, '_report_ratings', {})
         rhdr = self._reports_table.horizontalHeader()
-        self._reports_table.setHorizontalHeaderItem(
-            4, _SortItem('Rating' if is_role else 'Dev'))
+        col4_label = 'Rating' if is_role else 'Dev'
+        self._reports_table.setHorizontalHeaderItem(4, _SortItem(col4_label))
+        self._reports_table.horizontalHeaderItem(4).setToolTip(_COL_TT.get(col4_label, ''))
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._reports_table.setSortingEnabled(False)
         self._reports_table.setRowCount(len(players))
@@ -1928,6 +1943,9 @@ class MainWindow(QMainWindow):
         cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club']
         self._players_table.setColumnCount(len(cols))
         self._players_table.setHorizontalHeaderLabels(cols)
+        for i, col in enumerate(cols):
+            if col in _COL_TT:
+                self._players_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         phdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         phdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Interactive)
         self._players_table.setColumnWidth(8, 160)
@@ -2125,14 +2143,8 @@ class MainWindow(QMainWindow):
     def _configure_table_for_mode(self, mode):
         hdr = self._table.horizontalHeader()
         hdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        _TT = {
-            'CA':  'Current Ability (1-200): overall quality right now',
-            'PA':  'Potential Ability (1-200): maximum this player can reach',
-            'Dev': 'Development rate (1-20): predicted speed of improvement\n'
-                   'Based on ambition, professionalism and determination',
+        _TT = _COL_TT | {
             'Age': 'Age at start of FM24 season',
-            'HGP': 'Homegrown Player (nation): trained in England for 3+ years between ages 15-21',
-            'HGC': 'Homegrown at Club: trained at THIS club for 3+ years between ages 15-21',
         }
         if mode == 'squad':
             cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC']
