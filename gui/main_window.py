@@ -285,23 +285,25 @@ class ParseWorker(QThread):
             employment = find_employment(b, people)
             print(f"[diag] employment records: {len(employment)} people have employment link", flush=True)
 
-            # Find Spurs and check sub_squad kinds + Bertelli presence
-            spurs = next((c for c in clubs if 'tottenham' in c.get('name','').lower()), None)
-            if spurs:
-                sid = spurs['id']
-                kinds = sub_squads.get(sid, {})
-                print(f"[diag] Spurs sub_squad kinds: {list(kinds.keys())} (sizes: {[(k,len(v)) for k,v in kinds.items()]})", flush=True)
-                pid_bertelli = 5930
-                in_squad = pid_bertelli in squads
-                in_sub = any(pid_bertelli in v for v in kinds.values())
-                print(f"[diag] Bertelli(5930) in squads={in_squad} in_sub_squads={in_sub}", flush=True)
-                # Check which squad kinds contain non-CA people
-                people_by_id = {p.get('id'): p for p in people}
-                player_ids = {p.get('id') for p in people if 'ca' in p}
+            # Scan all sub_squad kinds globally — staff may use a kind we haven't seen
+            from collections import defaultdict
+            people_by_id = {p.get('id'): p for p in people}
+            player_ids = {p.get('id') for p in people if 'ca' in p}
+            kind_stats = defaultdict(lambda: {'clubs': 0, 'total_pids': 0, 'non_player_pids': 0, 'sample_names': []})
+            for cid, kinds in sub_squads.items():
                 for kind, pids in kinds.items():
-                    non_players = [pid for pid in pids if pid in people_by_id and pid not in player_ids]
-                    if non_players:
-                        print(f"[diag] sub_squad kind={kind} has {len(non_players)} non-CA people: {[people_by_id[pid]['name'] for pid in non_players[:5]]}", flush=True)
+                    ks = kind_stats[kind]
+                    ks['clubs'] += 1
+                    ks['total_pids'] += len(pids)
+                    non_p = [pid for pid in pids if pid not in player_ids]
+                    ks['non_player_pids'] += len(non_p)
+                    for pid in non_p[:2]:
+                        if pid in people_by_id and len(ks['sample_names']) < 3:
+                            ks['sample_names'].append(people_by_id[pid].get('name','?'))
+            print(f"[diag] All sub_squad kinds: {sorted(kind_stats.keys())}", flush=True)
+            for kind in sorted(kind_stats.keys()):
+                ks = kind_stats[kind]
+                print(f"[diag]   kind={kind}: {ks['clubs']} clubs, {ks['total_pids']} pids, {ks['non_player_pids']} non-player — {ks['sample_names']}", flush=True)
 
             self._emit("Caching results...", 97)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment)
