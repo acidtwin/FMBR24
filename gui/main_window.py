@@ -2122,6 +2122,36 @@ class MainWindow(QMainWindow):
         hdr_row.addWidget(self._report_role_bar)
 
         hdr_row.addStretch()
+
+        # Age range filter — always visible
+        _spin_ss = (
+            f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f" border:1px solid {COLORS['border']}; border-radius:2px;"
+            f" padding:1px 2px; font-size:12px; }}"
+        )
+        age_lbl = QLabel('Age:')
+        age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        hdr_row.addWidget(age_lbl)
+        self._report_age_min = QSpinBox()
+        self._report_age_min.setRange(15, 60)
+        self._report_age_min.setValue(15)
+        self._report_age_min.setFixedWidth(46)
+        self._report_age_min.setStyleSheet(_spin_ss)
+        self._report_age_min.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        hdr_row.addWidget(self._report_age_min)
+        dash_lbl = QLabel('–')
+        dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        hdr_row.addWidget(dash_lbl)
+        self._report_age_max = QSpinBox()
+        self._report_age_max.setRange(15, 60)
+        self._report_age_max.setValue(45)
+        self._report_age_max.setFixedWidth(46)
+        self._report_age_max.setStyleSheet(_spin_ss)
+        self._report_age_max.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        hdr_row.addWidget(self._report_age_max)
+        self._report_age_min.valueChanged.connect(self._on_report_age_changed)
+        self._report_age_max.valueChanged.connect(self._on_report_age_changed)
+
         self._report_count_lbl = QLabel('')
         self._report_count_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
         hdr_row.addWidget(self._report_count_lbl)
@@ -2184,8 +2214,13 @@ class MainWindow(QMainWindow):
         elif key == 'best_role':
             rname = role_name or ''
             role_weights = _weights_mod.get_role_weights(self._active_preset, rname)
+            mn_age = self._report_age_min.value()
+            mx_age = self._report_age_max.value()
             rated = []
             for p in people:
+                age = season_year - p.get('birth_year', season_year)
+                if not (mn_age <= age <= mx_age):
+                    continue
                 r = role_rating(p, rname, role_weights)
                 if r is not None:
                     rated.append((p, r))
@@ -2195,6 +2230,9 @@ class MainWindow(QMainWindow):
             return [p for p, _ in rated]
         else:
             return []
+        mn_age = self._report_age_min.value()
+        mx_age = self._report_age_max.value()
+        c = [p for p in c if mn_age <= (season_year - p.get('birth_year', season_year)) <= mx_age]
         return c[:200]
 
     def _populate_reports_table(self, players):
@@ -2265,6 +2303,20 @@ class MainWindow(QMainWindow):
             players = self._get_report_players('best_role', role_name=role)
             self._report_title_lbl.setText('Best by Role')
             self._populate_reports_table(players)
+
+    def _on_report_age_changed(self):
+        if not self._current_report_key or not self._save_data:
+            return
+        mn, mx = self._report_age_min.value(), self._report_age_max.value()
+        if mn > mx:
+            return
+        key = self._current_report_key
+        pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
+        role = self._report_role_combo.currentText() if key == 'best_role' else None
+        if role and role.startswith('──'):
+            return
+        players = self._get_report_players(key, pos, role)
+        self._populate_reports_table(players)
 
     def _on_reports_table_dblclick(self, index):
         item = self._reports_table.item(index.row(), 0)
