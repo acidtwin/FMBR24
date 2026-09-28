@@ -1530,8 +1530,9 @@ class MainWindow(QMainWindow):
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;"
             "padding: 13px 15px 2px; background:transparent;")
         self._sb_season = QLabel('No save loaded')
+        self._sb_season.setTextFormat(Qt.TextFormat.RichText)
         self._sb_season.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:11px;"
+            f"color:{COLORS['text_secondary']}; font-size:11px;"
             "padding:0 15px 10px; background:transparent;")
         vbox.addWidget(self._sb_club_name)
         vbox.addWidget(self._sb_season)
@@ -2713,7 +2714,8 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
-        self._sb_season.setText(os.path.basename(path))
+        self._sb_season.setText(
+            f'<span style="color:{COLORS["text_dim"]};">&#9679;</span> Loading...')
         self._update_ui_state()
         self._reload_save()
 
@@ -2736,7 +2738,9 @@ class MainWindow(QMainWindow):
         n_clubs = len(result.get('clubs', []))
         n_people = len([p for p in result.get('people', []) if p.get('ca') is not None])
         if self._save_path:
-            self._sb_season.setText(os.path.basename(self._save_path))
+            fname = os.path.basename(self._save_path)
+            self._sb_season.setText(
+                f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}')
         self._club_view_name.setText('Save loaded')
         self._club_view_info.setText(
             f"{n_clubs:,} clubs, {n_people:,} players with ability data. "
