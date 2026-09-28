@@ -2081,6 +2081,9 @@ class MainWindow(QMainWindow):
         staff.sort(key=lambda p: p.get('name', ''))
 
         print(f"[diag] club '{club['name']}' entity_id={club_entity_id} employed={len(employed_pids)} staff(no-ca)={len(staff)}", flush=True)
+        bertelli = [p for p in people if 'bertelli' in p.get('name','').lower()]
+        print(f"[diag] bertelli in people list: {[(p.get('name'), p.get('id'), 'ca' in p, employment.get(p.get('id'))) for p in bertelli]}", flush=True)
+        print(f"[diag] total people parsed: {len(people)}, with employment: {len(employment)}", flush=True)
         self._club_staff_title_lbl.setText(f'{club["name"]} - Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
@@ -2221,7 +2224,7 @@ class MainWindow(QMainWindow):
         _spin_ss = (
             f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
             f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:1px 16px 1px 4px; font-size:12px; }}"
+            f" padding:1px 2px 1px 4px; font-size:12px; }}"
             f"QSpinBox::up-button {{ subcontrol-origin:border; subcontrol-position:top right;"
             f" width:14px; height:10px; background:{COLORS['elevated']};"
             f" border-left:1px solid {COLORS['border']}; border-bottom:1px solid {COLORS['border']};"
@@ -2232,12 +2235,8 @@ class MainWindow(QMainWindow):
             f" border-bottom-right-radius:2px; }}"
             f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
             f" {{ background:{COLORS['border']}; }}"
-            f"QSpinBox::up-arrow {{ image:none; width:0; height:0;"
-            f" border-left:3px solid transparent; border-right:3px solid transparent;"
-            f" border-bottom:4px solid {COLORS['text_secondary']}; }}"
-            f"QSpinBox::down-arrow {{ image:none; width:0; height:0;"
-            f" border-left:3px solid transparent; border-right:3px solid transparent;"
-            f" border-top:4px solid {COLORS['text_secondary']}; }}"
+            f"QSpinBox::up-arrow {{ width:6px; height:6px; }}"
+            f"QSpinBox::down-arrow {{ width:6px; height:6px; }}"
         )
         age_lbl = QLabel('Age:')
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")

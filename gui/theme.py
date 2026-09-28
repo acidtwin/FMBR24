@@ -143,32 +143,38 @@ QLineEdit:disabled {{
 
 /* -- Table --------------------------------------------------------- */
 QTableWidget {{
-    background-color: {COLORS['surface']};
+    background-color: {COLORS['window_bg']};
     color: {COLORS['text_primary']};
-    gridline-color: {COLORS['border']};
-    border: 1px solid {COLORS['border']};
-    border-radius: 3px;
+    gridline-color: transparent;
+    border: none;
     selection-background-color: {COLORS['selection_bg']};
     selection-color: {COLORS['text_primary']};
-    alternate-background-color: {COLORS['elevated']};
+    alternate-background-color: {COLORS['surface']};
 }}
 QTableWidget::item {{
-    padding: 5px 8px;
+    padding: 7px 10px;
     border: none;
+    border-bottom: 1px solid rgba(52,55,64,160);
 }}
 QTableWidget::item:selected {{
     background-color: {COLORS['selection_bg']};
 }}
+QTableWidget::item:hover {{
+    background-color: rgba(105,51,189,26);
+}}
+QTableWidget::item:selected:hover {{
+    background-color: rgba(105,51,189,64);
+}}
 QHeaderView::section {{
     background-color: {COLORS['elevated']};
-    color: {COLORS['text_secondary']};
+    color: {COLORS['text_dim']};
     border: none;
     border-bottom: 1px solid {COLORS['border']};
     border-right: 1px solid {COLORS['border']};
-    padding: 5px 8px;
-    font-size: 11px;
+    padding: 6px 10px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
 }}
 QHeaderView::section:last {{
     border-right: none;

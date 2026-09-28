@@ -4,7 +4,7 @@
 import sys
 import faulthandler
 
-_log_path = '/tmp/fm_editor_crash.log'
+_log_path = '/tmp/fm_editor_debug.log'
 try:
     _log_file = open(_log_path, 'w', buffering=1)
     faulthandler.enable(file=_log_file)
