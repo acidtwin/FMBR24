@@ -898,20 +898,28 @@ class MainWindow(QMainWindow):
             QPushButton {{
                 background: transparent;
                 border: none;
+                border-left: 3px solid transparent;
                 color: {COLORS['text_secondary']};
                 text-align: left;
-                padding: 7px 15px;
+                padding: 7px 15px 7px 12px;
                 font-size: 12px;
                 border-radius: 0;
             }}
             QPushButton:hover {{
-                background: {COLORS['border']};
+                background: {COLORS['elevated']};
                 color: {COLORS['text_primary']};
+                border-left: 3px solid {COLORS['border_bright']};
             }}
             QPushButton:checked {{
                 background: {COLORS['selection_bg']};
                 color: {COLORS['text_primary']};
                 font-weight: bold;
+                border-left: 3px solid {COLORS['accent']};
+            }}
+            QPushButton:disabled {{
+                color: {COLORS['text_dim']};
+                background: transparent;
+                border-left: 3px solid transparent;
             }}
         """)
         return btn
@@ -919,8 +927,8 @@ class MainWindow(QMainWindow):
     def _make_section_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; "
-            "letter-spacing:1px; padding:6px 15px 4px;"
+            f"color:{COLORS['text_secondary']}; font-size:10px; font-weight:600; "
+            "letter-spacing:1.2px; padding:10px 15px 3px;"
         )
         return lbl
 
@@ -1434,7 +1442,7 @@ class MainWindow(QMainWindow):
                 background: transparent; border: none;
                 border-bottom: 2px solid transparent;
                 color: {COLORS['text_secondary']};
-                padding: 0 14px; font-size: 12px; border-radius: 0;
+                padding: 6px 14px; font-size: 12px; border-radius: 0;
             }}
             QPushButton:hover {{ color: {COLORS['text_primary']}; }}
             QPushButton:checked {{
@@ -1588,6 +1596,8 @@ class MainWindow(QMainWindow):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
         self._staff_table.setSortingEnabled(True)
+        for i in range(self._staff_table.columnCount()):
+            self._staff_table.resizeColumnToContents(i)
         total = len(staff)
         if total > self._STAFF_DISPLAY_LIMIT:
             self._staff_count_lbl.setText(
@@ -1836,6 +1846,8 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._reports_table.setItem(row, col, item)
         self._reports_table.setSortingEnabled(True)
+        for i in range(self._reports_table.columnCount()):
+            self._reports_table.resizeColumnToContents(i)
         self._report_count_lbl.setText(f'{len(players):,} players')
 
     def _on_report_pos_changed(self, pos):
@@ -2121,6 +2133,8 @@ class MainWindow(QMainWindow):
                 self._players_table.setItem(row, col, item)
 
         self._players_table.setSortingEnabled(True)
+        for i in range(self._players_table.columnCount()):
+            self._players_table.resizeColumnToContents(i)
         shown = len(display)
         suffix = f' (showing {shown:,} of {total:,})' if total > limit else f' ({total:,})'
         self._players_count_lbl.setText(
@@ -2208,7 +2222,9 @@ class MainWindow(QMainWindow):
                 self._table.setColumnWidth(i, cw)
         for i, col in enumerate(cols):
             if col in _TT:
-                self._table.horizontalHeaderItem(i).setToolTip(_TT[col])
+                hdr_item = self._table.horizontalHeaderItem(i)
+                if hdr_item is not None:
+                    hdr_item.setToolTip(_TT[col])
         hdr.setSectionsMovable(True)
         hdr.setFirstSectionMovable(False)
         self._table_mode = mode
@@ -2232,6 +2248,9 @@ class MainWindow(QMainWindow):
         for btn in self._report_btns.values():
             btn.setEnabled(has_abilities)
         self._players_nav_btn.setEnabled(has_abilities)
+        self._nav_btns['squad'].setEnabled(has_data)
+        self._nav_btns['staff'].setEnabled(has_data)
+        self._nav_btns['shortlist'].setEnabled(has_data)
         self._table.setEnabled(has_data)
         has_squad = bool(self._squad) and self._table_mode == 'squad'
         has_b = has_data and 'b' in self._save_data
@@ -2296,6 +2315,14 @@ class MainWindow(QMainWindow):
     # -- Search ---------------------------------------------------------------
 
     def _do_search(self):
+        try:
+            self._do_search_inner()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            self._status.showMessage('Search failed. See crash log.')
+
+    def _do_search_inner(self):
         if not self._save_data:
             return
         query = self._search_box.text().strip()
@@ -2427,6 +2454,8 @@ class MainWindow(QMainWindow):
                 self._table.setItem(row, col, item)
 
         self._table.setSortingEnabled(True)
+        for i in range(self._table.columnCount()):
+            self._table.resizeColumnToContents(i)
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc
