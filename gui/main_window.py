@@ -857,6 +857,8 @@ class MainWindow(QMainWindow):
         self._dot_timer.timeout.connect(self._tick_dots)
 
         self._shimmer_phase = 0.0
+        self._progress_target = 0.0
+        self._progress_displayed = 0.0
         self._shimmer_timer = QTimer(self)
         self._shimmer_timer.setInterval(30)
         self._shimmer_timer.timeout.connect(self._tick_shimmer)
@@ -2241,7 +2243,7 @@ class MainWindow(QMainWindow):
         self._set_busy(True, 'Parsing save file')
         self._worker = ParseWorker(self._save_path)
         self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._progress.setValue)
+        self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_parse_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -2583,7 +2585,7 @@ class MainWindow(QMainWindow):
         self._set_busy(True, 'Patching HGP and writing')
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch, mode='hgp')
         self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._progress.setValue)
+        self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_patch_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -2610,7 +2612,7 @@ class MainWindow(QMainWindow):
         self._worker = PatchWorker(self._save_data, out_path, people_to_patch,
                                    mode='hgc', club_entity_id=self._club_entity_id)
         self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._progress.setValue)
+        self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_patch_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -2660,7 +2662,7 @@ class MainWindow(QMainWindow):
         self._set_busy(True, 'Writing save file')
         self._worker = PatchWorker(self._save_data, out_path, [], mode='save_only')
         self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._progress.setValue)
+        self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_patch_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -2671,7 +2673,25 @@ class MainWindow(QMainWindow):
         self._dot_phase = (self._dot_phase + 1) % len(_DOT_SEQ)
         self._status.showMessage(self._status_base + '.' * _DOT_SEQ[self._dot_phase])
 
+    def _on_progress_pct(self, pct: int):
+        self._progress_target = float(pct)
+
     def _tick_shimmer(self):
+        # Smooth progress: lerp toward target, slow creep between chunks
+        target = self._progress_target
+        disp = self._progress_displayed
+        if target > disp:
+            disp += (target - disp) * 0.10
+            if target - disp < 0.05:
+                disp = target
+        else:
+            # Creep up to 3% ahead of target, never past 99 without explicit signal
+            headroom = min(target + 3.0, 99.0)
+            if disp < headroom:
+                disp = min(disp + 0.12, headroom)
+        self._progress_displayed = disp
+        self._progress.setValue(round(disp))
+
         self._shimmer_phase = (self._shimmer_phase + 0.017) % 1.0
         # peak sweeps -0.25 → 1.25 so shimmer fully enters and exits
         peak = -0.25 + self._shimmer_phase * 1.5
@@ -2703,6 +2723,8 @@ class MainWindow(QMainWindow):
         if busy:
             self._progress.setValue(0)
             self._shimmer_phase = 0.0
+            self._progress_target = 0.0
+            self._progress_displayed = 0.0
             self._shimmer_timer.start()
             self._dot_phase = -1
             self._status_base = msg or self._status_base
