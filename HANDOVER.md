@@ -11,6 +11,20 @@ Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham
 
 All changes on `master`.
 
+### Session 4 fixes/features (2026-09-28) — continued
+
+**Status bar black corner fixed**:
+- `QSizeGrip` inside `QStatusBar` didn't paint background when launched via desktop shortcut (no terminal). Fixed with `setSizeGripEnabled(False)` — window manager handles resizing.
+
+**Badge text → pure white**:
+- All `_POS_BADGE_COLORS` fg values changed to `#FFFFFF` for legibility on all badge backgrounds.
+
+**Dot animation**:
+- Changed from ping-pong `[1,2,3,4,5,4,3,2]` to growing cycle `[1,2,3,4]` (`.` `..` `...` `....` repeat).
+
+**Inline search dropdown**:
+- Multiple club matches no longer open `QInputDialog`. Instead `_show_search_dropdown()` shows a floating `QFrame(Qt.Popup)` below the search box with clickable club name buttons. Auto-dismisses on outside click.
+
 ### Session 4 fixes/features (2026-09-28)
 
 **Sub-squad tabs** — squad view now shows First Team + youth/reserve tabs:

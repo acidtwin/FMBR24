@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QStyleOptionViewItem,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
 from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction
 
 from gui.theme import COLORS
@@ -114,8 +114,8 @@ _SVG_SAVE = (
     '</svg>'
 )
 
-# Ping-pong dot counts for loading animation
-_DOT_SEQ = [1, 2, 3, 4, 5, 4, 3, 2]
+# Growing dot cycle: . .. ... ....
+_DOT_SEQ = [1, 2, 3, 4]
 
 # Column header tooltips shared across all player tables
 _COL_TT = {
@@ -355,15 +355,15 @@ _NATION_FLAG = {
 
 # Position → (background, foreground) matching mockup color scheme
 _POS_BADGE_COLORS = {
-    'GK':  ('#C07B2A', '#F5A63C'),
-    'SW':  ('#3A6BA8', '#6EB3F7'),
-    'DL':  ('#3A6BA8', '#6EB3F7'), 'DC': ('#3A6BA8', '#6EB3F7'),
-    'DR':  ('#3A6BA8', '#6EB3F7'), 'DM': ('#3A6BA8', '#6EB3F7'),
-    'WBL': ('#3A6BA8', '#6EB3F7'), 'WBR': ('#3A6BA8', '#6EB3F7'),
-    'ML':  ('#3A8A5A', '#6ADE9A'), 'MC': ('#3A8A5A', '#6ADE9A'),
-    'MR':  ('#3A8A5A', '#6ADE9A'), 'AML': ('#3A8A5A', '#6ADE9A'),
-    'AMC': ('#3A8A5A', '#6ADE9A'), 'AMR': ('#3A8A5A', '#6ADE9A'),
-    'ST':  ('#A83A3A', '#F7806A'),
+    'GK':  ('#C07B2A', '#FFFFFF'),
+    'SW':  ('#3A6BA8', '#FFFFFF'),
+    'DL':  ('#3A6BA8', '#FFFFFF'), 'DC': ('#3A6BA8', '#FFFFFF'),
+    'DR':  ('#3A6BA8', '#FFFFFF'), 'DM': ('#3A6BA8', '#FFFFFF'),
+    'WBL': ('#3A6BA8', '#FFFFFF'), 'WBR': ('#3A6BA8', '#FFFFFF'),
+    'ML':  ('#3A8A5A', '#FFFFFF'), 'MC': ('#3A8A5A', '#FFFFFF'),
+    'MR':  ('#3A8A5A', '#FFFFFF'), 'AML': ('#3A8A5A', '#FFFFFF'),
+    'AMC': ('#3A8A5A', '#FFFFFF'), 'AMR': ('#3A8A5A', '#FFFFFF'),
+    'ST':  ('#A83A3A', '#FFFFFF'),
 }
 
 
@@ -970,6 +970,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(shell)
 
         self._status = QStatusBar()
+        self._status.setSizeGripEnabled(False)
         self.setStatusBar(self._status)
         self._status.showMessage('Open an FM24 save file to get started.')
         self._save_path = None
@@ -2353,16 +2354,42 @@ class MainWindow(QMainWindow):
         for cid in squads.values():
             squad_counts[cid] = squad_counts.get(cid, 0) + 1
         matches.sort(key=lambda c: squad_counts.get(c['id'], 0), reverse=True)
-        from PyQt6.QtWidgets import QInputDialog
-        names = [c['name'] for c in matches]
-        chosen, ok = QInputDialog.getItem(
-            self, 'Multiple matches',
-            f'{len(matches)} clubs match "{query}". Pick one:',
-            names, 0, False)
-        if ok:
-            self._show_squad(matches[names.index(chosen)])
+        self._show_search_dropdown(matches)
 
     # -- Squad / table views --------------------------------------------------
+
+    def _show_search_dropdown(self, matches):
+        """Show floating panel below search box listing club matches."""
+        if hasattr(self, '_search_dropdown') and self._search_dropdown is not None:
+            try:
+                self._search_dropdown.close()
+            except RuntimeError:
+                pass
+        popup = QFrame(self, Qt.WindowType.Popup)
+        popup.setStyleSheet(
+            f"QFrame {{ background:{COLORS['elevated']};"
+            f" border:1px solid {COLORS['border_bright']}; border-radius:4px; }}"
+        )
+        vbox = QVBoxLayout(popup)
+        vbox.setContentsMargins(4, 4, 4, 4)
+        vbox.setSpacing(1)
+        _btn_ss = (
+            f"QPushButton {{ background:transparent; color:{COLORS['text_primary']};"
+            f" border:none; text-align:left; padding:6px 10px; font-size:12px; border-radius:3px; }}"
+            f"QPushButton:hover {{ background:{COLORS['selection_bg']}; }}"
+        )
+        for club in matches[:15]:
+            btn = QPushButton(club['name'])
+            btn.setStyleSheet(_btn_ss)
+            btn.clicked.connect(
+                lambda checked, c=club: (popup.close(), self._show_squad(c)))
+            vbox.addWidget(btn)
+        sb = self._search_box
+        origin = sb.mapToGlobal(QPoint(0, sb.height() + 2))
+        popup.move(origin)
+        popup.setFixedWidth(max(260, sb.width()))
+        popup.show()
+        self._search_dropdown = popup
 
     def _show_squad(self, club):
         self._configure_table_for_mode('squad')
