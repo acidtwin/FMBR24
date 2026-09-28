@@ -2221,7 +2221,23 @@ class MainWindow(QMainWindow):
         _spin_ss = (
             f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
             f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:1px 2px; font-size:12px; }}"
+            f" padding:1px 16px 1px 4px; font-size:12px; }}"
+            f"QSpinBox::up-button {{ subcontrol-origin:border; subcontrol-position:top right;"
+            f" width:14px; height:10px; background:{COLORS['elevated']};"
+            f" border-left:1px solid {COLORS['border']}; border-bottom:1px solid {COLORS['border']};"
+            f" border-top-right-radius:2px; }}"
+            f"QSpinBox::down-button {{ subcontrol-origin:border; subcontrol-position:bottom right;"
+            f" width:14px; height:10px; background:{COLORS['elevated']};"
+            f" border-left:1px solid {COLORS['border']};"
+            f" border-bottom-right-radius:2px; }}"
+            f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
+            f" {{ background:{COLORS['border']}; }}"
+            f"QSpinBox::up-arrow {{ image:none; width:0; height:0;"
+            f" border-left:3px solid transparent; border-right:3px solid transparent;"
+            f" border-bottom:4px solid {COLORS['text_secondary']}; }}"
+            f"QSpinBox::down-arrow {{ image:none; width:0; height:0;"
+            f" border-left:3px solid transparent; border-right:3px solid transparent;"
+            f" border-top:4px solid {COLORS['text_secondary']}; }}"
         )
         age_lbl = QLabel('Age:')
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
@@ -2229,7 +2245,7 @@ class MainWindow(QMainWindow):
         self._report_age_min = QSpinBox()
         self._report_age_min.setRange(15, 60)
         self._report_age_min.setValue(15)
-        self._report_age_min.setFixedWidth(46)
+        self._report_age_min.setFixedWidth(52)
         self._report_age_min.setStyleSheet(_spin_ss)
         hdr_row.addWidget(self._report_age_min)
         dash_lbl = QLabel('-')
@@ -2238,7 +2254,7 @@ class MainWindow(QMainWindow):
         self._report_age_max = QSpinBox()
         self._report_age_max.setRange(15, 60)
         self._report_age_max.setValue(45)
-        self._report_age_max.setFixedWidth(46)
+        self._report_age_max.setFixedWidth(52)
         self._report_age_max.setStyleSheet(_spin_ss)
         hdr_row.addWidget(self._report_age_max)
         self._report_age_min.valueChanged.connect(self._on_report_age_changed)
