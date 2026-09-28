@@ -856,6 +856,11 @@ class MainWindow(QMainWindow):
         self._dot_timer.setInterval(420)
         self._dot_timer.timeout.connect(self._tick_dots)
 
+        self._shimmer_phase = 0.0
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(30)
+        self._shimmer_timer.timeout.connect(self._tick_shimmer)
+
         self._build_ui()
         self._update_ui_state()
 
@@ -2342,7 +2347,7 @@ class MainWindow(QMainWindow):
         self._update_ui_state()
         try:
             self._table.itemSelectionChanged.disconnect()
-        except Exception:
+        except RuntimeError:
             pass
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
 
@@ -2666,6 +2671,24 @@ class MainWindow(QMainWindow):
         self._dot_phase = (self._dot_phase + 1) % len(_DOT_SEQ)
         self._status.showMessage(self._status_base + '.' * _DOT_SEQ[self._dot_phase])
 
+    def _tick_shimmer(self):
+        self._shimmer_phase = (self._shimmer_phase + 0.017) % 1.0
+        # peak sweeps -0.25 → 1.25 so shimmer fully enters and exits
+        peak = -0.25 + self._shimmer_phase * 1.5
+        hw = 0.18
+        stops: dict[float, str] = {0.0: '#4a2290', 1.0: '#4a2290'}
+        for offset, col in ((-hw, '#5a2da0'), (-hw * 0.5, '#6933bd'),
+                            (0.0, '#c0a8fa'), (hw * 0.5, '#6933bd'), (hw, '#5a2da0')):
+            p = round(peak + offset, 4)
+            if 0.001 <= p <= 0.999:
+                stops[p] = col
+        s = ' '.join(f'stop:{p} {c}' for p, c in sorted(stops.items()))
+        self._progress.setStyleSheet(
+            f"QProgressBar {{ background:{COLORS['elevated']}; border:none; }}"
+            f"QProgressBar::chunk {{ background:qlineargradient("
+            f"x1:0,y1:0,x2:1,y2:0,{s}); }}"
+        )
+
     def _on_progress(self, msg):
         self._status_base = msg.rstrip('.')
         self._dot_phase = -1
@@ -2679,11 +2702,18 @@ class MainWindow(QMainWindow):
     def _set_busy(self, busy, msg=''):
         if busy:
             self._progress.setValue(0)
+            self._shimmer_phase = 0.0
+            self._shimmer_timer.start()
             self._dot_phase = -1
             self._status_base = msg or self._status_base
             self._status.showMessage(self._status_base)
             self._dot_timer.start()
         else:
+            self._shimmer_timer.stop()
+            self._progress.setStyleSheet(
+                f"QProgressBar {{ background:{COLORS['elevated']}; border:none; }}"
+                f"QProgressBar::chunk {{ background:{COLORS['accent']}; }}"
+            )
             self._dot_timer.stop()
         self._progress.setVisible(busy)
         self._load_btn.setEnabled(not busy)
