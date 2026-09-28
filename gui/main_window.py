@@ -167,6 +167,41 @@ class _SortItem(QTableWidgetItem):
             return False
 
 
+class _HoverTable(QTableWidget):
+    """QTableWidget that highlights the full hovered row."""
+    _HOVER_COLOR = QColor(105, 51, 189, 26)
+    _SEL_HOVER_COLOR = QColor(105, 51, 189, 64)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._hovered_row = -1
+        self.viewport().setMouseTracking(True)
+        self.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            if event.type() == event.Type.MouseMove:
+                idx = self.indexAt(event.pos())
+                row = idx.row() if idx.isValid() else -1
+                if row != self._hovered_row:
+                    self._hovered_row = row
+                    self.viewport().update()
+            elif event.type() in (event.Type.Leave, event.Type.HoverLeave):
+                self._hovered_row = -1
+                self.viewport().update()
+        return super().eventFilter(obj, event)
+
+    def drawRow(self, painter, option, index):
+        if index.row() == self._hovered_row:
+            color = (self._SEL_HOVER_COLOR
+                     if self.selectionModel().isRowSelected(index.row())
+                     else self._HOVER_COLOR)
+            painter.save()
+            painter.fillRect(option.rect, color)
+            painter.restore()
+        super().drawRow(painter, option, index)
+
+
 def _primary_pos(positions):
     return POSITIONS[positions.index(max(positions))]
 
@@ -250,21 +285,23 @@ class ParseWorker(QThread):
             employment = find_employment(b, people)
             print(f"[diag] employment records: {len(employment)} people have employment link", flush=True)
 
-            # Scan record blocks for known staff (Bertelli) to find club-link record type
-            for p in people:
-                if 'bertelli' in p.get('name', '').lower() and 'ca' not in p:
-                    end = p['end']
-                    count = b[end + 34] if end + 35 <= len(b) else 0
-                    recs = []
-                    for k in range(min(count, 60)):
-                        roff = end + 35 + k * 16
-                        if roff + 16 > len(b): break
-                        b10, b11 = b[roff + 10], b[roff + 11]
-                        val0 = int.from_bytes(b[roff:roff+4], 'little')
-                        recs.append(f"b10={hex(b10)} b11={hex(b11)} val0={val0}")
-                    print(f"[diag] {p['name']} id={p['id']} end={end} record_count={count}", flush=True)
-                    for r in recs:
-                        print(f"  {r}", flush=True)
+            # Find Spurs and check sub_squad kinds + Bertelli presence
+            spurs = next((c for c in clubs if 'tottenham' in c.get('name','').lower()), None)
+            if spurs:
+                sid = spurs['id']
+                kinds = sub_squads.get(sid, {})
+                print(f"[diag] Spurs sub_squad kinds: {list(kinds.keys())} (sizes: {[(k,len(v)) for k,v in kinds.items()]})", flush=True)
+                pid_bertelli = 5930
+                in_squad = pid_bertelli in squads
+                in_sub = any(pid_bertelli in v for v in kinds.values())
+                print(f"[diag] Bertelli(5930) in squads={in_squad} in_sub_squads={in_sub}", flush=True)
+                # Check which squad kinds contain non-CA people
+                people_by_id = {p.get('id'): p for p in people}
+                player_ids = {p.get('id') for p in people if 'ca' in p}
+                for kind, pids in kinds.items():
+                    non_players = [pid for pid in pids if pid in people_by_id and pid not in player_ids]
+                    if non_players:
+                        print(f"[diag] sub_squad kind={kind} has {len(non_players)} non-CA people: {[people_by_id[pid]['name'] for pid in non_players[:5]]}", flush=True)
 
             self._emit("Caching results...", 97)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment)
@@ -1941,7 +1978,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(tab_bar)
 
         # Table
-        self._table = QTableWidget()
+        self._table = _HoverTable()
         self._table.setColumnCount(9)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -1984,7 +2021,7 @@ class MainWindow(QMainWindow):
         self._staff_count_lbl = QLabel('')
         vbox.addWidget(hdr)
 
-        self._staff_table = QTableWidget()
+        self._staff_table = _HoverTable()
         self._staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._staff_table.setAlternatingRowColors(True)
@@ -2057,7 +2094,7 @@ class MainWindow(QMainWindow):
         hdr_row.addStretch()
         vbox.addWidget(hdr)
 
-        self._club_staff_table = QTableWidget()
+        self._club_staff_table = _HoverTable()
         self._club_staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._club_staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._club_staff_table.setAlternatingRowColors(True)
@@ -2137,7 +2174,7 @@ class MainWindow(QMainWindow):
         self._shortlist_count_lbl = QLabel('0 players')
         vbox.addWidget(hdr)
 
-        self._shortlist_table = QTableWidget()
+        self._shortlist_table = _HoverTable()
         self._shortlist_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._shortlist_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._shortlist_table.setAlternatingRowColors(True)
@@ -2278,7 +2315,7 @@ class MainWindow(QMainWindow):
         self._report_count_lbl = QLabel('')
         vbox.addWidget(hdr)
 
-        self._reports_table = QTableWidget()
+        self._reports_table = _HoverTable()
         self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._reports_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._reports_table.setAlternatingRowColors(True)
@@ -2543,7 +2580,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(hdr)
 
         # Players table
-        self._players_table = QTableWidget()
+        self._players_table = _HoverTable()
         self._players_table.setColumnCount(9)
         self._players_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._players_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

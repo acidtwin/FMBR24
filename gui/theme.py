@@ -159,12 +159,7 @@ QTableWidget::item {{
 QTableWidget::item:selected {{
     background-color: #2A1B4A;
 }}
-QTableWidget::item:hover {{
-    background-color: rgba(105,51,189,26);
-}}
-QTableWidget::item:selected:hover {{
-    background-color: rgba(105,51,189,64);
-}}
+
 QHeaderView::section {{
     background-color: #292B32;
     color: #525B68;
