@@ -1,0 +1,6 @@
+{
+  "name": "Equal Weight",
+  "description": "All key attributes weighted equally. Original behavior.",
+  "tactical_style": "Balanced",
+  "roles": {}
+}

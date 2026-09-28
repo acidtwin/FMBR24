@@ -132,14 +132,23 @@ for _name, _group, _attrs in FM_ROLES:
     _ROLE_BY_GROUP.setdefault(_group, []).append(_name)
 
 
-def role_rating(person: dict, role_name: str) -> int | None:
-    """Return role suitability 1-20, or None if attrs missing."""
+def role_rating(person: dict, role_name: str,
+                weights: dict[int, int] | None = None) -> int | None:
+    """Return role suitability 1-20, or None if attrs missing.
+
+    weights: {attr_idx: weight} from a loaded preset. None = equal-weight fallback.
+    """
     key_indices = _ROLE_INDEX.get(role_name)
     if not key_indices:
         return None
     raw = person.get('raw_attrs', [])
     if len(raw) < 54:
         return None
+    if weights:
+        total_w = sum(weights.get(i, 0) for i in key_indices)
+        if total_w > 0:
+            score = sum(raw[i] * weights.get(i, 0) for i in key_indices) / total_w
+            return max(1, min(20, round(score / 5)))
     vals = [max(1, min(20, round(raw[i] / 5))) for i in key_indices]
     return round(sum(vals) / len(vals))
 

@@ -5,14 +5,16 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
-    QComboBox, QStyledItemDelegate, QStyleOptionViewItem,
+    QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
+    QInputDialog,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
 from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction
 
 from gui.theme import COLORS
-from gui.roles import role_rating, role_names_by_group, FM_ROLES
+from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
 from fm_editor.cache import load_cache, save_cache, clear_cache
+from fm_editor import weights as _weights_mod
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c'
@@ -845,6 +847,390 @@ class PlayerDetailDialog(QDialog):
         self._patch_mode = mode
 
 
+# -- Role attribute names for weight editor ------------------------------------
+
+_ATTR_DISPLAY = [
+    'Crossing', 'Dribbling', 'Finishing', 'Heading', 'Long Shots', 'Marking',
+    'Off The Ball', 'Passing', 'Penalties', 'Tackling', 'Vision', 'Handling',
+    'Aerial Reach', 'Cmd of Area', 'Communication', 'Kicking', 'Throwing',
+    'Anticipation', 'Decisions', 'One on Ones', 'Positioning', 'Reflexes',
+    'First Touch', 'Technique', 'Left Foot', 'Right Foot', 'Flair', 'Corners',
+    'Teamwork', 'Work Rate', 'Long Throws', 'Eccentricity', 'Rushing Out',
+    'Punching', 'Acceleration', 'Free Kick', 'Strength', 'Stamina', 'Pace',
+    'Jumping Reach', 'Leadership', 'Dirtiness', 'Balance', 'Bravery',
+    'Consistency', 'Aggression', 'Agility', 'Big Matches', 'Injury Prone',
+    'Versatility', 'Natural Fitness', 'Determination', 'Composure', 'Concentration',
+]
+
+_DIALOG_SS = lambda: f"""
+    QDialog {{
+        background: {COLORS['window_bg']};
+        color: {COLORS['text_primary']};
+    }}
+    QLabel {{
+        color: {COLORS['text_primary']};
+        background: transparent;
+    }}
+    QComboBox, QSpinBox {{
+        background: {COLORS['surface']};
+        color: {COLORS['text_primary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 2px;
+        padding: 2px 6px;
+        min-height: 24px;
+    }}
+    QComboBox::drop-down {{ border: none; }}
+    QComboBox QAbstractItemView {{
+        background: {COLORS['elevated']};
+        color: {COLORS['text_primary']};
+        selection-background-color: {COLORS['selection_bg']};
+        border: 1px solid {COLORS['border_bright']};
+    }}
+    QScrollArea {{ border: none; background: transparent; }}
+    QScrollBar:vertical {{
+        background: {COLORS['surface']}; width: 6px; border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {COLORS['border_bright']}; border-radius: 3px; min-height: 20px;
+    }}
+"""
+
+_BTN_SS = lambda accent=False: (
+    f"QPushButton {{ background: {COLORS['accent'] if accent else COLORS['surface']};"
+    f" color: {'#fff' if accent else COLORS['text_primary']};"
+    f" border: {'none' if accent else '1px solid ' + COLORS['border']};"
+    f" border-radius: 3px; padding: 5px 14px; font-size: 12px; }}"
+    f"QPushButton:hover {{ background: {COLORS['accent'] if accent else COLORS['selection_bg']}; }}"
+    f"QPushButton:disabled {{ opacity: 0.4; }}"
+)
+
+
+# -- Weight editor dialog -------------------------------------------------------
+
+class WeightEditorDialog(QDialog):
+    """Edit per-role attribute weights. Operates on a mutable copy of a preset."""
+
+    def __init__(self, base_preset: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Role Weight Editor')
+        self.setMinimumSize(520, 580)
+        self.setStyleSheet(_DIALOG_SS())
+        self._edited: dict[str, dict[int, int]] = {
+            role: dict(w) for role, w in base_preset.get('roles', {}).items()
+        }
+        self._current_role = None
+        self._spinboxes: dict[int, QSpinBox] = {}
+        self._saved_preset_path: str | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
+
+        # Role selector
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        top.addWidget(QLabel('Role:'))
+        self._role_combo = QComboBox()
+        self._role_combo.setFixedWidth(260)
+        for group, names in role_names_by_group():
+            sep = self._role_combo.count()
+            self._role_combo.addItem(f'── {group} ──')
+            self._role_combo.model().item(sep).setEnabled(False)
+            for name in names:
+                self._role_combo.addItem(name)
+        self._role_combo.setCurrentIndex(1)
+        top.addWidget(self._role_combo)
+        top.addStretch()
+        layout.addLayout(top)
+
+        # Info label
+        self._info_lbl = QLabel('Zero = attribute not used for this role.')
+        self._info_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+        layout.addWidget(self._info_lbl)
+
+        # Attr list scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{COLORS['surface']}; border-radius:3px;")
+        self._attr_layout = QVBoxLayout(inner)
+        self._attr_layout.setContentsMargins(10, 8, 10, 8)
+        self._attr_layout.setSpacing(4)
+        scroll.setWidget(inner)
+        layout.addWidget(scroll, 1)
+
+        # Buttons
+        btns = QHBoxLayout()
+        btns.setSpacing(8)
+        reset_btn = QPushButton('Reset Role')
+        reset_btn.setStyleSheet(_BTN_SS())
+        reset_btn.clicked.connect(self._reset_current_role)
+        btns.addWidget(reset_btn)
+        btns.addStretch()
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.setStyleSheet(_BTN_SS())
+        cancel_btn.clicked.connect(self.reject)
+        btns.addWidget(cancel_btn)
+        save_btn = QPushButton('Save as New Preset…')
+        save_btn.setStyleSheet(_BTN_SS(accent=True))
+        save_btn.clicked.connect(self._save_as)
+        btns.addWidget(save_btn)
+        layout.addLayout(btns)
+
+        self._role_combo.currentTextChanged.connect(self._on_role_changed)
+        self._on_role_changed(self._role_combo.currentText())
+
+    def _on_role_changed(self, role_name: str):
+        if not role_name or role_name.startswith('──'):
+            return
+        self._flush_current()
+        self._current_role = role_name
+
+        # Clear old spinboxes
+        while self._attr_layout.count():
+            item = self._attr_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._spinboxes.clear()
+
+        key_indices = set(_ROLE_INDEX.get(role_name, ()))
+        current_weights = self._edited.get(role_name, {})
+
+        for idx, name in enumerate(_ATTR_DISPLAY):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            lbl = QLabel(name)
+            lbl.setFixedWidth(140)
+            lbl.setStyleSheet(
+                f"color:{COLORS['text_primary'] if idx in key_indices else COLORS['text_dim']};"
+                f"font-size:12px;")
+            row.addWidget(lbl)
+            spin = QSpinBox()
+            spin.setRange(0, 20)
+            spin.setFixedWidth(55)
+            spin.setValue(current_weights.get(idx, 0))
+            spin.setStyleSheet(
+                f"QSpinBox {{ background:{COLORS['elevated']};"
+                f" color:{COLORS['text_primary']}; border:1px solid {COLORS['border']};"
+                f" border-radius:2px; padding:1px 4px; font-size:12px; }}")
+            row.addWidget(spin)
+            if idx in key_indices:
+                kw_lbl = QLabel('key attr')
+                kw_lbl.setStyleSheet(f"color:{COLORS['accent']}; font-size:10px;")
+                row.addWidget(kw_lbl)
+            row.addStretch()
+            container = QWidget()
+            container.setLayout(row)
+            self._attr_layout.addWidget(container)
+            self._spinboxes[idx] = spin
+
+        self._attr_layout.addStretch()
+
+    def _flush_current(self):
+        if self._current_role and self._spinboxes:
+            self._edited[self._current_role] = {
+                idx: spin.value() for idx, spin in self._spinboxes.items()
+                if spin.value() > 0
+            }
+
+    def _reset_current_role(self):
+        if not self._current_role:
+            return
+        # Restore equal-weight defaults from key_indices
+        key_indices = _ROLE_INDEX.get(self._current_role, ())
+        for idx, spin in self._spinboxes.items():
+            spin.setValue(10 if idx in key_indices else 0)
+
+    def _save_as(self):
+        self._flush_current()
+        name, ok = QInputDialog.getText(self, 'Save Preset', 'Preset name:')
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+        desc, ok2 = QInputDialog.getText(self, 'Save Preset', 'Description (optional):')
+        if not ok2:
+            return
+        path = _weights_mod.save_custom_preset(name, desc.strip(), self._edited)
+        self._saved_preset_path = path
+        self.accept()
+
+    def saved_preset_name(self) -> str | None:
+        if not self._saved_preset_path:
+            return None
+        try:
+            import json
+            with open(self._saved_preset_path, encoding='utf-8') as f:
+                return json.load(f).get('name')
+        except Exception:
+            return None
+
+
+# -- Settings dialog ------------------------------------------------------------
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Settings')
+        self.setMinimumSize(460, 320)
+        self.setStyleSheet(_DIALOG_SS())
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(14)
+
+        # Section title
+        sec_lbl = QLabel('Role Weights')
+        sec_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;"
+            f" padding-bottom:2px; border-bottom:1px solid {COLORS['border']};")
+        layout.addWidget(sec_lbl)
+
+        # Preset row
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(8)
+        preset_row.addWidget(QLabel('Preset:'))
+        self._preset_combo = QComboBox()
+        self._preset_combo.setMinimumWidth(200)
+        self._presets = _weights_mod.list_presets()
+        active = _weights_mod.get_active_preset_name()
+        active_idx = 0
+        for i, p in enumerate(self._presets):
+            self._preset_combo.addItem(p['name'])
+            if p['name'] == active:
+                active_idx = i
+        self._preset_combo.setCurrentIndex(active_idx)
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        preset_row.addWidget(self._preset_combo)
+        self._edit_btn = QPushButton('Edit Weights…')
+        self._edit_btn.setStyleSheet(_BTN_SS())
+        self._edit_btn.clicked.connect(self._edit_weights)
+        preset_row.addWidget(self._edit_btn)
+        layout.addLayout(preset_row)
+
+        # Import / delete row
+        action_row = QHBoxLayout()
+        action_row.setSpacing(8)
+        import_btn = QPushButton('Import Preset…')
+        import_btn.setStyleSheet(_BTN_SS())
+        import_btn.clicked.connect(self._import_preset)
+        action_row.addWidget(import_btn)
+        self._delete_btn = QPushButton('Delete Preset')
+        self._delete_btn.setStyleSheet(_BTN_SS())
+        self._delete_btn.clicked.connect(self._delete_preset)
+        action_row.addWidget(self._delete_btn)
+        action_row.addStretch()
+        layout.addLayout(action_row)
+
+        # Description
+        self._desc_lbl = QLabel()
+        self._desc_lbl.setWordWrap(True)
+        self._desc_lbl.setStyleSheet(
+            f"color:{COLORS['text_secondary']}; font-size:11px;"
+            f" background:{COLORS['surface']}; border-radius:3px; padding:8px;")
+        layout.addWidget(self._desc_lbl)
+
+        layout.addStretch()
+
+        # OK / Cancel
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addStretch()
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.setStyleSheet(_BTN_SS())
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+        ok_btn = QPushButton('Apply')
+        ok_btn.setStyleSheet(_BTN_SS(accent=True))
+        ok_btn.clicked.connect(self._apply)
+        btn_row.addWidget(ok_btn)
+        layout.addLayout(btn_row)
+
+        self._on_preset_changed(active_idx)
+
+    def _on_preset_changed(self, idx: int):
+        if 0 <= idx < len(self._presets):
+            p = self._presets[idx]
+            parts = []
+            if p['tactical_style']:
+                parts.append(f"Style: {p['tactical_style']}")
+            if p['description']:
+                parts.append(p['description'])
+            self._desc_lbl.setText('\n'.join(parts) if parts else 'No description.')
+            self._delete_btn.setEnabled(not p['bundled'])
+            self._edit_btn.setEnabled(True)
+
+    def _edit_weights(self):
+        idx = self._preset_combo.currentIndex()
+        if not (0 <= idx < len(self._presets)):
+            return
+        p = self._presets[idx]
+        try:
+            base_preset = _weights_mod.load_preset(p['path'])
+        except Exception as e:
+            QMessageBox.warning(self, 'Error', f'Could not load preset:\n{e}')
+            return
+        dlg = WeightEditorDialog(base_preset, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_name = dlg.saved_preset_name()
+            if new_name:
+                self._refresh_presets(select_name=new_name)
+
+    def _import_preset(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Import Weight Preset', '', 'JSON Files (*.json)')
+        if not path:
+            return
+        try:
+            name = _weights_mod.import_preset(path)
+            self._refresh_presets(select_name=name)
+        except Exception as e:
+            QMessageBox.warning(self, 'Import Error', f'Could not import preset:\n{e}')
+
+    def _delete_preset(self):
+        idx = self._preset_combo.currentIndex()
+        if not (0 <= idx < len(self._presets)):
+            return
+        p = self._presets[idx]
+        if p['bundled']:
+            return
+        if QMessageBox.question(
+                self, 'Delete Preset',
+                f"Delete '{p['name']}'?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        _weights_mod.delete_user_preset(p['name'])
+        self._refresh_presets()
+
+    def _refresh_presets(self, select_name: str | None = None):
+        self._presets = _weights_mod.list_presets()
+        current = self._preset_combo.currentText()
+        self._preset_combo.blockSignals(True)
+        self._preset_combo.clear()
+        select_idx = 0
+        for i, p in enumerate(self._presets):
+            self._preset_combo.addItem(p['name'])
+            if select_name and p['name'] == select_name:
+                select_idx = i
+            elif not select_name and p['name'] == current:
+                select_idx = i
+        self._preset_combo.blockSignals(False)
+        self._preset_combo.setCurrentIndex(select_idx)
+        self._on_preset_changed(select_idx)
+
+    def _apply(self):
+        idx = self._preset_combo.currentIndex()
+        if 0 <= idx < len(self._presets):
+            _weights_mod.set_active_preset_name(self._presets[idx]['name'])
+        self.accept()
+
+    def selected_preset_name(self) -> str:
+        idx = self._preset_combo.currentIndex()
+        if 0 <= idx < len(self._presets):
+            return self._presets[idx]['name']
+        return ''
+
+
 # -- Main window ---------------------------------------------------------------
 
 class MainWindow(QMainWindow):
@@ -865,6 +1251,7 @@ class MainWindow(QMainWindow):
         self._table_mode = 'squad'
         self._current_report_key = ''
         self._report_ratings = {}
+        self._active_preset = _weights_mod.load_active_preset()
 
         self._dot_timer = QTimer(self)
         self._dot_timer.setInterval(420)
@@ -1109,6 +1496,7 @@ class MainWindow(QMainWindow):
             }}
         """)
 
+        self._settings_btn.clicked.connect(self._open_settings)
         layout.addWidget(self._save_btn)
         layout.addWidget(self._load_btn)
         layout.addWidget(self._reload_btn)
@@ -1724,6 +2112,10 @@ class MainWindow(QMainWindow):
         self._report_role_combo.setCurrentIndex(1)  # first real role, skip group header
         self._report_role_combo.currentTextChanged.connect(self._on_report_role_changed)
         role_row.addWidget(self._report_role_combo)
+        self._weights_lbl = QLabel()
+        self._weights_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; padding-left:6px;")
+        role_row.addWidget(self._weights_lbl)
         self._report_role_bar.setVisible(False)
         hdr_row.addWidget(self._report_role_bar)
 
@@ -1786,9 +2178,10 @@ class MainWindow(QMainWindow):
             c.sort(key=lambda p: -p.get('ca', 0))
         elif key == 'best_role':
             rname = role_name or ''
+            role_weights = _weights_mod.get_role_weights(self._active_preset, rname)
             rated = []
             for p in people:
-                r = role_rating(p, rname)
+                r = role_rating(p, rname, role_weights)
                 if r is not None:
                     rated.append((p, r))
             rated.sort(key=lambda x: -x[1])
@@ -2629,6 +3022,20 @@ class MainWindow(QMainWindow):
                     break
             self._do_patch_hgc()
 
+    def _open_settings(self):
+        dlg = SettingsDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._active_preset = _weights_mod.load_active_preset()
+            preset_name = _weights_mod.get_active_preset_name()
+            self._weights_lbl.setText(f'[{preset_name}]')
+            self._status.showMessage(f'Role weights: {preset_name}', 3000)
+            # Re-run Best by Role if it's currently shown
+            if self._current_report_key == 'best_role':
+                role = self._report_role_combo.currentText()
+                if role and not role.startswith('──'):
+                    players = self._get_report_players('best_role', role_name=role)
+                    self._populate_reports_table(players)
+
     def _run_report(self, key: str):
         try:
             if not self._save_data:
@@ -2647,6 +3054,9 @@ class MainWindow(QMainWindow):
             self._players_nav_btn.setChecked(False)
             self._report_pos_bar.setVisible(key == 'best_pos')
             self._report_role_bar.setVisible(key == 'best_role')
+            if key == 'best_role':
+                pname = _weights_mod.get_active_preset_name()
+                self._weights_lbl.setText(f'[{pname}]')
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
             role = self._report_role_combo.currentText() if key == 'best_role' else None
             players = self._get_report_players(key, pos, role)

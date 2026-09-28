@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-28 (session 4)
+**Last updated:** 2026-09-28 (session 5)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -10,6 +10,26 @@
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
 All changes on `master`.
+
+### Session 5 (2026-09-28) — Role weight presets
+
+**Problem fixed**: Best by Role report surfaced defenders for forward roles (equal-weight scoring of key attrs meant high mental attrs gave defenders comparable scores to strikers).
+
+**Role weight presets system** — `fm_editor/weights.py` + `fm_editor/weights/*.json`:
+- **4 bundled presets**: Equal Weight (original behavior), FMScout Community (tiered weights, primary attrs score 20), Possession-Based (boosts passing/vision/technique/composure, softens pace/strength), Direct Play (boosts pace/strength/heading/crossing, softens technical attrs)
+- Settings dialog (⚙ button, now wired up): preset dropdown + description. Import custom preset from JSON. Delete user presets.
+- **Weight editor dialog**: pick a role → edit per-attribute weights (0-20 spinboxes) → "Save as New Preset" writes to `~/.config/fm24_editor/weights/`
+- Active preset persisted in `~/.config/fm24_editor/settings.json`
+- `role_rating(person, role_name, weights=None)` — weights param optional, falls back to equal-weight when None
+- `_active_preset` loaded at startup in `MainWindow`; re-loaded when settings applied
+- Preset name shown in `[FMScout Community]` label next to role dropdown
+- Changing preset while Best by Role is open auto-refreshes the report
+
+**Weight generation**: `scripts/gen_weights.py` (scratchpad) — GROUP_PRIMARY + ROLE_PRIMARY_OVERRIDE maps key attr indices to tiered weights; possession/direct play apply ±4 modifiers to technical/physical attr sets.
+
+**New files**: `fm_editor/weights.py`, `fm_editor/weights/equal_weight.json`, `fm_editor/weights/fmscout_community.json`, `fm_editor/weights/possession_based.json`, `fm_editor/weights/direct_play.json`
+
+**Changed files**: `gui/main_window.py` (SettingsDialog, WeightEditorDialog classes; _open_settings, _active_preset, weights label, _get_report_players update), `gui/roles.py` (role_rating weights param)
 
 ### Session 4 fixes/features (2026-09-28) — continued
 
@@ -145,7 +165,7 @@ Double-click a player in Players view → navigates to their club's squad.
 |---------|--------|
 | Staff view | Live — table of Name/Nation/Age, no filters yet |
 | My Shortlist | Stub — wire up Add to Shortlist from player modal |
-| Best by Role report | Coming soon — role classification not yet implemented |
+| Best by Role report | Live — 4 bundled weight presets (FMScout Community default). Weight editor + import in Settings (⚙). |
 | ▶ / ▼ navigation buttons | Disabled (greyed) — no back/forward history yet |
 | Right tab nav in player modal | Only Profile tab active; Transfer/Positions/Ratings are future |
 | Squad number (#) column | Not implemented — mockup had it, excluded by design |
