@@ -99,6 +99,20 @@ _SVG_REPORT = (
     '<path d="M6 5h4M6 8h4M6 11h2"/>'
     '</svg>'
 )
+_SVG_LOAD = (
+    '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"'
+    ' stroke="{c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M2 12V6a1 1 0 0 1 1-1h3.5L8 6.5H13a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/>'
+    '</svg>'
+)
+_SVG_SAVE = (
+    '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"'
+    ' stroke="{c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+    '<rect x="2" y="2" width="12" height="12" rx="1"/>'
+    '<path d="M5 2v4h6V2"/>'
+    '<rect x="4.5" y="9" width="7" height="4" rx="0.5"/>'
+    '</svg>'
+)
 
 # Ping-pong dot counts for loading animation
 _DOT_SEQ = [1, 2, 3, 4, 5, 4, 3, 2]
@@ -995,7 +1009,7 @@ class MainWindow(QMainWindow):
 
         # Centred search
         self._search_box = QLineEdit()
-        self._search_box.setPlaceholderText('Search clubs or players...')
+        self._search_box.setPlaceholderText('Search clubs, players or staff...')
         self._search_box.setEnabled(False)
         self._search_box.returnPressed.connect(self._do_search)
         self._search_box.setFixedHeight(28)
@@ -1020,11 +1034,31 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._search_box, 2)
         layout.addStretch(1)
 
+        _tbtn_ss = (
+            f"QPushButton {{ background:{COLORS['elevated']}; color:{COLORS['text_secondary']};"
+            f" border:1px solid {COLORS['border']}; border-radius:2px;"
+            f" padding:4px 10px; font-size:11px; }}"
+            f"QPushButton:hover {{ background:{COLORS['border']}; color:{COLORS['text_primary']}; }}"
+            f"QPushButton:disabled {{ color:{COLORS['text_dim']}; }}"
+        )
+        _tbtn_accent_ss = (
+            f"QPushButton {{ background:{COLORS['accent']}; color:#fff;"
+            f" border:none; border-radius:2px;"
+            f" padding:4px 10px; font-size:11px; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
+            f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}"
+            f"QPushButton:disabled {{ background:{COLORS['elevated']}; color:{COLORS['text_dim']};"
+            f" border:1px solid {COLORS['border']}; font-weight:normal; }}"
+        )
+
         # Save button (left of Load)
         self._save_btn = QPushButton('Save Changes')
         self._save_btn.setFixedHeight(28)
         self._save_btn.setEnabled(False)
         self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
+        self._save_btn.setIcon(_svg_icon(_SVG_SAVE, COLORS['text_secondary'], 13))
+        self._save_btn.setIconSize(QSize(13, 13))
+        self._save_btn.setStyleSheet(_tbtn_ss)
         self._save_btn.clicked.connect(self._do_save)
 
         # Load button
@@ -1032,6 +1066,9 @@ class MainWindow(QMainWindow):
         self._load_btn.setFixedHeight(28)
         self._load_btn.setObjectName('accent')
         self._load_btn.setToolTip('Open and load an FM24 save file')
+        self._load_btn.setIcon(_svg_icon(_SVG_LOAD, '#fff', 13))
+        self._load_btn.setIconSize(QSize(13, 13))
+        self._load_btn.setStyleSheet(_tbtn_accent_ss)
         self._load_btn.clicked.connect(self._load_file)
 
         # Reload button (right of Load, greyed when no file)
@@ -1039,6 +1076,9 @@ class MainWindow(QMainWindow):
         self._reload_btn.setFixedHeight(28)
         self._reload_btn.setEnabled(False)
         self._reload_btn.setToolTip('Re-parse the current save file')
+        self._reload_btn.setIcon(_svg_icon(_SVG_RELOAD, COLORS['text_secondary'], 13))
+        self._reload_btn.setIconSize(QSize(13, 13))
+        self._reload_btn.setStyleSheet(_tbtn_ss)
         self._reload_btn.clicked.connect(self._reload_save)
 
         # Settings cog
@@ -1701,14 +1741,10 @@ class MainWindow(QMainWindow):
         for i, col in enumerate(cols):
             if col in _COL_TT:
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
-        rhdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        rhdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
-        for i in range(1, 7):
+        for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        _col_widths = {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50}
-        for i, cw in _col_widths.items():
+        for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 160}.items():
             self._reports_table.setColumnWidth(i, cw)
-        self._reports_table.setColumnWidth(7, 160)
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
         self._reports_table.doubleClicked.connect(self._on_reports_table_dblclick)
@@ -1922,10 +1958,10 @@ class MainWindow(QMainWindow):
         filter_row.addStretch()
 
         clear_btn = QPushButton('Clear')
-        clear_btn.setFixedSize(52, 26)
+        clear_btn.setFixedHeight(26)
         clear_btn.setStyleSheet(
             f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
-            f"border:1px solid {COLORS['border']}; border-radius:2px;")
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
         clear_btn.clicked.connect(self._clear_players_filter)
         filter_row.addWidget(clear_btn)
 
@@ -1953,12 +1989,9 @@ class MainWindow(QMainWindow):
         for i, col in enumerate(cols):
             if col in _COL_TT:
                 self._players_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
-        phdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        phdr.setSectionResizeMode(8, QHeaderView.ResizeMode.Interactive)
-        self._players_table.setColumnWidth(8, 160)
-        for i in range(1, 8):
+        for i in range(len(cols)):
             phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
+        for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 160}.items():
             self._players_table.setColumnWidth(i, cw)
 
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
@@ -2157,32 +2190,25 @@ class MainWindow(QMainWindow):
             cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC']
             self._table.setColumnCount(len(cols))
             self._table.setHorizontalHeaderLabels(cols)
-            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            for i in range(1, len(cols)):
+            for i in range(len(cols)):
                 hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45}.items():
+            for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45}.items():
                 self._table.setColumnWidth(i, cw)
         elif mode == 'scout':
             cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
             self._table.setColumnCount(len(cols))
             self._table.setHorizontalHeaderLabels(cols)
-            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-            for i in range(2, len(cols)):
+            for i in range(len(cols)):
                 hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            self._table.setColumnWidth(1, 180)
-            for i, cw in {2: 55, 3: 45, 4: 45, 5: 45, 6: 40}.items():
+            for i, cw in {0: 150, 1: 160, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40}.items():
                 self._table.setColumnWidth(i, cw)
         else:  # player
             cols = ['Name', 'Club', 'Nation', 'Born', 'HGP']
             self._table.setColumnCount(len(cols))
             self._table.setHorizontalHeaderLabels(cols)
-            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-            for i in range(2, len(cols)):
+            for i in range(len(cols)):
                 hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            self._table.setColumnWidth(1, 200)
-            for i, cw in {2: 50, 3: 50, 4: 45}.items():
+            for i, cw in {0: 150, 1: 160, 2: 50, 3: 50, 4: 45}.items():
                 self._table.setColumnWidth(i, cw)
         for i, col in enumerate(cols):
             if col in _TT:
