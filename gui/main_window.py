@@ -1881,7 +1881,7 @@ class MainWindow(QMainWindow):
         self._nav_btns = {}
         for key, svg, label in [
             ('club',       _SVG_CLUB,      'Club'),
-            ('squad',      _SVG_SQUAD,     'Squad'),
+            ('squad',      _SVG_SQUAD,     'Squads'),
             ('club_staff', _SVG_STAFF,     'Club Staff'),
             ('shortlist',  _SVG_SHORTLIST, 'My Shortlist'),
         ]:
@@ -3534,7 +3534,7 @@ class MainWindow(QMainWindow):
         self._breadcrumb.setText(
             f"FM Save Editor <span style='color:{dim}'> &rsaquo; </span>"
             f"<b>{club['name']}</b>"
-            f"<span style='color:{dim}'> &rsaquo; </span><b>Squad</b>")
+            f"<span style='color:{dim}'> &rsaquo; </span><b>Squads</b>")
         self._breadcrumb.setTextFormat(Qt.TextFormat.RichText)
         self._squad_club_label.setText(club['name'])
         # Update club view
@@ -3856,9 +3856,31 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self):
         has_sel = bool(self._table.selectedItems())
         has_b = self._save_data is not None and 'b' in self._save_data
-        self._patch_hgp_btn.setEnabled(bool(self._squad) and has_sel)
-        self._patch_hgc_btn.setEnabled(bool(self._squad) and has_sel and has_b
-                                        and self._club_entity_id is not None)
+        has_squad = bool(self._squad)
+
+        if has_sel and has_squad:
+            id_to_person = {p.get('id', -1): p for p in self._squad}
+            sel_rows = self._table.selectionModel().selectedRows()
+            sel_pids = [
+                self._table.item(idx.row(), 0).data(Qt.ItemDataRole.UserRole)
+                for idx in sel_rows
+                if self._table.item(idx.row(), 0)
+            ]
+            sel_persons = [id_to_person[pid] for pid in sel_pids if pid in id_to_person]
+            all_hgp = bool(sel_persons) and all(p.get('hgp', False) for p in sel_persons)
+            if has_b and self._club_entity_id and sel_persons:
+                from fm_editor.patch import is_hgc
+                b = self._save_data['b']
+                all_hgc = all(is_hgc(b, p, self._club_entity_id) for p in sel_persons)
+            else:
+                all_hgc = False
+        else:
+            all_hgp = False
+            all_hgc = False
+
+        self._patch_hgp_btn.setEnabled(has_squad and has_sel and not all_hgp)
+        self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
+                                        and self._club_entity_id is not None and not all_hgc)
 
     def _select_all_non_hgp(self):
         id_to_hgp = {p.get('id', -1): p.get('hgp', False) for p in self._squad}
