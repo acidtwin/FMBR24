@@ -466,6 +466,7 @@ class PlayerDetailDialog(QDialog):
         self._save_data = save_data
         self._club_entity_id = club_entity_id
         self._patch_mode = None
+        self._shortlist_added = False
         self._build()
 
     def _build(self):
@@ -842,8 +843,9 @@ class PlayerDetailDialog(QDialog):
 
         action_row.addStretch()
         add_shortlist = QPushButton('Add to Shortlist')
-        add_shortlist.setEnabled(False)
-        add_shortlist.setToolTip('Shortlist coming soon')
+        add_shortlist.setStyleSheet(_btn_ss)
+        add_shortlist.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_shortlist.clicked.connect(lambda: self._do_add_shortlist())
         action_row.addWidget(add_shortlist)
         center_vbox.addWidget(action_frame)
 
@@ -892,6 +894,10 @@ class PlayerDetailDialog(QDialog):
     def _emit_patch(self, mode):
         self._patch_mode = mode
 
+    def _do_add_shortlist(self):
+        self._shortlist_added = True
+        self.accept()
+
 
 class StaffDetailDialog(QDialog):
     _PERS_LABELS = [
@@ -906,6 +912,7 @@ class StaffDetailDialog(QDialog):
         self.resize(620, 500)
         self._person = person
         self._save_data = save_data
+        self._shortlist_added = False
         self._build()
 
     def _build(self):
@@ -1077,9 +1084,36 @@ class StaffDetailDialog(QDialog):
             center_vbox.addWidget(no_data)
 
         center_vbox.addStretch()
+
+        # Action strip
+        action_frame = QFrame()
+        action_frame.setStyleSheet(
+            f"border-top:1px solid {COLORS['border']}; background:transparent;")
+        action_row = QHBoxLayout(action_frame)
+        action_row.setContentsMargins(0, 8, 0, 4)
+        action_row.addStretch()
+        _btn_ss = f"""
+            QPushButton {{
+                background:{COLORS['accent']}; color:#fff; border:none;
+                padding:6px 16px; font-weight:bold; border-radius:2px; font-size:11px;
+            }}
+            QPushButton:hover {{ background:{COLORS['accent_hover']}; }}
+            QPushButton:pressed {{ background:{COLORS['accent_press']}; }}
+        """
+        add_btn = QPushButton('Add to Shortlist')
+        add_btn.setStyleSheet(_btn_ss)
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.clicked.connect(lambda checked=False: self._do_add_shortlist())
+        action_row.addWidget(add_btn)
+        center_vbox.addWidget(action_frame)
+
         center_scroll.setWidget(center_w)
         body_hbox.addWidget(center_scroll, 1)
         layout.addWidget(body)
+
+    def _do_add_shortlist(self):
+        self._shortlist_added = True
+        self.accept()
 
 
 # -- Role attribute names for weight editor ------------------------------------
@@ -2262,7 +2296,9 @@ class MainWindow(QMainWindow):
             for idx in range(8):
                 v = pers[idx] if idx < len(pers) else None
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
-            items = [_SortItem(name), _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
+            name_item = _SortItem(name)
+            name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            items = [name_item, _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
@@ -2351,7 +2387,10 @@ class MainWindow(QMainWindow):
             for idx in range(8):
                 v = pers[idx] if idx < len(pers) else None
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
-            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
+            pid = p.get('id', -1)
+            name_item = _SortItem(name)
+            name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            items = [name_item, _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._club_staff_table.setItem(row, col, item)
@@ -2375,7 +2414,10 @@ class MainWindow(QMainWindow):
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
         hdr_row.addWidget(hdr_lbl)
         hdr_row.addStretch()
-        self._shortlist_count_lbl = QLabel('0 players')
+        self._shortlist_count_lbl = QLabel('0 people')
+        self._shortlist_count_lbl.setStyleSheet(
+            f"color:{COLORS['text_secondary']}; font-size:11px;")
+        hdr_row.addWidget(self._shortlist_count_lbl)
         vbox.addWidget(hdr)
 
         self._shortlist_table = _HoverTable()
@@ -2388,19 +2430,19 @@ class MainWindow(QMainWindow):
         shdr = self._shortlist_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Age', 'Nation', 'HGP']
+        cols = ['Name', 'Club', 'Type', 'Pos', 'CA', 'PA', 'Age', 'Nation']
         self._shortlist_table.setColumnCount(len(cols))
         self._shortlist_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 150, 1: 160, 2: 55, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45}.items():
+        for i, cw in {0: 150, 1: 160, 2: 55, 3: 55, 4: 45, 5: 45, 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(True)
 
         self._shortlist_empty_lbl = QLabel(
-            'Your shortlist is empty.\nDouble-click a player in Squad view to add them.')
+            'Your shortlist is empty.\nDouble-click a player or staff member to add them.')
         self._shortlist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._shortlist_empty_lbl.setStyleSheet(
             f"color:{COLORS['text_dim']}; font-size:13px; padding:40px;")
@@ -2411,6 +2453,70 @@ class MainWindow(QMainWindow):
         self._shortlist_stack.addWidget(self._shortlist_table)
         vbox.addWidget(self._shortlist_stack, 1)
         return w
+
+    def _add_to_shortlist(self, person):
+        pid = person.get('id', -1)
+        if any(p.get('id') == pid for p in self._shortlist):
+            return
+        self._shortlist.append(person)
+        self._populate_shortlist()
+        self._status.showMessage(f'Added {person.get("name", "")} to shortlist', 2000)
+
+    def _populate_shortlist(self):
+        people = self._shortlist
+        self._shortlist_table.setSortingEnabled(False)
+        self._shortlist_table.setRowCount(len(people))
+        clubs = self._save_data.get('clubs', []) if self._save_data else []
+        squads = self._save_data.get('squads', {}) if self._save_data else {}
+        club_staff = self._save_data.get('club_staff', {}) if self._save_data else {}
+        employment = self._save_data.get('employment', {}) if self._save_data else {}
+        club_by_id = {c['id']: c['name'] for c in clubs}
+        club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+        staff_club: dict[int, int] = {}
+        for cid, pids in club_staff.items():
+            for ppid in pids:
+                if ppid not in staff_club:
+                    staff_club[ppid] = cid
+        for row, p in enumerate(people):
+            pid = p.get('id', -1)
+            is_player = 'ca' in p
+            name = p.get('name', '')
+            # Club
+            if is_player:
+                cid = squads.get(pid)
+                club_name = club_by_id.get(cid, '') if cid else ''
+            else:
+                cid = staff_club.get(pid)
+                if cid is not None:
+                    club_name = club_by_id.get(cid, '')
+                else:
+                    eid = employment.get(pid)
+                    club_name = club_by_entity.get(eid, '') if eid else ''
+            ptype = 'Player' if is_player else 'Staff'
+            pos = _primary_pos(p['positions']) if is_player and p.get('positions') else '-'
+            ca = str(p.get('ca', '-')) if is_player else '-'
+            pa = str(p.get('pa', '-')) if is_player else '-'
+            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            nation = NATIONS.get(p.get('nation', 0), '')
+            name_item = _SortItem(name)
+            name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            row_items = [
+                name_item,
+                _SortItem(club_name),
+                _SortItem(ptype),
+                _SortItem(pos),
+                _SortItem(ca, p.get('ca', -1) if is_player else -1),
+                _SortItem(pa, p.get('pa', -1) if is_player else -1),
+                _SortItem(str(age), age),
+                _SortItem(nation),
+            ]
+            for col, item in enumerate(row_items):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._shortlist_table.setItem(row, col, item)
+        self._shortlist_table.setSortingEnabled(True)
+        n = len(people)
+        self._shortlist_count_lbl.setText(f'{n} {"person" if n == 1 else "people"}')
+        self._shortlist_stack.setCurrentIndex(1 if n > 0 else 0)
 
     def _make_view_reports(self):
         from PyQt6.QtWidgets import QComboBox
@@ -3048,25 +3154,29 @@ class MainWindow(QMainWindow):
         item = self._staff_table.item(row, 0)
         if not item:
             return
-        name = item.text()
+        pid = item.data(Qt.ItemDataRole.UserRole)
         people = self._save_data.get('people', []) if self._save_data else []
-        person = next((p for p in people if p.get('name') == name and 'ca' not in p), None)
+        person = next((p for p in people if p.get('id') == pid and 'ca' not in p), None)
         if not person:
             return
         dlg = StaffDetailDialog(person, self._save_data, self)
         dlg.exec()
+        if dlg._shortlist_added:
+            self._add_to_shortlist(person)
 
     def _on_club_staff_double_click(self, row: int, col: int):
         item = self._club_staff_table.item(row, 0)
         if not item:
             return
-        name = item.text()
+        pid = item.data(Qt.ItemDataRole.UserRole)
         people = self._save_data.get('people', []) if self._save_data else []
-        person = next((p for p in people if p.get('name') == name and 'ca' not in p), None)
+        person = next((p for p in people if p.get('id') == pid and 'ca' not in p), None)
         if not person:
             return
         dlg = StaffDetailDialog(person, self._save_data, self)
         dlg.exec()
+        if dlg._shortlist_added:
+            self._add_to_shortlist(person)
 
     # -- Table configuration --------------------------------------------------
 
@@ -3492,6 +3602,8 @@ class MainWindow(QMainWindow):
             return
         dlg = PlayerDetailDialog(person, self._save_data, self._club_entity_id, self)
         dlg.exec()
+        if dlg._shortlist_added:
+            self._add_to_shortlist(person)
         if dlg._patch_mode == 'hgp':
             self._table.clearSelection()
             for r in range(self._table.rowCount()):
@@ -3528,6 +3640,8 @@ class MainWindow(QMainWindow):
                 club_entity_id = self._club_entity_id
         dlg = PlayerDetailDialog(person, self._save_data, club_entity_id, self)
         dlg.exec()
+        if dlg._shortlist_added:
+            self._add_to_shortlist(person)
 
     def _on_list_table_context_menu(self, table, pos):
         """Shared context menu for reports and players tables."""
