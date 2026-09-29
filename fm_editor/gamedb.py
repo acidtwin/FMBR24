@@ -458,14 +458,28 @@ def _find_coaching_magic(b, records_end):
 
 
 def find_injuries(b, people, player_ids):
-    """Set p['injured'] = True/False for each player in player_ids.
+    """Set p['injured'] and p['injury_days'] for each player in player_ids.
 
-    # ponytail: injury detection not yet confirmed — all False until binary format mapped.
-    # Upgrade path: scan linked records for injury-type entries (b11 injury code + duration).
+    b11=0x47 is the injury record type (confirmed against save with known injuries).
+    Days remaining: b[roff+12] (trail byte 0).
     """
+    _INJURY_RECORD_TYPE = 0x47
     for p in people:
-        if p.get('id', -1) in player_ids:
+        if p.get('id', -1) not in player_ids:
+            continue
+        end = p['end']
+        count = b[end + 34] if end + 34 < len(b) else 0
+        for k in range(min(count, 60)):
+            roff = end + 35 + k * 16
+            if roff + 16 > len(b):
+                break
+            if b[roff + 11] == _INJURY_RECORD_TYPE:
+                p['injured'] = True
+                p['injury_days'] = b[roff + 12]
+                break
+        else:
             p['injured'] = False
+            p['injury_days'] = 0
 
 
 def find_staff_extras(b, people, player_ids):

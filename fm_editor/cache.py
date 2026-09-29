@@ -74,6 +74,7 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
             entry['positions'] = p['positions']
             entry['raw_attrs'] = p['raw_attrs']
             entry['injured'] = p.get('injured', False)
+            entry['injury_days'] = p.get('injury_days', 0)
         else:
             # Non-player staff fields
             if 'coaching' in p:
