@@ -2697,6 +2697,8 @@ class MainWindow(QMainWindow):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._shortlist_table.setItem(row, col, item)
         self._shortlist_table.setSortingEnabled(True)
+        for c in range(self._shortlist_table.columnCount()):
+            self._shortlist_table.resizeColumnToContents(c)
         n = len(people)
         self._shortlist_count_lbl.setText(f'{n} {"person" if n == 1 else "people"}')
         self._shortlist_stack.setCurrentIndex(1 if n > 0 else 0)
@@ -3757,6 +3759,8 @@ class MainWindow(QMainWindow):
 
         self._table.setSortingEnabled(True)
         self._table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
+        for c in range(self._table.columnCount()):
+            self._table.resizeColumnToContents(c)
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc

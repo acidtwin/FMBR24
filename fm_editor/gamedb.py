@@ -475,7 +475,11 @@ def find_injuries(b, people, player_ids):
                 break
             if b[roff + 11] == _INJURY_RECORD_TYPE:
                 days = b[roff + 12]
-                if days > 0:
+                trail2 = b[roff + 14]
+                # trail[2]==0x00 → long-term injury (204-206 day range confirmed)
+                # trail[2]==0x03 AND days<=11 → short-term injury (Sávio: 5 days confirmed)
+                # trail[2]==0x03 AND days>=12 → non-injury record (fitness/condition metric)
+                if (trail2 == 0x00 and days > 0) or (trail2 == 0x03 and 0 < days <= 11):
                     p['injured'] = True
                     p['injury_days'] = days
                     break

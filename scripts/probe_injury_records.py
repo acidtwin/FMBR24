@@ -39,7 +39,8 @@ def probe(save_path, club_filter):
         print(f"Club '{club_filter}' not found. Available: {[c['name'] for c in clubs[:20]]}")
         return
 
-    squad_pids = set(squads.get(club['id'], []))
+    # squads maps player_id -> club_id
+    squad_pids = {pid for pid, cid in squads.items() if cid == club['id']}
     players = [p for p in people if p.get('id') in squad_pids and p.get('id') in player_ids]
     pid_to_person = {p['id']: p for p in people}
 
