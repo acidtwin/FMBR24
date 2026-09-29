@@ -261,7 +261,8 @@ class ParseWorker(QThread):
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
                                           find_people, match_identities, find_abilities,
                                           find_employment, find_contracts, find_club_staff,
-                                          find_coaching_attrs, find_injuries)
+                                          find_coaching_attrs, find_injuries,
+                                          find_staff_extras)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -320,6 +321,7 @@ class ParseWorker(QThread):
             player_ids = set(abilities.keys())
             find_coaching_attrs(b, people, player_ids)
             find_injuries(b, people, player_ids)
+            find_staff_extras(b, people, player_ids)
 
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff)
@@ -1175,6 +1177,27 @@ class StaffDetailDialog(QDialog):
                 cols_hbox.addWidget(col_w, 1)
 
             center_vbox.addWidget(cols_w)
+
+        staff_ca = p.get('staff_ca')
+        staff_pa = p.get('staff_pa')
+        if staff_ca is not None:
+            center_vbox.addWidget(_section_title('ABILITY'))
+            ab_row = QHBoxLayout()
+            ab_row.setSpacing(24)
+            for label, val in (('CA', staff_ca), ('PA', staff_pa)):
+                pair = QHBoxLayout()
+                pair.setSpacing(6)
+                lbl = QLabel(label)
+                lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+                num = QLabel(str(val))
+                num.setStyleSheet(
+                    f"color:{_attr_val_color(round(val / 10))};"
+                    f" font-size:13px; font-weight:bold;")
+                pair.addWidget(lbl)
+                pair.addWidget(num)
+                ab_row.addLayout(pair)
+            ab_row.addStretch()
+            center_vbox.addLayout(ab_row)
 
         center_vbox.addWidget(_section_title('PERSONALITY'))
         if personality:
