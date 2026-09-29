@@ -213,6 +213,33 @@ def find_abilities(b, names_end):
     return abilities
 
 
+def find_contracts(b, people):
+    """Return {person_id: 'YYYY-MM'} contract end dates from b11=0x6a records.
+
+    Encoding confirmed: byte13 = year - 2000, byte14 = month (1-12).
+    When a player has multiple 0x6a records (e.g. loan + permanent),
+    the last match wins (current club contract).
+    """
+    result = {}
+    for p in people:
+        pid = p.get('id', -1)
+        if pid == -1:
+            continue
+        end = p['end']
+        if end + 35 > len(b):
+            continue
+        count = b[end + 34]
+        for k in range(min(count, 60)):
+            roff = end + 35 + k * 16
+            if roff + 16 > len(b):
+                break
+            if b[roff + 10] == 0x01 and b[roff + 11] == 0x6a:
+                yr, mo = b[roff + 13], b[roff + 14]
+                if 1 <= mo <= 12 and yr <= 50:  # sanity: year 2001-2050
+                    result[pid] = f'{2000 + yr:04d}-{mo:02d}'
+    return result
+
+
 def find_employment(b, people):
     """Return {person_id: club_entity_id} for non-player staff.
 

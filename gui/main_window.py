@@ -130,6 +130,26 @@ _COL_TT = {
     'Rating': 'Role suitability (1–20)\nMean of key attributes for the selected role',
     'HGP':    'Homegrown Player (nation)\nTrained in England for 3+ years between ages 15–21',
     'HGC':    'Homegrown at Club\nTrained at this club for 3+ years between ages 15–21',
+    'CtrE':   'Contract End (YYYY-MM)',
+    # Attribute abbreviations → full names (display value = max(1, min(20, round(raw/5))))
+    'Cro': 'Crossing',      'Dri': 'Dribbling',      'Fin': 'Finishing',
+    'Hea': 'Heading',       'Lsh': 'Long Shots',      'Mar': 'Marking',
+    'OtB': 'Off The Ball',  'Pas': 'Passing',         'Pen': 'Penalties',
+    'Tck': 'Tackling',      'Vis': 'Vision',          'Han': 'Handling',
+    'AeR': 'Aerial Reach',  'CoA': 'Cmd of Area',     'Com': 'Communication',
+    'Kic': 'Kicking',       'Thr': 'Throwing',        'Ant': 'Anticipation',
+    'Dec': 'Decisions',     '1v1': 'One on Ones',     'Psn': 'Positioning',
+    'Ref': 'Reflexes',      'Fir': 'First Touch',     'Tec': 'Technique',
+    'LFo': 'Left Foot',     'RFo': 'Right Foot',      'Fla': 'Flair',
+    'Cor': 'Corners',       'Tea': 'Teamwork',        'Wor': 'Work Rate',
+    'LTh': 'Long Throws',   'Ecc': 'Eccentricity',    'RuO': 'Rushing Out',
+    'Pun': 'Punching',      'Acc': 'Acceleration',    'FK':  'Free Kick',
+    'Str': 'Strength',      'Sta': 'Stamina',         'Pac': 'Pace',
+    'JR':  'Jumping Reach', 'Lea': 'Leadership',      'Dir': 'Dirtiness',
+    'Bal': 'Balance',       'Bra': 'Bravery',         'Con': 'Consistency',
+    'Agg': 'Aggression',    'Agi': 'Agility',         'BM':  'Big Matches',
+    'IP':  'Injury Prone',  'Ver': 'Versatility',     'NF':  'Natural Fitness',
+    'Det': 'Determination', 'Cmp': 'Composure',       'Cnc': 'Concentration',
 }
 
 
@@ -239,7 +259,8 @@ class ParseWorker(QThread):
             from fm_editor.archive import parse_archive, get_member
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
                                           find_people, match_identities, find_abilities,
-                                          find_employment, find_club_staff, find_coaching_attrs)
+                                          find_employment, find_contracts, find_club_staff,
+                                          find_coaching_attrs)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -283,6 +304,13 @@ class ParseWorker(QThread):
 
             self._emit("Scanning employment records...", 91)
             employment = find_employment(b, people)
+
+            self._emit("Scanning contract dates...", 92)
+            contracts = find_contracts(b, people)
+            for p in people:
+                ce = contracts.get(p.get('id', -1))
+                if ce:
+                    p['contract_end'] = ce
 
             self._emit("Scanning club staff arrays...", 93)
             club_staff = find_club_staff(b, clubs, people, abilities, names_start)
@@ -1179,6 +1207,15 @@ class StaffDetailDialog(QDialog):
 
 
 # -- Role attribute names for weight editor ------------------------------------
+
+# Short column labels for the squad table (54 attrs, same order as raw_attrs)
+_ATTR_ABBREV = [
+    'Cro', 'Dri', 'Fin', 'Hea', 'Lsh', 'Mar', 'OtB', 'Pas', 'Pen', 'Tck', 'Vis', 'Han',
+    'AeR', 'CoA', 'Com', 'Kic', 'Thr', 'Ant', 'Dec', '1v1', 'Psn', 'Ref', 'Fir', 'Tec',
+    'LFo', 'RFo', 'Fla', 'Cor', 'Tea', 'Wor', 'LTh', 'Ecc', 'RuO', 'Pun', 'Acc', 'FK',
+    'Str', 'Sta', 'Pac', 'JR',  'Lea', 'Dir', 'Bal', 'Bra', 'Con', 'Agg', 'Agi', 'BM',
+    'IP',  'Ver', 'NF',  'Det', 'Cmp', 'Cnc',
+]
 
 _ATTR_DISPLAY = [
     'Crossing', 'Dribbling', 'Finishing', 'Heading', 'Long Shots', 'Marking',
@@ -3315,13 +3352,19 @@ class MainWindow(QMainWindow):
             'Age': 'Age at start of FM24 season',
         }
         if mode == 'squad':
-            cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC']
+            cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
+                    'CtrE'] + _ATTR_ABBREV
             self._table.setColumnCount(len(cols))
             self._table.setHorizontalHeaderLabels(cols)
             for i in range(len(cols)):
                 hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45}.items():
+            fixed_widths = {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45,
+                            9: 65}  # CtrE
+            for i, cw in fixed_widths.items():
                 self._table.setColumnWidth(i, cw)
+            # Attr columns: 35px each
+            for i in range(10, len(cols)):
+                self._table.setColumnWidth(i, 35)
         elif mode == 'scout':
             cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
             self._table.setColumnCount(len(cols))
@@ -3647,6 +3690,9 @@ class MainWindow(QMainWindow):
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             hgc_text = ('HGC' if hgc else '-') if hgc is not None else '?'
 
+            contract_end = p.get('contract_end', '')
+            raw_attrs = p.get('raw_attrs', [])
+
             items = [
                 name_item,
                 _SortItem(pos),
@@ -3657,7 +3703,16 @@ class MainWindow(QMainWindow):
                 _SortItem(flag),
                 _SortItem('HGP' if hgp else '-'),
                 _SortItem(hgc_text),
+                _SortItem(contract_end),
             ]
+            # Append 54 attribute columns (display value = max(1, min(20, round(raw/5))))
+            for raw in raw_attrs:
+                dv = max(1, min(20, round(raw / 5)))
+                items.append(_SortItem(str(dv), dv))
+            # Pad missing attrs with empty items
+            while len(items) < 10 + 54:
+                items.append(_SortItem(''))
+
             for col, item in enumerate(items):
                 if col == 6:  # Nation flag — center
                     item.setTextAlignment(
@@ -3676,8 +3731,7 @@ class MainWindow(QMainWindow):
                 self._table.setItem(row, col, item)
 
         self._table.setSortingEnabled(True)
-        for i in range(self._table.columnCount()):
-            self._table.resizeColumnToContents(i)
+        # Do NOT call resizeColumnToContents — O(n²) freeze on large squads
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc
