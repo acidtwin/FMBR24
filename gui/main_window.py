@@ -123,6 +123,7 @@ _DOT_SEQ = [1, 2, 3, 4]
 
 # Column header tooltips shared across all player tables
 _COL_TT = {
+    'INJ':    'Injured',
     'Pos':    'Primary playing position',
     'CA':     'Current Ability (1–200)\nOverall quality right now',
     'PA':     'Potential Ability (1–200)\nMaximum this player can reach',
@@ -260,7 +261,7 @@ class ParseWorker(QThread):
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
                                           find_people, match_identities, find_abilities,
                                           find_employment, find_contracts, find_club_staff,
-                                          find_coaching_attrs)
+                                          find_coaching_attrs, find_injuries)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -318,6 +319,7 @@ class ParseWorker(QThread):
             self._emit("Parsing coaching attributes...", 96)
             player_ids = set(abilities.keys())
             find_coaching_attrs(b, people, player_ids)
+            find_injuries(b, people, player_ids)
 
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff)
@@ -3355,18 +3357,18 @@ class MainWindow(QMainWindow):
             'Age': 'Age at start of FM24 season',
         }
         if mode == 'squad':
-            cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
+            cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
                     'CtrE'] + _ATTR_ABBREV
             self._table.setColumnCount(len(cols))
             self._table.setHorizontalHeaderLabels(cols)
             for i in range(len(cols)):
                 hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            fixed_widths = {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 45,
-                            9: 65}  # CtrE
+            fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
+                            9: 45, 10: 65}  # 1=INJ, 10=CtrE
             for i, cw in fixed_widths.items():
                 self._table.setColumnWidth(i, cw)
             # Attr columns: 35px each
-            for i in range(10, len(cols)):
+            for i in range(11, len(cols)):
                 self._table.setColumnWidth(i, 35)
         elif mode == 'scout':
             cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
@@ -3691,12 +3693,15 @@ class MainWindow(QMainWindow):
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             hgc_text = ('HGC' if hgc else '-') if hgc is not None else '?'
+            injured = p.get('injured', False)
 
             contract_end = p.get('contract_end', '')
             raw_attrs = p.get('raw_attrs', [])
 
+            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
             items = [
                 name_item,
+                inj_item,
                 _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
@@ -3712,11 +3717,11 @@ class MainWindow(QMainWindow):
                 dv = max(1, min(20, round(raw / 5)))
                 items.append(_SortItem(str(dv), dv))
             # Pad missing attrs with empty items
-            while len(items) < 10 + 54:
+            while len(items) < 11 + 54:
                 items.append(_SortItem(''))
 
             for col, item in enumerate(items):
-                if col == 6:  # Nation flag — center
+                if col == 7:  # Nation flag — center
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
@@ -3724,10 +3729,13 @@ class MainWindow(QMainWindow):
                     item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 7:
+                if col == 1 and injured:
+                    item.setForeground(QColor('#FFFFFF'))
+                    item.setBackground(QColor('#8B1A1A'))
+                elif col == 8:
                     item.setForeground(QColor(COLORS['hgp_green'] if hgp
                                               else COLORS['text_dim']))
-                elif col == 8:
+                elif col == 9:
                     item.setForeground(QColor(COLORS['hgp_green'] if hgc
                                               else COLORS['text_dim']))
                 self._table.setItem(row, col, item)
@@ -3739,14 +3747,17 @@ class MainWindow(QMainWindow):
         from fm_editor.patch import is_hgc
         n_hgc = sum(1 for p in squad
                     if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
+        n_inj = sum(1 for p in squad if p.get('injured', False))
         def _stat(val, label, color=COLORS['text_secondary']):
             return (f'<span style="color:{COLORS["text_primary"]};font-weight:600;">{val}</span>'
                     f'&nbsp;<span style="color:{color};font-size:11px;">{label}</span>')
         sep = f'<span style="color:{COLORS["border"]};">&nbsp;&nbsp;·&nbsp;&nbsp;</span>'
+        inj_part = (sep + _stat(n_inj, 'injured', '#C0392B')) if n_inj > 0 else ''
         self._squad_info.setText(
             _stat(len(squad), 'players') + sep
             + _stat(n_hgp, 'HGP', COLORS['hgp_green']) + sep
-            + _stat(n_hgc, 'HGC', COLORS['hgp_green']))
+            + _stat(n_hgc, 'HGC', COLORS['hgp_green'])
+            + inj_part)
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):

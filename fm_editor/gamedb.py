@@ -457,6 +457,17 @@ def _find_coaching_magic(b, records_end):
     return -1
 
 
+def find_injuries(b, people, player_ids):
+    """Set p['injured'] = True/False for each player in player_ids.
+
+    # ponytail: injury detection not yet confirmed — all False until binary format mapped.
+    # Upgrade path: scan linked records for injury-type entries (b11 injury code + duration).
+    """
+    for p in people:
+        if p.get('id', -1) in player_ids:
+            p['injured'] = False
+
+
 def find_coaching_attrs(b, people, player_ids):
     """Parse coaching block for each non-player person; store 'coaching' dict in-place."""
     MAGIC_SUFFIX = _MAGIC_SUFFIX
