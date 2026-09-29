@@ -3085,13 +3085,15 @@ class MainWindow(QMainWindow):
         self._players_table.setShowGrid(False)
         self._players_table.setSortingEnabled(True)
         self._players_table.setStyleSheet(self._table.styleSheet() if hasattr(self, '_table') else '')
+        self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
-        self._players_table.setItemDelegateForColumn(1, self._players_pos_delegate)
+        self._players_table.setItemDelegateForColumn(1, self._players_inj_delegate)
+        self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
 
         phdr = self._players_table.horizontalHeader()
         phdr.setHighlightSections(False)
         phdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club']
+        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE'] + _ATTR_ABBREV
         self._players_table.setColumnCount(len(cols))
         self._players_table.setHorizontalHeaderLabels(cols)
         for i, col in enumerate(cols):
@@ -3099,8 +3101,11 @@ class MainWindow(QMainWindow):
                 self._players_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 45, 8: 160}.items():
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}
+        for i, cw in fixed_widths.items():
             self._players_table.setColumnWidth(i, cw)
+        for i in range(11, len(cols)):
+            self._players_table.setColumnWidth(i, 35)
         phdr.setStretchLastSection(True)
 
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
@@ -3211,10 +3216,20 @@ class MainWindow(QMainWindow):
             club_id = squads.get(p.get('id'))
             club_name = club_by_id.get(club_id, '') if club_id else ''
 
+            injured = p.get('injured', False)
+            injury_days = p.get('injury_days', 0)
+            contract_end = p.get('contract_end', '')
+            raw_attrs = p.get('raw_attrs', [])
+
+            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
+            if injured and injury_days > 0:
+                inj_item.setToolTip(f"Out for {injury_days} days")
+
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             items = [
                 name_item,
+                inj_item,
                 _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
@@ -3223,9 +3238,15 @@ class MainWindow(QMainWindow):
                 _SortItem(flag),
                 _SortItem('HGP' if hgp else '-'),
                 _SortItem(club_name),
+                _SortItem(contract_end),
             ]
+            for raw in raw_attrs:
+                dv = max(1, min(20, round(raw / 5)))
+                items.append(_SortItem(str(dv), dv))
+            while len(items) < 11 + 54:
+                items.append(_SortItem(''))
             for col, item in enumerate(items):
-                if col == 6:
+                if col == 7:
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
@@ -3233,12 +3254,12 @@ class MainWindow(QMainWindow):
                     item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 7:
+                if col == 8:
                     item.setForeground(QColor(COLORS['hgp_green'] if hgp else COLORS['text_dim']))
                 self._players_table.setItem(row, col, item)
 
         self._players_table.setSortingEnabled(True)
-        self._players_table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
+        self._players_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         for i in range(self._players_table.columnCount()):
             self._players_table.resizeColumnToContents(i)
         shown = len(display)
