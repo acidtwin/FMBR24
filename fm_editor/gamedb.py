@@ -474,10 +474,15 @@ def find_injuries(b, people, player_ids):
             if roff + 16 > len(b):
                 break
             if b[roff + 11] == _INJURY_RECORD_TYPE:
-                p['injured'] = True
-                p['injury_days'] = b[roff + 12]
-                break
+                days = b[roff + 12]
+                if days > 0:
+                    p['injured'] = True
+                    p['injury_days'] = days
+                    break
         else:
+            p['injured'] = False
+            p['injury_days'] = 0
+        if 'injured' not in p:
             p['injured'] = False
             p['injury_days'] = 0
 

@@ -2321,7 +2321,7 @@ class MainWindow(QMainWindow):
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         self._pos_delegate = _PosBadgeDelegate(self._table)
-        self._table.setItemDelegateForColumn(1, self._pos_delegate)
+        self._table.setItemDelegateForColumn(2, self._pos_delegate)
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 

@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 14  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 15  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
