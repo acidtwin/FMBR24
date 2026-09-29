@@ -434,10 +434,12 @@ _POS_BADGE_COLORS = {
 
 # Default sort order for position column (lower = higher in list)
 _POS_SORT_ORDER = {
-    'GK': 0, 'DR': 1, 'DL': 2, 'DC': 3, 'DM': 4,
-    'AMR': 5, 'AML': 6, 'AMC': 7, 'ST': 8,
-    # remaining positions sorted after
-    'SW': 9, 'WBR': 10, 'WBL': 11, 'MR': 12, 'MC': 13, 'ML': 14,
+    'GK': 0,
+    'DR': 1, 'WBR': 2, 'DL': 3, 'WBL': 4,
+    'DC': 5, 'SW': 6,
+    'DM': 7, 'MC': 8,
+    'MR': 9, 'AMR': 10, 'ML': 11, 'AML': 12,
+    'AMC': 13, 'ST': 14,
 }
 
 
