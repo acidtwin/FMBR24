@@ -239,7 +239,7 @@ class ParseWorker(QThread):
             from fm_editor.archive import parse_archive, get_member
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
                                           find_people, match_identities, find_abilities,
-                                          find_employment, find_club_staff)
+                                          find_employment, find_club_staff, find_coaching_attrs)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -284,11 +284,14 @@ class ParseWorker(QThread):
             self._emit("Scanning employment records...", 91)
             employment = find_employment(b, people)
 
-            self._emit("Scanning club staff arrays...", 94)
+            self._emit("Scanning club staff arrays...", 93)
             club_staff = find_club_staff(b, clubs, people, abilities, names_start)
-            print(f"[diag] club_staff: {len(club_staff)} clubs, {sum(len(v) for v in club_staff.values())} total staff links", flush=True)
 
-            self._emit("Caching results...", 97)
+            self._emit("Parsing coaching attributes...", 96)
+            player_ids = set(abilities.keys())
+            find_coaching_attrs(b, people, player_ids)
+
+            self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff)
 
             self.pct.emit(100)
@@ -2289,7 +2292,7 @@ class MainWindow(QMainWindow):
                 entity_id = employment.get(pid)
                 club_name = club_by_entity.get(entity_id, '') if entity_id else ''
             nation_id = p.get('nation', 0)
-            nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
+            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
             pers = p.get('personality', [])
             pers_items = []
@@ -2298,11 +2301,13 @@ class MainWindow(QMainWindow):
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
-            items = [name_item, _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
+            items = [name_item, _SortItem(club_name), _SortItem(flag), _SortItem(str(age), age)] + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
         self._staff_table.setSortingEnabled(True)
+        for i in range(self._staff_table.columnCount()):
+            self._staff_table.resizeColumnToContents(i)
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
         self._status_info_lbl.setText(f'{total:,} staff')
@@ -2337,12 +2342,33 @@ class MainWindow(QMainWindow):
         shdr = self._club_staff_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Nation', 'Age', 'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
+        # Coaching cols (Section B confirmed + Section A extras), then personality
+        _STAFF_COACHING_COLS = [
+            'Atk', 'Def', 'Fit', 'Mnt', 'SPc', 'Tac', 'Tch', 'WwY',  # coaching area
+            'Det', 'Mot', 'PMg',                                          # mental
+            'JPA', 'JSA', 'TKn',                                          # knowledge
+            'Neg', 'GKH', 'GKS',                                          # other
+        ]
+        self._club_staff_coaching_cols = _STAFF_COACHING_COLS
+        # Map short label → coaching dict key
+        self._coaching_col_map = {
+            'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
+            'Mnt': 'Mental',    'SPc': 'Set Pieces','Tac': 'Tactical',
+            'Tch': 'Technical', 'WwY': 'WwY',
+            'Det': 'Determination', 'Mot': 'Motivating', 'PMg': 'People Mgt',
+            'JPA': 'JPA',       'JSA': 'JSA',       'TKn': 'Tact Knowledge',
+            'Neg': 'Negotiating','GKH': 'GK Handling','GKS': 'GK Shot Stop',
+        }
+        cols = ['Name', 'Nation', 'Age'] + _STAFF_COACHING_COLS + [
+            'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
         self._club_staff_table.setColumnCount(len(cols))
         self._club_staff_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 250, 1: 50, 2: 40, 3: 35, 4: 35, 5: 35, 6: 35, 7: 35, 8: 35, 9: 35, 10: 35}.items():
+        widths = {0: 220, 1: 45, 2: 38}
+        for i in range(3, len(cols)):
+            widths[i] = 35
+        for i, cw in widths.items():
             self._club_staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
@@ -2377,24 +2403,34 @@ class MainWindow(QMainWindow):
         self._club_staff_title_lbl.setText(f'{club["name"]} - Club Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
+        coaching_col_map = getattr(self, '_coaching_col_map', {})
+        coaching_cols = getattr(self, '_club_staff_coaching_cols', [])
         for row, p in enumerate(staff):
+            pid = p.get('id', -1)
             name = p.get('name', '')
             nation_id = p.get('nation', 0)
-            nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
+            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            coaching = p.get('coaching', {})
+            coaching_items = []
+            for short_label in coaching_cols:
+                key = coaching_col_map.get(short_label, short_label)
+                v = coaching.get(key)
+                coaching_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             pers = p.get('personality', [])
             pers_items = []
             for idx in range(8):
                 v = pers[idx] if idx < len(pers) else None
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
-            pid = p.get('id', -1)
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
-            items = [name_item, _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
+            items = [name_item, _SortItem(flag), _SortItem(str(age), age)] + coaching_items + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._club_staff_table.setItem(row, col, item)
         self._club_staff_table.setSortingEnabled(True)
+        for i in range(self._club_staff_table.columnCount()):
+            self._club_staff_table.resizeColumnToContents(i)
         self._status_info_lbl.setText(f'{len(staff):,} staff')
 
     def _make_view_shortlist(self):
@@ -3289,13 +3325,15 @@ class MainWindow(QMainWindow):
         self._all_players_cache = []  # invalidate on new load
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
-        n_people = len([p for p in result.get('people', []) if p.get('ca') is not None])
+        people_all = result.get('people', [])
+        n_people = len([p for p in people_all if p.get('ca') is not None])
+        n_staff = len([p for p in people_all if p.get('ca') is None])
         fname = os.path.basename(self._save_path) if self._save_path else ''
         if fname:
             self._sb_season.setText(fname)
         self._status_ready_lbl.setText(
             f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}'
-            f' &nbsp;&middot;&nbsp; {n_clubs:,} clubs, {n_people:,} players')
+            f' &nbsp;&middot;&nbsp; {n_clubs:,} clubs, {n_people:,} players, {n_staff:,} staff')
         self._club_view_name.setText('Save loaded')
         self._club_view_info.setText(
             f"{n_clubs:,} clubs, {n_people:,} players with ability data.")

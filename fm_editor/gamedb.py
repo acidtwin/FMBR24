@@ -388,3 +388,81 @@ def match_identities(b, people, names_end):
             person['id'] = ordered[j][1]
             person['uid'] = ordered[j][2]
             person['identity_offset'] = ordered[j][0]
+
+
+# -- Coaching attributes -------------------------------------------------------
+
+# Section B layout (magic+81, 14 bytes, ÷5 scale).
+# Positions confirmed against FM24 coaching screen (Daniele Baldini id=355).
+# Positions marked ? are best-guess based on value matching.
+_COACHING_B_LABELS = [
+    'WwY',            # 0  confirmed
+    'Motivating',     # 1  confirmed
+    'Mental',         # 2  likely (same value as SetPieces for reference coach)
+    'Determination',  # 3  confirmed
+    'Technical',      # 4  confirmed
+    'Set Pieces',     # 5  likely
+    'Fitness',        # 6  confirmed
+    'Attacking',      # 7  confirmed
+    'Defending',      # 8  unconfirmed (save-dependent)
+    'GK Shot Stop',   # 9  unconfirmed
+    'People Mgt',     # 10 confirmed
+    'Tact Knowledge', # 11 confirmed
+    'Negotiating',    # 12 confirmed
+    'GK Handling',    # 13 confirmed
+]
+
+# Section A extra positions (magic+37 base, ÷5 scale).
+_COACHING_A_EXTRAS = {
+    33: 'Tactical',   # confirmed: =16 for Baldini
+    36: 'JPA',        # confirmed: =11 for Baldini
+    39: 'JSA',        # confirmed: =11 for Baldini
+}
+
+_MAGIC_SUFFIX = b'\x1a\xea\x07'
+
+
+def _find_coaching_magic(b, records_end):
+    """Find the XX 1a ea 07 magic for a person's coaching block."""
+    for check_off in range(records_end, min(records_end + 60, len(b) - 4)):
+        if b[check_off + 1:check_off + 4] == _MAGIC_SUFFIX:
+            return check_off
+    return -1
+
+
+def find_coaching_attrs(b, people, player_ids):
+    """Parse coaching block for each non-player person; store 'coaching' dict in-place."""
+    MAGIC_SUFFIX = _MAGIC_SUFFIX
+    for p in people:
+        if p.get('id', -1) in player_ids:
+            continue
+        end = p['end']
+        if end + 45 > len(b):
+            continue
+        count = b[end + 34] if end + 34 < len(b) else 0
+        records_end = end + 35 + count * 16
+        m = _find_coaching_magic(b, records_end)
+        if m < 0 or m + 95 > len(b):
+            continue
+        # Verify PID at magic+12
+        pid_check = _u32(b, m + 12) & 0xFFFF
+        if pid_check != (p.get('id', -1) & 0xFFFF):
+            continue
+        # Section B: 14 bytes at magic+81, stop at 0xff
+        sec_b = []
+        for i in range(m + 81, min(m + 95, len(b))):
+            if b[i] == 0xff:
+                break
+            sec_b.append(b[i])
+        coaching = {}
+        for idx, label in enumerate(_COACHING_B_LABELS):
+            if idx < len(sec_b):
+                coaching[label] = max(1, min(20, round(sec_b[idx] / 5)))
+        # Section A extras at specific positions
+        sec_a_base = m + 37
+        for a_idx, label in _COACHING_A_EXTRAS.items():
+            pos = sec_a_base + a_idx
+            if pos < len(b):
+                coaching[label] = max(1, min(20, round(b[pos] / 5)))
+        if coaching:
+            p['coaching'] = coaching

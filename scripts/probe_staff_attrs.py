@@ -97,15 +97,41 @@ def probe(save_path, name_filter=''):
                 m = check_off
                 magic_found = True
                 break
+        # Print 30 bytes before magic (between records_end and magic)
+        pre_gap = b[records_end:records_end+30] if magic_found else b''
+        if magic_found:
+            pre_gap = b[records_end:m]
+        if pre_gap:
+            print(f"  Pre-magic gap ({len(pre_gap)} bytes): {pre_gap.hex(' ')}")
+
         if magic_found:
             pid_check = _u32(b, m + 12) & 0xFFFF
             print(f"  Coaching block at +{m - end} from end  magic={b[m:m+4].hex(' ')}  pid_check={pid_check} vs id={pid}")
+            # Dump full block +0..+300 for analysis
+            block = bytes(b[m:m+300])
+            print(f"  Block +0..+300 hex: {block.hex(' ')}")
             attrs_raw = list(b[m+37:m+37+44])
             attrs_scaled = [max(1, min(20, round(v/5))) for v in attrs_raw]
             print(f"  Attrs raw (+37, 44): {attrs_raw}")
             print(f"  Attrs ÷5           : {attrs_scaled}")
-            ctx = b[m+24:m+82]
-            print(f"  Context +24..+82: {ctx.hex(' ')}")
+            # Look for second coaching block around end+1000..+1400
+            print(f"  Extended region end+1000..+1400:")
+            chunk = bytes(b[end+1000:end+1400])
+            print(f"    {chunk.hex(' ')}")
+            # Look for magic suffix in that region
+            for i in range(len(chunk)-4):
+                if chunk[i+1:i+4] == b'\x1a\xea\x07':
+                    print(f"    *** Magic at end+{1000+i}: {chunk[i:i+4].hex(' ')}")
+            # Also scan for JPA/JSA linked records (b11=02 or similar)
+            print(f"  Bytes end+200..+350 (post-block):  {bytes(b[end+200:end+350]).hex(' ')}")
+            # Also print Section B candidates (bytes before first ff ff ff ff after magic+80)
+            secb_start = m + 81
+            secb = []
+            for i in range(secb_start, min(secb_start + 30, len(b))):
+                if b[i:i+4] == b'\xff\xff\xff\xff':
+                    break
+                secb.append(b[i])
+            print(f"  Section B ({len(secb)} bytes): {bytes(secb).hex(' ')}  ÷5: {[max(1,min(20,round(v/5))) for v in secb]}")
         else:
             post = b[records_end:records_end+80]
             print(f"  No magic found. Post-records +80: {post.hex(' ')}")
