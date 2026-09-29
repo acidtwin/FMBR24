@@ -1786,7 +1786,7 @@ class MainWindow(QMainWindow):
         for key, svg, label in [
             ('club',       _SVG_CLUB,      'Club'),
             ('squad',      _SVG_SQUAD,     'Squad'),
-            ('club_staff', _SVG_STAFF,     'Staff'),
+            ('club_staff', _SVG_STAFF,     'Club Staff'),
             ('shortlist',  _SVG_SHORTLIST, 'My Shortlist'),
         ]:
             if key == 'squad':
@@ -2283,7 +2283,7 @@ class MainWindow(QMainWindow):
             f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
         hdr_row = QHBoxLayout(hdr)
         hdr_row.setContentsMargins(16, 0, 16, 0)
-        self._club_staff_title_lbl = QLabel('Staff')
+        self._club_staff_title_lbl = QLabel('Club Staff')
         self._club_staff_title_lbl.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
         hdr_row.addWidget(self._club_staff_title_lbl)
@@ -2338,7 +2338,7 @@ class MainWindow(QMainWindow):
                  if pid in people_by_id and 'ca' not in people_by_id[pid]]
         staff.sort(key=lambda p: p.get('name', ''))
 
-        self._club_staff_title_lbl.setText(f'{club["name"]} - Staff')
+        self._club_staff_title_lbl.setText(f'{club["name"]} - Club Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
         for row, p in enumerate(staff):
@@ -2493,8 +2493,6 @@ class MainWindow(QMainWindow):
             f" border-bottom-right-radius:2px; }}"
             f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
             f" {{ background:{COLORS['border']}; }}"
-            f"QSpinBox::up-arrow {{ image:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMywwIDYsNCAwLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4='); width:6px; height:4px; }}"
-            f"QSpinBox::down-arrow {{ image:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMCwwIDYsMCAzLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4='); width:6px; height:4px; }}"
         )
         age_lbl = QLabel('Age:')
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")

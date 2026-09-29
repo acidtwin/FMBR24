@@ -12,6 +12,19 @@ Sources (settings.fmf → settings/fm colours.xml):
   default foreground     rgb(255,255,255)→ text_primary
 """
 
+# Qt QSS image: does not support data: URIs — write real SVG files to /tmp.
+_SPIN_UP_SVG = '/tmp/fme_spin_up.svg'
+_SPIN_DN_SVG = '/tmp/fme_spin_dn.svg'
+try:
+    with open(_SPIN_UP_SVG, 'wb') as _f:
+        _f.write(b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 4'>"
+                 b"<polygon points='3,0 6,4 0,4' fill='#8B96A8'/></svg>")
+    with open(_SPIN_DN_SVG, 'wb') as _f:
+        _f.write(b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 4'>"
+                 b"<polygon points='0,0 6,0 3,4' fill='#8B96A8'/></svg>")
+except Exception:
+    _SPIN_UP_SVG = _SPIN_DN_SVG = ''
+
 COLORS = {
     # backgrounds - from fm colours.xml box_background tokens
     'window_bg':     '#14151A',  # alt_box_background
@@ -316,12 +329,12 @@ QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
     background: {COLORS['border']};
 }}
 QSpinBox::up-arrow {{
-    image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMywwIDYsNCAwLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4=");
+    image: url({_SPIN_UP_SVG});
     width: 6px;
     height: 4px;
 }}
 QSpinBox::down-arrow {{
-    image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMCwwIDYsMCAzLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4=");
+    image: url({_SPIN_DN_SVG});
     width: 6px;
     height: 4px;
 }}
