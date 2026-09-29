@@ -886,13 +886,6 @@ class PlayerDetailDialog(QDialog):
             QPushButton:hover {{ background:{COLORS['accent_hover']}; }}
             QPushButton:pressed {{ background:{COLORS['accent_press']}; }}
         """
-        if b is not None and hgc is False and self._club_entity_id:
-            make_hgc = QPushButton('Make HGC')
-            make_hgc.setStyleSheet(_btn_ss)
-            make_hgc.setCursor(Qt.CursorShape.PointingHandCursor)
-            make_hgc.clicked.connect(lambda: (self._emit_patch('hgc'), self.accept()))
-            action_row.addWidget(make_hgc)
-
         action_row.addStretch()
         add_shortlist = QPushButton('Add to Shortlist')
         add_shortlist.setStyleSheet(_btn_ss)
