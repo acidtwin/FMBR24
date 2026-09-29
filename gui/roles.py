@@ -22,11 +22,14 @@ Attribute index reference:
 FM_ROLES: list[tuple[str, str, tuple[int, ...]]] = [
 
     # ── Goalkeeper (5) ───────────────────────────────────────────────────────
-    ('Goalkeeper (D)',      'GK', (11, 21, 19, 12, 13, 15, 20, 17, 18, 53)),
-    ('Goalkeeper (S)',      'GK', (11, 21, 19, 12, 13, 15, 20, 17, 18, 53)),
-    ('Sweeper Keeper (D)',  'GK', (11, 21, 15, 17, 20, 18, 53, 46, 52, 22)),
-    ('Sweeper Keeper (S)',  'GK', (11, 21, 15, 17, 20, 18, 53, 46, 52, 22, 7)),
-    ('Sweeper Keeper (A)',  'GK', (11, 21, 15, 17, 20, 18, 53, 46, 52, 22, 7, 23, 10, 1)),
+    # GK key attrs (FM Scout): handling, reflexes, oneOnOnes, aerialReach, commandArea,
+    #   communication, kicking, throwing, positioning, anticipation, decisions, firstTouch
+    # SK adds: concentration, agility, composure (all duties); passing (S/A); technique, vision, dribbling (A)
+    ('Goalkeeper (D)',      'GK', (11, 21, 19, 12, 13, 14, 15, 16, 20, 17, 18, 22, 53)),
+    ('Goalkeeper (S)',      'GK', (11, 21, 19, 12, 13, 14, 15, 16, 20, 17, 18, 22, 53)),
+    ('Sweeper Keeper (D)',  'GK', (11, 21, 19, 12, 13, 14, 15, 16, 20, 17, 18, 22, 53, 46, 52)),
+    ('Sweeper Keeper (S)',  'GK', (11, 21, 19, 12, 13, 14, 15, 16, 20, 17, 18, 22, 53, 46, 52, 7)),
+    ('Sweeper Keeper (A)',  'GK', (11, 21, 19, 12, 13, 14, 15, 16, 20, 17, 18, 22, 53, 46, 52, 7, 23, 10, 1)),
 
     # ── Central Defender (9) ─────────────────────────────────────────────────
     ('Ball-Playing Defender (D)',  'CB', (17, 53, 18, 3, 5, 20, 9, 7, 23, 36, 39, 43, 52)),
@@ -49,9 +52,9 @@ FM_ROLES: list[tuple[str, str, tuple[int, ...]]] = [
     ('Inverted Wing-Back (S)',   'FB/WB', (17, 52, 53, 18, 22, 5, 7, 9, 23, 10)),
     ('Inverted Wing-Back (A)',   'FB/WB', (34, 17, 52, 53, 18, 22, 5, 7, 9, 23, 10, 38)),
     ('No-Nonsense Full Back',    'FB/WB', (5, 9, 43, 53, 17, 20, 45, 36)),
-    ('Wide Centre-Back (D)',     'FB/WB', (17, 53, 18, 3, 5, 20, 9, 7, 23)),
-    ('Wide Centre-Back (S)',     'FB/WB', (17, 53, 18, 3, 5, 20, 9, 7, 23, 29)),
-    ('Wide Centre-Back (A)',     'FB/WB', (34, 17, 53, 18, 3, 5, 20, 9, 29, 0)),
+    ('Wide Centre-Back (D)',     'FB/WB', (17, 53, 18, 3, 5, 20, 9, 7, 23, 36, 39, 43, 52)),
+    ('Wide Centre-Back (S)',     'FB/WB', (17, 53, 18, 3, 5, 20, 9, 7, 23, 29, 36, 39, 43, 52)),
+    ('Wide Centre-Back (A)',     'FB/WB', (34, 17, 53, 18, 3, 5, 20, 9, 29, 0, 36, 39)),
     ('Wing-Back (D)',            'FB/WB', (17, 0, 18, 5, 20, 37, 9, 28, 29)),
     ('Wing-Back (S)',            'FB/WB', (17, 0, 18, 22, 5, 20, 37, 9, 28, 29)),
 
@@ -94,7 +97,7 @@ FM_ROLES: list[tuple[str, str, tuple[int, ...]]] = [
     ('Inside Forward (A)',    'Winger', (34, 1, 2, 22, 6, 38, 23, 52, 4)),
     ('Inverted Winger (S)',   'Winger', (0, 1, 22, 6, 38, 7, 23, 10)),
     ('Inverted Winger (A)',   'Winger', (34, 0, 1, 22, 6, 38, 7, 23, 10)),
-    ('Raumdeuter (A)',        'Winger', (34, 17, 52, 18, 6, 38)),
+    ('Raumdeuter (A)',        'Winger', (34, 17, 52, 18, 26, 6, 38)),
     ('Wide Midfielder (D)',   'Winger', (0, 18, 22, 7, 37, 28, 29)),
     ('Wide Midfielder (S)',   'Winger', (0, 18, 22, 6, 7, 37, 28, 29)),
     ('Wide Midfielder (A)',   'Winger', (0, 18, 22, 4, 6, 7, 37, 28, 29)),
@@ -105,13 +108,13 @@ FM_ROLES: list[tuple[str, str, tuple[int, ...]]] = [
     ('Winger (A)',            'Winger', (34, 46, 0, 1, 2, 6, 38, 23, 29)),
 
     # ── Striker (13) ─────────────────────────────────────────────────────────
-    ('Advanced Forward (A)',   'Striker', (34, 17, 52, 18, 2, 22, 6, 38, 23)),
+    ('Advanced Forward (A)',   'Striker', (34, 46, 42, 52, 2, 22, 6, 38, 23)),
     ('Complete Forward (S)',   'Striker', (34, 17, 52, 18, 1, 2, 22, 3, 4, 6, 38, 7, 23)),
     ('Complete Forward (A)',   'Striker', (34, 17, 52, 18, 1, 2, 22, 3, 4, 6, 26, 38, 7, 23)),
     ('Deep-Lying Forward (S)', 'Striker', (17, 52, 18, 22, 7, 23, 10, 6)),
     ('Deep-Lying Forward (A)', 'Striker', (17, 52, 18, 22, 7, 23, 10, 6, 2)),
     ('False Nine (S)',          'Striker', (17, 52, 18, 1, 22, 7, 23, 10, 6, 26)),
-    ('Poacher (A)',             'Striker', (34, 17, 52, 18, 2, 6, 38, 20)),
+    ('Poacher (A)',             'Striker', (34, 17, 52, 2, 6, 38, 20)),
     ('Pressing Forward (D)',    'Striker', (34, 45, 17, 43, 18, 38, 37, 28, 29)),
     ('Pressing Forward (S)',    'Striker', (34, 45, 17, 43, 18, 38, 37, 28, 29)),
     ('Pressing Forward (A)',    'Striker', (34, 45, 17, 43, 18, 2, 38, 37, 28, 29)),
@@ -149,8 +152,8 @@ def role_rating(person: dict, role_name: str,
         if total_w > 0:
             score = sum(raw[i] * weights.get(i, 0) for i in key_indices) / total_w
             return max(1, min(20, round(score / 5)))
-    vals = [max(1, min(20, round(raw[i] / 5))) for i in key_indices]
-    return round(sum(vals) / len(vals))
+    score = sum(raw[i] for i in key_indices) / len(key_indices)
+    return max(1, min(20, round(score / 5)))
 
 
 def all_role_names() -> list[str]:

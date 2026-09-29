@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-28 (session 5)
+**Last updated:** 2026-09-29 (session 6)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -10,6 +10,46 @@
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
 All changes on `master`.
+
+### Session 6 (2026-09-29) — Club staff array discovery
+
+**Problem solved**: Find current club for ALL coaching staff (physios, coaches, scouts, analysts). Previous approach (employment records) only found managers + ex-player coaches. Now using club-side staff arrays.
+
+**`find_club_staff(b, clubs, people, abilities, names_start)`** — new function in `fm_editor/gamedb.py`:
+- Scans each club's binary record for flat u32 PID arrays (coaching staff lists)
+- Pattern: byte immediately before the count byte == `0x00`
+- First-PID quick reject: if first u32 in array not in non_ca_ids, skip immediately
+- Adjacent array detection: backs up 4 bytes after each valid array (high byte of last PID = 0x00, which is also the marker for the next adjacent array)
+- Bounded by next club's offset from sorted club list — correct for all 44,035 clubs
+- Uses `bytearray.find(b'\x00')` instead of byte-by-byte loop (~14s vs ~60s)
+- Returns `{club_id: [person_ids]}`
+
+**Results for major clubs** (2026-27 save):
+- Tottenham Hotspur: 76 staff (coaches, analysts, scouts, physios)
+- Liverpool: 75 staff
+- Man Utd: 68 staff
+- Real Madrid: 60 staff
+- Man City: 64 staff
+
+**Key discoveries during investigation**:
+- Club id=2 in game_db.dat is an ALBANIAN club (Besëlidhja Lezhë), NOT Arsenal — club IDs are not fixed to English clubs
+- There are 44,035 clubs total; average record size ~2200 bytes
+- Big English clubs have ~7000-10000 byte records (Liverpool=8284, Man City=7961, Spurs=8296)
+- Staff arrays are adjacent (end-to-end), hence the arr_end-4 backup after success
+- False-positive filter: non_ca_ids = all_person_ids - player_ids (uses find_abilities result)
+- The `b11=0x48` employment record is HGC (Homegrown at Club) training record, NOT staff employment
+
+**Integration**:
+- `ParseWorker` calls `find_club_staff` after `find_abilities`; result stored in `_save_data['club_staff']`
+- `_populate_staff_table` (global Staff tab): builds `staff_club: {pid: club_id}` reverse map, falls back to `employment` dict for unmatched staff
+- `_populate_club_staff_table` (Club Staff tab): uses `club_staff[club_id]` as primary, merges `employment` records
+- `cache.py` v10: stores/restores `{club_id: [pids]}` dict
+
+**Removed** from loading: diagnostic sub_squad kind scan (was dead code printing to console).
+
+**Files changed**: `fm_editor/gamedb.py`, `fm_editor/cache.py`, `gui/main_window.py`
+
+---
 
 ### Session 5 (2026-09-28) — Role weight presets
 
@@ -97,7 +137,8 @@ All changes on `master`.
 6. **Save Changes** — topbar button writes current binary state to file (no patching)
 7. **Reports** — Scouting → Reports sidebar section; table view with Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (position picker), Best by Role (coming soon)
 8. **Players** — Scouting → Players sidebar section; shows all parsed players sorted by CA with name/pos/nation/min-CA/nation filters; player search results land here
-9. **Staff** — Staff sidebar entry; table of all non-player people (no CA/PA) showing Name, Nation, Age; populated on save load
+9. **Staff** — Staff sidebar entry; 54k+ non-player people showing Name, **Club**, Nation, Age; Club column populated via club-side staff arrays + employment fallback
+10. **Club Staff** — Staff tab when viewing a specific club; shows that club's full staff roster (coaches, physios, scouts, analysts)
 
 ---
 
@@ -109,10 +150,11 @@ All changes on `master`.
 |-------|-----|------|
 | 0 | `club` | Club overview (name, player/HGP/HGC counts) |
 | 1 | `squad` | Squad table (QTableWidget `_table`) |
-| 2 | `staff` | Staff table (QTableWidget `_staff_table`) — Name, Nation, Age |
+| 2 | `staff` | Staff table (QTableWidget `_staff_table`) — Name, Club, Nation, Age |
 | 3 | `shortlist` | My Shortlist (stub) |
 | 4 | `reports` | Scouting Reports table |
 | 5 | `players` | All Players view (QTableWidget `_players_table`) |
+| 6 | `club_staff` | Club-specific staff table — Name, Nation, Age |
 
 ### Topbar
 
@@ -142,7 +184,10 @@ Double-click a player in Players view → navigates to their club's squad.
 
 | Symbol | Location | Purpose |
 |--------|----------|---------|
-| `_populate_staff_table` | main_window.py | Fills `_staff_table` with people who have no CA/PA |
+| `find_club_staff` | fm_editor/gamedb.py | Scans club binary records for staff PID arrays; returns `{club_id: [pids]}` |
+| `find_employment` | fm_editor/gamedb.py | Employment records for managers + ex-player coaches |
+| `_populate_staff_table` | main_window.py | Global staff table — Club column via club_staff reverse map |
+| `_populate_club_staff_table` | main_window.py | Per-club staff: club_staff primary + employment merge |
 | `ParseWorker` | main_window.py | QThread — parses .fm archive |
 | `PatchWorker` | main_window.py | QThread — patches HGP/HGC or `mode='save_only'` |
 | `PlayerDetailDialog` | main_window.py | Player profile modal (attrs, CA/PA bars, action strip) |
@@ -150,7 +195,6 @@ Double-click a player in Players view → navigates to their club's squad.
 | `_attr_val_color(v)` | main_window.py | Returns color for attr value (gold ≥17, green ≥16, …) |
 | `_NATION_FLAG` | main_window.py | nation_id → flag emoji mapping |
 | `_POS_BADGE_COLORS` | main_window.py | pos string → (bg, fg) for badge delegate |
-| `_DOT_SEQ` | main_window.py | `[1,2,3,4,3,2]` ping-pong dot animation |
 | `NATIONS` | main_window.py | nation_id → nation name (35 entries) |
 | `POSITIONS` | main_window.py | FM24 position strings list |
 | `find_club_entity_id` | fm_editor/patch.py | Finds club entity ID from b11=0x6a records |
@@ -163,7 +207,9 @@ Double-click a player in Players view → navigates to their club's squad.
 
 | Feature | Status |
 |---------|--------|
-| Staff view | Live — table of Name/Nation/Age, no filters yet |
+| Staff view | Live — Name/Club/Nation/Age, no filters yet |
+| Club Staff view | Live — full roster from club-side arrays + employment; ~60-76 per big club |
+| Staff load time | ~14s extra on first load (44k club scan), cached after |
 | My Shortlist | Stub — wire up Add to Shortlist from player modal |
 | Best by Role report | Live — 4 bundled weight presets (FMScout Community default). Weight editor + import in Settings (⚙). |
 | ▶ / ▼ navigation buttons | Disabled (greyed) — no back/forward history yet |
@@ -173,6 +219,7 @@ Double-click a player in Players view → navigates to their club's squad.
 | Players view: load all | Currently loads all people with CA data (no explicit limit enforced in filter; display caps at 3000 rows); slow on first open for large saves |
 | HGP/HGC patching from cache | Disabled — requires binary `b` in memory; user must Load (not use cached version) |
 | Player photo | Placeholder person icon; FM save doesn't store player photos |
+| Staff panel (like player panel) | Future — double-click staff member to see role/attribute panel |
 
 ---
 
@@ -182,17 +229,8 @@ See memory file: `~/.claude/projects/-run-media-acidtwin-Gaming-SSD-1-Claude-Cod
 
 - **Ability block**: scanned from `names_end + 57`, gate at `b[at-37]==0 && b[at-35]==0`; CA at `b[at-38]`, attrs at `b[at..at+54]`
 - **HGP**: secondary nation record `b10=0x08, b11=0x46`
-- **HGC**: training record `b10=0x01, b11=0x48`, bytes 0-3 = club entity ID (LE u32)
-- **Personality**: `b[end+17..end+25]` in person record, 8 bytes 1-20
-
----
-
-## Next steps / ideas
-
-- Wire **Add to Shortlist** in player modal → My Shortlist view
-- **Back/forward** navigation history (`_nav_history` stack)
-- **Sub-squad tabs** — working for clubs with kind data; investigate if kind 18-23 presence varies by league setup or save age
-- **Best by Role** report — map positions to FM roles, rank by relevant attributes
-- **Player photo** — if FM24 image packs can be located on disk, load by player ID
-- **Bulk export** — export squad CSV
-- **Season update** — `FM_SEASON_YEAR` is hardcoded to 2024; could derive from save filename or header
+- **HGC**: training record `b10=0x01, b11=0x48`, bytes 0-3 = club entity ID (LE u32); NOT an employment record
+- **Personality**: `b[end+17..end+25]` in person record, 8 bytes valid 0-20
+- **Club staff array**: flat u32 array within club's binary record; byte before count == `0x00`; multiple adjacent arrays per club (use arr_end-4 backup); bounded by next club's offset in sorted order
+- **Employment (non-staff-array)**: `b10=0x01, b11=0x6a` = current employer; `b10=0x01, b11=0x03, b8=0x04` = manager appointment
+- **Entity ID**: `club_id + 1` in FM24 (e.g. Spurs club_id=492, entity_id=493)
