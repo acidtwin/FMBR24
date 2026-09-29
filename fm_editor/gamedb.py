@@ -468,6 +468,38 @@ def find_injuries(b, people, player_ids):
             p['injured'] = False
 
 
+def find_staff_extras(b, people, player_ids):
+    """Parse CA and PA for non-player staff from their coaching magic block.
+
+    CA = magic+33, PA = magic+35 (both u8, 1-200).
+    Confirmed on 4 staff in a FM24 2026-27 save; pid_check (lower 16 bits of PID
+    at magic+12) gates against hitting a neighbouring person's block.
+
+    # ponytail: reputation (0-9999), training rating, and role assignments were
+    # not reliably located in this binary — first 4 bytes at end+25 are in-range
+    # for some persons but exceed 9999 for others (e.g. Daniele Baldini=12973).
+    # Add when binary layout is confirmed against known in-game values.
+    """
+    for p in people:
+        if p.get('id', -1) in player_ids:
+            continue
+        end = p['end']
+        if end + 45 > len(b):
+            continue
+        count = b[end + 34] if end + 34 < len(b) else 0
+        records_end = end + 35 + count * 16
+        m = _find_coaching_magic(b, records_end)
+        if m < 0 or m + 36 > len(b):
+            continue
+        pid_check = _u32(b, m + 12) & 0xFFFF
+        if pid_check != (p.get('id', -1) & 0xFFFF):
+            continue
+        ca, pa = b[m + 33], b[m + 35]
+        if 1 <= ca <= 200 and 1 <= pa <= 200:
+            p['staff_ca'] = ca
+            p['staff_pa'] = pa
+
+
 def find_coaching_attrs(b, people, player_ids):
     """Parse coaching block for each non-player person; store 'coaching' dict in-place."""
     MAGIC_SUFFIX = _MAGIC_SUFFIX
