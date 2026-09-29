@@ -3694,11 +3694,14 @@ class MainWindow(QMainWindow):
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             hgc_text = ('HGC' if hgc else '-') if hgc is not None else '?'
             injured = p.get('injured', False)
+            injury_days = p.get('injury_days', 0)
 
             contract_end = p.get('contract_end', '')
             raw_attrs = p.get('raw_attrs', [])
 
             inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
+            if injured and injury_days > 0:
+                inj_item.setToolTip(f"Out for {injury_days} days")
             items = [
                 name_item,
                 inj_item,
