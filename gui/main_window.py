@@ -1970,7 +1970,7 @@ class MainWindow(QMainWindow):
         self._scouting_staff_nav_btn.setEnabled(False)
         vbox.addWidget(self._scouting_staff_nav_btn)
 
-        vbox.addWidget(self._make_section_label('REPORTS'))
+        vbox.addWidget(self._make_section_label('PLAYER REPORTS'))
 
         self._report_btns = {}
         for key, label in [
@@ -1983,6 +1983,12 @@ class MainWindow(QMainWindow):
             btn.setEnabled(False)
             self._report_btns[key] = btn
             vbox.addWidget(btn)
+
+        vbox.addWidget(self._make_hline())
+        vbox.addWidget(self._make_section_label('STAFF REPORTS'))
+        staff_rpt_btn = self._make_nav_btn(_SVG_REPORT, 'Coming Soon', lambda checked: None)
+        staff_rpt_btn.setEnabled(False)
+        vbox.addWidget(staff_rpt_btn)
 
         vbox.addStretch()
         return sidebar
@@ -2722,6 +2728,19 @@ class MainWindow(QMainWindow):
         self._report_title_lbl.setStyleSheet(
             f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
         hdr_row.addWidget(self._report_title_lbl)
+        hdr_row.addStretch()
+
+        self._report_count_lbl = QLabel('')
+        vbox.addWidget(hdr)
+
+        filter_frame = QFrame()
+        filter_frame.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        filter_frame.setFixedHeight(38)
+        filter_row2 = QHBoxLayout(filter_frame)
+        filter_row2.setContentsMargins(16, 0, 16, 0)
+        filter_row2.setSpacing(12)
+        vbox.addWidget(filter_frame)
 
         self._report_pos_bar = QWidget()
         pos_row = QHBoxLayout(self._report_pos_bar)
@@ -2739,7 +2758,7 @@ class MainWindow(QMainWindow):
         self._report_pos_combo.currentTextChanged.connect(self._on_report_pos_changed)
         pos_row.addWidget(self._report_pos_combo)
         self._report_pos_bar.setVisible(False)
-        hdr_row.addWidget(self._report_pos_bar)
+        filter_row2.addWidget(self._report_pos_bar)
 
         # Role picker bar (best_role mode)
         self._report_role_bar = QWidget()
@@ -2765,9 +2784,9 @@ class MainWindow(QMainWindow):
         role_row.addWidget(self._report_role_combo)
         self._weights_lbl = QLabel()
         self._report_role_bar.setVisible(False)
-        hdr_row.addWidget(self._report_role_bar)
+        filter_row2.addWidget(self._report_role_bar)
 
-        hdr_row.addStretch()
+        filter_row2.addStretch()
 
         # Age range filter — always visible
         _spin_ss = (
@@ -2787,27 +2806,24 @@ class MainWindow(QMainWindow):
         )
         age_lbl = QLabel('Age:')
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
-        hdr_row.addWidget(age_lbl)
+        filter_row2.addWidget(age_lbl)
         self._report_age_min = QSpinBox()
         self._report_age_min.setRange(15, 60)
         self._report_age_min.setValue(15)
         self._report_age_min.setFixedWidth(52)
         self._report_age_min.setStyleSheet(_spin_ss)
-        hdr_row.addWidget(self._report_age_min)
+        filter_row2.addWidget(self._report_age_min)
         dash_lbl = QLabel('-')
         dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
-        hdr_row.addWidget(dash_lbl)
+        filter_row2.addWidget(dash_lbl)
         self._report_age_max = QSpinBox()
         self._report_age_max.setRange(15, 60)
         self._report_age_max.setValue(45)
         self._report_age_max.setFixedWidth(52)
         self._report_age_max.setStyleSheet(_spin_ss)
-        hdr_row.addWidget(self._report_age_max)
+        filter_row2.addWidget(self._report_age_max)
         self._report_age_min.valueChanged.connect(self._on_report_age_changed)
         self._report_age_max.valueChanged.connect(self._on_report_age_changed)
-
-        self._report_count_lbl = QLabel('')
-        vbox.addWidget(hdr)
 
         self._reports_table = _HoverTable()
         self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -2817,13 +2833,15 @@ class MainWindow(QMainWindow):
         self._reports_table.setShowGrid(False)
         self._reports_table.setSortingEnabled(True)
 
+        self._reports_inj_delegate = _PosBadgeDelegate(self._reports_table)
         self._reports_pos_delegate = _PosBadgeDelegate(self._reports_table)
-        self._reports_table.setItemDelegateForColumn(1, self._reports_pos_delegate)
+        self._reports_table.setItemDelegateForColumn(1, self._reports_inj_delegate)
+        self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
 
         rhdr = self._reports_table.horizontalHeader()
         rhdr.setHighlightSections(False)
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'Club']
+        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE'] + _ATTR_ABBREV
         self._reports_table.setColumnCount(len(cols))
         self._reports_table.setHorizontalHeaderLabels(cols)
         for i, col in enumerate(cols):
@@ -2831,8 +2849,11 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 150, 1: 55, 2: 45, 3: 45, 4: 45, 5: 40, 6: 50, 7: 160}.items():
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}
+        for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
+        for i in range(11, len(cols)):
+            self._reports_table.setColumnWidth(i, 35)
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
         rhdr.setStretchLastSection(True)
@@ -2899,8 +2920,8 @@ class MainWindow(QMainWindow):
         ratings = getattr(self, '_report_ratings', {})
         rhdr = self._reports_table.horizontalHeader()
         col4_label = 'Rating' if is_role else 'Dev'
-        self._reports_table.setHorizontalHeaderItem(4, _SortItem(col4_label))
-        self._reports_table.horizontalHeaderItem(4).setToolTip(_COL_TT.get(col4_label, ''))
+        self._reports_table.setHorizontalHeaderItem(5, _SortItem(col4_label))
+        self._reports_table.horizontalHeaderItem(5).setToolTip(_COL_TT.get(col4_label, ''))
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._reports_table.setSortingEnabled(False)
         self._reports_table.setRowCount(len(players))
@@ -2918,10 +2939,21 @@ class MainWindow(QMainWindow):
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             club_id = squads.get(p.get('id'))
             club_name = club_by_id.get(club_id, '') if club_id else ''
+            injured = p.get('injured', False)
+            injury_days = p.get('injury_days', 0)
+            contract_end = p.get('contract_end', '')
+            raw_attrs = p.get('raw_attrs', [])
+            hgp = p.get('hgp', False)
+
+            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
+            if injured and injury_days > 0:
+                inj_item.setToolTip(f"Out for {injury_days} days")
+
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             items = [
                 name_item,
+                inj_item,
                 _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
@@ -2929,21 +2961,30 @@ class MainWindow(QMainWindow):
                           col4_val if col4_val is not None else -1),
                 _SortItem(str(age), age),
                 _SortItem(flag),
+                _SortItem('HGP' if hgp else '-'),
                 _SortItem(club_name),
+                _SortItem(contract_end),
             ]
+            for raw in raw_attrs:
+                dv = max(1, min(20, round(raw / 5)))
+                items.append(_SortItem(str(dv), dv))
+            while len(items) < 11 + 54:
+                items.append(_SortItem(''))
             for col, item in enumerate(items):
-                if col == 6:
+                if col == 7:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
                     f.setPointSize(14)
                     item.setFont(f)
+                elif col == 8:
+                    text_dim = COLORS.get('text_dim', COLORS.get('text_secondary', '#888'))
+                    item.setForeground(QColor('#4caf50') if hgp else QColor(text_dim))
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._reports_table.setItem(row, col, item)
         self._reports_table.setSortingEnabled(True)
-        self._reports_table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
-        for i in range(self._reports_table.columnCount()):
-            self._reports_table.resizeColumnToContents(i)
+        self._reports_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         self._report_count_lbl.setText(f'{len(players):,} players')
         info = f'{len(players):,} players'
         if self._current_report_key == 'best_role':
@@ -3035,32 +3076,74 @@ class MainWindow(QMainWindow):
         self._players_pos_filter.currentIndexChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_pos_filter)
 
+        _spin_ss = (
+            f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f" border:1px solid {COLORS['border']}; border-radius:2px;"
+            f" padding:1px 2px 1px 4px; font-size:12px; }}"
+            f"QSpinBox::up-button {{ subcontrol-origin:border; subcontrol-position:top right;"
+            f" width:14px; height:10px; background:{COLORS['elevated']};"
+            f" border-left:1px solid {COLORS['border']}; border-bottom:1px solid {COLORS['border']};"
+            f" border-top-right-radius:2px; }}"
+            f"QSpinBox::down-button {{ subcontrol-origin:border; subcontrol-position:bottom right;"
+            f" width:14px; height:10px; background:{COLORS['elevated']};"
+            f" border-left:1px solid {COLORS['border']};"
+            f" border-bottom-right-radius:2px; }}"
+            f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
+            f" {{ background:{COLORS['border']}; }}"
+        )
         min_ca_lbl = QLabel('Min CA:')
         min_ca_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row.addWidget(min_ca_lbl)
-        self._players_ca_filter = QLineEdit()
-        self._players_ca_filter.setPlaceholderText('0')
-        self._players_ca_filter.setFixedSize(48, 26)
-        self._players_ca_filter.setStyleSheet(
-            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 6px; font-size:11px;")
-        self._players_ca_filter.returnPressed.connect(self._apply_players_filter)
+        self._players_ca_filter = QSpinBox()
+        self._players_ca_filter.setRange(0, 200)
+        self._players_ca_filter.setValue(0)
+        self._players_ca_filter.setFixedSize(56, 26)
+        self._players_ca_filter.setStyleSheet(_spin_ss)
+        self._players_ca_filter.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_ca_filter)
 
-        nation_lbl = QLabel('Nation:')
-        nation_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-        filter_row.addWidget(nation_lbl)
-        self._players_nation_filter = QComboBox()
-        self._players_nation_filter.addItem('All Nations')
-        for nid in sorted(NATIONS, key=lambda k: NATIONS[k]):
-            self._players_nation_filter.addItem(NATIONS[nid], nid)
-        self._players_nation_filter.setFixedHeight(26)
-        self._players_nation_filter.setFixedWidth(120)
-        self._players_nation_filter.setStyleSheet(
-            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
-        self._players_nation_filter.currentIndexChanged.connect(self._apply_players_filter)
-        filter_row.addWidget(self._players_nation_filter)
+        min_pa_lbl = QLabel('Min PA:')
+        min_pa_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(min_pa_lbl)
+        self._players_pa_filter = QSpinBox()
+        self._players_pa_filter.setRange(0, 200)
+        self._players_pa_filter.setValue(0)
+        self._players_pa_filter.setFixedSize(56, 26)
+        self._players_pa_filter.setStyleSheet(_spin_ss)
+        self._players_pa_filter.valueChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_pa_filter)
+
+        age_lbl = QLabel('Age:')
+        age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(age_lbl)
+        self._players_age_min = QSpinBox()
+        self._players_age_min.setRange(15, 60)
+        self._players_age_min.setValue(15)
+        self._players_age_min.setFixedSize(52, 26)
+        self._players_age_min.setStyleSheet(_spin_ss)
+        self._players_age_min.valueChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_age_min)
+        dash = QLabel('-')
+        dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(dash)
+        self._players_age_max = QSpinBox()
+        self._players_age_max.setRange(15, 60)
+        self._players_age_max.setValue(60)
+        self._players_age_max.setFixedSize(52, 26)
+        self._players_age_max.setStyleSheet(_spin_ss)
+        self._players_age_max.valueChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_age_max)
+
+        dev_lbl = QLabel('Min Dev:')
+        dev_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row.addWidget(dev_lbl)
+        self._players_dev_filter = QSpinBox()
+        self._players_dev_filter.setRange(0, 20)
+        self._players_dev_filter.setValue(0)
+        self._players_dev_filter.setFixedSize(52, 26)
+        self._players_dev_filter.setStyleSheet(_spin_ss)
+        self._players_dev_filter.valueChanged.connect(self._apply_players_filter)
+        filter_row.addWidget(self._players_dev_filter)
 
         filter_row.addStretch()
 
@@ -3150,15 +3233,24 @@ class MainWindow(QMainWindow):
         self._players_name_filter.blockSignals(True)
         self._players_pos_filter.blockSignals(True)
         self._players_ca_filter.blockSignals(True)
-        self._players_nation_filter.blockSignals(True)
+        self._players_pa_filter.blockSignals(True)
+        self._players_age_min.blockSignals(True)
+        self._players_age_max.blockSignals(True)
+        self._players_dev_filter.blockSignals(True)
         self._players_name_filter.clear()
         self._players_pos_filter.setCurrentIndex(0)
-        self._players_ca_filter.clear()
-        self._players_nation_filter.setCurrentIndex(0)
+        self._players_ca_filter.setValue(0)
+        self._players_pa_filter.setValue(0)
+        self._players_age_min.setValue(15)
+        self._players_age_max.setValue(60)
+        self._players_dev_filter.setValue(0)
         self._players_name_filter.blockSignals(False)
         self._players_pos_filter.blockSignals(False)
         self._players_ca_filter.blockSignals(False)
-        self._players_nation_filter.blockSignals(False)
+        self._players_pa_filter.blockSignals(False)
+        self._players_age_min.blockSignals(False)
+        self._players_age_max.blockSignals(False)
+        self._players_dev_filter.blockSignals(False)
 
     def _apply_players_filter(self):
         if not self._all_players_cache:
@@ -3167,12 +3259,11 @@ class MainWindow(QMainWindow):
         pos_q = self._players_pos_filter.currentText()
         if pos_q == 'All Positions':
             pos_q = ''
-        try:
-            min_ca = int(self._players_ca_filter.text().strip() or '0')
-        except ValueError:
-            min_ca = 0
-        nation_idx = self._players_nation_filter.currentIndex()
-        nation_id = self._players_nation_filter.itemData(nation_idx) if nation_idx > 0 else None
+        min_ca = self._players_ca_filter.value()
+        min_pa = self._players_pa_filter.value()
+        age_min = self._players_age_min.value()
+        age_max = self._players_age_max.value()
+        min_dev = self._players_dev_filter.value()
 
         filtered = self._all_players_cache
         if name_q:
@@ -3184,8 +3275,14 @@ class MainWindow(QMainWindow):
                         and p['positions'][pos_idx] == max(p['positions'])]
         if min_ca:
             filtered = [p for p in filtered if (p.get('ca') or 0) >= min_ca]
-        if nation_id is not None:
-            filtered = [p for p in filtered if p.get('nation') == nation_id]
+        if min_pa:
+            filtered = [p for p in filtered if (p.get('pa') or 0) >= min_pa]
+        age_min_eff = age_min if age_min > 15 else 0
+        age_max_eff = age_max if age_max < 60 else 999
+        if age_min_eff or age_max_eff < 999:
+            filtered = [p for p in filtered if age_min_eff <= (FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)) <= age_max_eff]
+        if min_dev:
+            filtered = [p for p in filtered if (_progress_rate(p) or 0) >= min_dev]
 
         self._populate_players_table(filtered)
 
