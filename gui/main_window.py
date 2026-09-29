@@ -886,12 +886,6 @@ class PlayerDetailDialog(QDialog):
             QPushButton:hover {{ background:{COLORS['accent_hover']}; }}
             QPushButton:pressed {{ background:{COLORS['accent_press']}; }}
         """
-        if b is not None and not hgp:
-            make_hgp = QPushButton('Make HGP')
-            make_hgp.setStyleSheet(_btn_ss)
-            make_hgp.setCursor(Qt.CursorShape.PointingHandCursor)
-            make_hgp.clicked.connect(lambda: (self._emit_patch('hgp'), self.accept()))
-            action_row.addWidget(make_hgp)
         if b is not None and hgc is False and self._club_entity_id:
             make_hgc = QPushButton('Make HGC')
             make_hgc.setStyleSheet(_btn_ss)
