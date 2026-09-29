@@ -423,12 +423,21 @@ _POS_BADGE_COLORS = {
     'GK':  ('#C07B2A', '#FFFFFF'),
     'SW':  ('#3A6BA8', '#FFFFFF'),
     'DL':  ('#3A6BA8', '#FFFFFF'), 'DC': ('#3A6BA8', '#FFFFFF'),
-    'DR':  ('#3A6BA8', '#FFFFFF'), 'DM': ('#3A6BA8', '#FFFFFF'),
+    'DR':  ('#3A6BA8', '#FFFFFF'),
+    'DM':  ('#5A3A8A', '#FFFFFF'),  # purple — distinct from DC blue
     'WBL': ('#3A6BA8', '#FFFFFF'), 'WBR': ('#3A6BA8', '#FFFFFF'),
     'ML':  ('#3A8A5A', '#FFFFFF'), 'MC': ('#3A8A5A', '#FFFFFF'),
     'MR':  ('#3A8A5A', '#FFFFFF'), 'AML': ('#3A8A5A', '#FFFFFF'),
     'AMC': ('#3A8A5A', '#FFFFFF'), 'AMR': ('#3A8A5A', '#FFFFFF'),
     'ST':  ('#A83A3A', '#FFFFFF'),
+}
+
+# Default sort order for position column (lower = higher in list)
+_POS_SORT_ORDER = {
+    'GK': 0, 'DR': 1, 'DL': 2, 'DC': 3, 'DM': 4,
+    'AMR': 5, 'AML': 6, 'AMC': 7, 'ST': 8,
+    # remaining positions sorted after
+    'SW': 9, 'WBR': 10, 'WBL': 11, 'MR': 12, 'MC': 13, 'ML': 14,
 }
 
 
@@ -2865,7 +2874,7 @@ class MainWindow(QMainWindow):
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             items = [
                 name_item,
-                _SortItem(pos),
+                _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
                 _SortItem(str(col4_val) if col4_val is not None else '?',
@@ -2884,6 +2893,7 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._reports_table.setItem(row, col, item)
         self._reports_table.setSortingEnabled(True)
+        self._reports_table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
         for i in range(self._reports_table.columnCount()):
             self._reports_table.resizeColumnToContents(i)
         self._report_count_lbl.setText(f'{len(players):,} players')
@@ -3157,7 +3167,7 @@ class MainWindow(QMainWindow):
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
             items = [
                 name_item,
-                _SortItem(pos),
+                _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
                 _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
@@ -3180,6 +3190,7 @@ class MainWindow(QMainWindow):
                 self._players_table.setItem(row, col, item)
 
         self._players_table.setSortingEnabled(True)
+        self._players_table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
         for i in range(self._players_table.columnCount()):
             self._players_table.resizeColumnToContents(i)
         shown = len(display)
@@ -3649,7 +3660,7 @@ class MainWindow(QMainWindow):
 
             items = [
                 name_item,
-                _SortItem(pos),
+                _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
                 _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
                 _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
@@ -3676,6 +3687,7 @@ class MainWindow(QMainWindow):
                 self._table.setItem(row, col, item)
 
         self._table.setSortingEnabled(True)
+        self._table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
         for i in range(self._table.columnCount()):
             self._table.resizeColumnToContents(i)
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
