@@ -317,10 +317,12 @@ class ParseWorker(QThread):
             self._emit("Scanning club staff arrays...", 93)
             club_staff = find_club_staff(b, clubs, people, abilities, names_start)
 
-            self._emit("Parsing coaching attributes...", 96)
             player_ids = set(abilities.keys())
+            self._emit("Parsing coaching attributes...", 94)
             find_coaching_attrs(b, people, player_ids)
+            self._emit("Scanning injuries...", 95)
             find_injuries(b, people, player_ids)
+            self._emit("Parsing staff ability (CA/PA)...", 96)
             find_staff_extras(b, people, player_ids)
 
             self._emit("Caching results...", 98)
