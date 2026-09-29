@@ -165,7 +165,7 @@ def find_people(b, first_names, last_names, names_end):
         day = _u16(b, end); year = _u16(b, end + 2); nation = _u16(b, end + 9)
         if not (1 <= day <= 366) or not (1850 <= year <= 2300) or nation > 255: continue
         if b[end + 11:end + 17] != b'\x00' * 6: continue
-        if not all(1 <= v <= 20 for v in b[end + 17:end + 25]): continue
+        if not all(v <= 20 for v in b[end + 17:end + 25]): continue
         fn = b[start + 19:end].decode('utf-8', errors='replace')
         if any(ord(c) <= 0x1f or c == '?' for c in fn): continue
         fname = first_names[f] if f != 0xFFFFFFFF else ''
@@ -214,7 +214,17 @@ def find_abilities(b, names_end):
 
 
 def find_employment(b, people):
-    """Return {person_id: club_entity_id} from b11=0x6a employment records."""
+    """Return {person_id: club_entity_id} for non-player staff.
+
+    Covers two record types:
+      b10=0x01, b11=0x6a — current club contract (player or staff)
+      b10=0x01, b11=0x03, b8=0x04 — manager/head coach appointment (current)
+
+    Note: b11=0x48 is the HGC (Homegrown at Club) training record — bytes 0-3
+    are the training-club entity, NOT an employment link; excluded here.
+    b10=0x01, b11=0x03, b8=0x02 records appear on ex-players' historical
+    records and are false positives; also excluded.
+    """
     result = {}
     for p in people:
         pid = p.get('id', -1)
@@ -224,15 +234,94 @@ def find_employment(b, people):
         if end + 35 > len(b):
             continue
         count = b[end + 34]
-        for k in range(min(count, 40)):
+        for k in range(min(count, 60)):
             roff = end + 35 + k * 16
             if roff + 16 > len(b):
                 break
-            if b[roff + 10] == 0x01 and b[roff + 11] == 0x6a:
+            b10, b11 = b[roff + 10], b[roff + 11]
+            if b10 == 0x01 and b11 == 0x6a:
                 entity_id = int.from_bytes(b[roff:roff + 4], 'little')
                 if entity_id > 0:
                     result[pid] = entity_id
                     break
+            elif b10 == 0x01 and b11 == 0x03 and b[roff + 8] == 0x04:
+                entity_id = int.from_bytes(b[roff:roff + 4], 'little')
+                if entity_id > 0:
+                    result[pid] = entity_id
+                    break
+    return result
+
+
+def find_club_staff(b, clubs, people, abilities, names_start):
+    """Return {club_id: [person_ids]} from each club's binary staff PID array.
+
+    Pattern: b[count_pos-1]==0x00 (byte before count is zero).
+    Bounds each scan to [club_offset, next_club_offset) using sorted order.
+    Uses bytearray.find() for speed instead of byte-by-byte iteration.
+    """
+    non_ca_ids = set(p['id'] for p in people if p.get('id', -1) >= 0) - set(abilities.keys())
+    if not non_ca_ids:
+        return {}
+
+    sorted_clubs = sorted(clubs, key=lambda c: c['offset'])
+    result = {}
+
+    for idx, c in enumerate(sorted_clubs):
+        cid = c['id']
+        scan_start = c['offset']
+        scan_end = sorted_clubs[idx + 1]['offset'] if idx + 1 < len(sorted_clubs) else names_start
+        scan_end = min(scan_end, names_start)
+
+        if scan_end - scan_start < 10:
+            continue
+
+        staff_pids = []
+        seen = set()
+        pos = scan_start + 1
+
+        while True:
+            # Jump to next \x00 byte — this is b[count_pos-1]
+            zero_pos = b.find(b'\x00', pos, scan_end - 2)
+            if zero_pos < 0:
+                break
+
+            count = b[zero_pos + 1]  # count_pos = zero_pos + 1
+            if not (8 <= count <= 250):
+                pos = zero_pos + 1
+                continue
+
+            arr_start = zero_pos + 2
+            arr_end = arr_start + count * 4
+            if arr_end > scan_end:
+                pos = zero_pos + 1
+                continue
+
+            # Quick reject: first PID must be a plausible person ID
+            first_pid = _u32(b, arr_start)
+            if first_pid > 5_000_000 or first_pid not in non_ca_ids:
+                pos = zero_pos + 1
+                continue
+
+            pids = [_u32(b, arr_start + k * 4) for k in range(count)]
+            if len(set(pids)) != count or any(pid > 5_000_000 for pid in pids):
+                pos = zero_pos + 1
+                continue
+
+            valid = sum(1 for pid in pids if pid in non_ca_ids)
+            if valid >= max(count * 0.6, 6):
+                for pid in pids:
+                    if pid not in seen:
+                        seen.add(pid)
+                        staff_pids.append(pid)
+                # Back up 4 bytes: adjacent arrays share a zero byte
+                # (high byte of last PID == 0x00 marks next array's count)
+                pos = max(zero_pos + 1, arr_end - 4)
+            else:
+                pos = zero_pos + 1
+
+        if staff_pids:
+            result[cid] = staff_pids
+
     return result
 
 

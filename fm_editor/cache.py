@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 8  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 10  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -43,6 +43,8 @@ def load_cache(save_path):
             }
         if 'employment' in data:
             data['employment'] = {int(k): int(v) for k, v in data['employment'].items()}
+        if 'club_staff' in data:
+            data['club_staff'] = {int(k): v for k, v in data['club_staff'].items()}
         return data
     except Exception:
         return None
@@ -56,7 +58,7 @@ def clear_cache(save_path):
         pass
 
 
-def save_cache(save_path, clubs, squads, sub_squads, people, employment=None):
+def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, club_staff=None):
     os.makedirs(_CACHE_DIR, exist_ok=True)
     cp = _cache_path(save_path)
     slim_people = []
@@ -82,6 +84,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None):
     }
     if employment:
         data['employment'] = employment
+    if club_staff:
+        data['club_staff'] = club_staff
     try:
         with open(cp, 'w', encoding='utf-8') as f:
             json.dump(data, f, separators=(',', ':'))

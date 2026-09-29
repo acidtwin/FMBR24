@@ -239,7 +239,7 @@ class ParseWorker(QThread):
             from fm_editor.archive import parse_archive, get_member
             from fm_editor.gamedb import (find_names, find_clubs, find_squads,
                                           find_people, match_identities, find_abilities,
-                                          find_employment)
+                                          find_employment, find_club_staff)
             from fm_editor.patch import is_homegrown
 
             self._emit("Parsing archive...", 3)
@@ -281,37 +281,20 @@ class ParseWorker(QThread):
                     p['positions'] = ab['positions']
                     p['raw_attrs'] = ab['raw_attrs']
 
-            self._emit("Scanning employment records...", 94)
+            self._emit("Scanning employment records...", 91)
             employment = find_employment(b, people)
-            print(f"[diag] employment records: {len(employment)} people have employment link", flush=True)
 
-            # Scan all sub_squad kinds globally — staff may use a kind we haven't seen
-            from collections import defaultdict
-            people_by_id = {p.get('id'): p for p in people}
-            player_ids = {p.get('id') for p in people if 'ca' in p}
-            kind_stats = defaultdict(lambda: {'clubs': 0, 'total_pids': 0, 'non_player_pids': 0, 'sample_names': []})
-            for cid, kinds in sub_squads.items():
-                for kind, pids in kinds.items():
-                    ks = kind_stats[kind]
-                    ks['clubs'] += 1
-                    ks['total_pids'] += len(pids)
-                    non_p = [pid for pid in pids if pid not in player_ids]
-                    ks['non_player_pids'] += len(non_p)
-                    for pid in non_p[:2]:
-                        if pid in people_by_id and len(ks['sample_names']) < 3:
-                            ks['sample_names'].append(people_by_id[pid].get('name','?'))
-            print(f"[diag] All sub_squad kinds: {sorted(kind_stats.keys())}", flush=True)
-            for kind in sorted(kind_stats.keys()):
-                ks = kind_stats[kind]
-                print(f"[diag]   kind={kind}: {ks['clubs']} clubs, {ks['total_pids']} pids, {ks['non_player_pids']} non-player — {ks['sample_names']}", flush=True)
+            self._emit("Scanning club staff arrays...", 94)
+            club_staff = find_club_staff(b, clubs, people, abilities, names_start)
+            print(f"[diag] club_staff: {len(club_staff)} clubs, {sum(len(v) for v in club_staff.values())} total staff links", flush=True)
 
             self._emit("Caching results...", 97)
-            save_cache(self.save_path, clubs, squads, sub_squads, people, employment)
+            save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff)
 
             self.pct.emit(100)
             result = {
                 'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
-                'employment': employment,
+                'employment': employment, 'club_staff': club_staff,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
@@ -2034,12 +2017,12 @@ class MainWindow(QMainWindow):
         shdr = self._staff_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Nation', 'Age']
+        cols = ['Name', 'Club', 'Nation', 'Age']
         self._staff_table.setColumnCount(len(cols))
         self._staff_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 200, 1: 50, 2: 40}.items():
+        for i, cw in {0: 200, 1: 160, 2: 50, 3: 40}.items():
             self._staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
@@ -2047,22 +2030,38 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._staff_table, 1)
         return w
 
-    _STAFF_DISPLAY_LIMIT = 2000
-
     def _populate_staff_table(self):
         if not self._save_data:
             return
         people = self._save_data.get('people', [])
+        employment = self._save_data.get('employment', {})
+        club_staff = self._save_data.get('club_staff', {})
+        clubs = self._save_data.get('clubs', [])
+        club_by_id = {c['id']: c['name'] for c in clubs}
+        club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+        # Build reverse map: person_id -> club_id from club_staff arrays
+        staff_club: dict[int, int] = {}
+        for cid, pids in club_staff.items():
+            for pid in pids:
+                if pid not in staff_club:
+                    staff_club[pid] = cid
         staff = [p for p in people if 'ca' not in p]
-        display = staff[:self._STAFF_DISPLAY_LIMIT]
         self._staff_table.setSortingEnabled(False)
-        self._staff_table.setRowCount(len(display))
-        for row, p in enumerate(display):
+        self._staff_table.setRowCount(len(staff))
+        for row, p in enumerate(staff):
+            pid = p.get('id', -1)
             name = p.get('name', '')
+            # club_staff array first, fall back to employment record
+            cid = staff_club.get(pid)
+            if cid is not None:
+                club_name = club_by_id.get(cid, '')
+            else:
+                entity_id = employment.get(pid)
+                club_name = club_by_entity.get(entity_id, '') if entity_id else ''
             nation_id = p.get('nation', 0)
             nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)]
+            items = [_SortItem(name), _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)]
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
@@ -2070,14 +2069,8 @@ class MainWindow(QMainWindow):
         for i in range(self._staff_table.columnCount()):
             self._staff_table.resizeColumnToContents(i)
         total = len(staff)
-        if total > self._STAFF_DISPLAY_LIMIT:
-            self._staff_count_lbl.setText(
-                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
-            self._status_info_lbl.setText(
-                f'showing {self._STAFF_DISPLAY_LIMIT:,} of {total:,} staff')
-        else:
-            self._staff_count_lbl.setText(f'{total:,} staff')
-            self._status_info_lbl.setText(f'{total:,} staff')
+        self._staff_count_lbl.setText(f'{total:,} staff')
+        self._status_info_lbl.setText(f'{total:,} staff')
 
     def _make_view_club_staff(self):
         w = QWidget()
@@ -2114,7 +2107,7 @@ class MainWindow(QMainWindow):
         self._club_staff_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 200, 1: 50, 2: 40}.items():
+        for i, cw in {0: 250, 1: 50, 2: 40}.items():
             self._club_staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
@@ -2128,20 +2121,23 @@ class MainWindow(QMainWindow):
         club = self._current_club
         people = self._save_data.get('people', [])
         employment = self._save_data.get('employment', {})
+        club_staff = self._save_data.get('club_staff', {})
 
-        # Staff are linked via b11=0x6a employment records, not squad records.
-        # Entity ID = club_id + 1 in FM24 saves.
-        club_entity_id = club['id'] + 1
-        employed_pids = {pid for pid, eid in employment.items() if eid == club_entity_id}
+        # Primary: club-side staff array (coaches, physios, scouts, analysts).
+        # Fallback: employment records for managers / ex-player coaches.
+        cid = club['id']
+        staff_pids = set(club_staff.get(cid, []))
+        # Add any employment-linked staff not already in the array
+        club_entity_id = cid + 1
+        for pid, eid in employment.items():
+            if eid == club_entity_id:
+                staff_pids.add(pid)
 
-        staff = [p for p in people
-                 if p.get('id') in employed_pids and 'ca' not in p]
+        people_by_id = {p.get('id'): p for p in people}
+        staff = [people_by_id[pid] for pid in staff_pids
+                 if pid in people_by_id and 'ca' not in people_by_id[pid]]
         staff.sort(key=lambda p: p.get('name', ''))
 
-        print(f"[diag] club '{club['name']}' entity_id={club_entity_id} employed={len(employed_pids)} staff(no-ca)={len(staff)}", flush=True)
-        bertelli = [p for p in people if 'bertelli' in p.get('name','').lower()]
-        print(f"[diag] bertelli in people list: {[(p.get('name'), p.get('id'), 'ca' in p, employment.get(p.get('id'))) for p in bertelli]}", flush=True)
-        print(f"[diag] total people parsed: {len(people)}, with employment: {len(employment)}", flush=True)
         self._club_staff_title_lbl.setText(f'{club["name"]} - Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
@@ -2771,6 +2767,8 @@ class MainWindow(QMainWindow):
         if key == 'staff' and not getattr(self, '_staff_loaded', False):
             self._populate_staff_table()
             self._staff_loaded = True
+        elif key == 'staff':
+            self._status_info_lbl.setText(self._staff_count_lbl.text())
         if key == 'club_staff':
             self._populate_club_staff_table()
         if key in ('club', 'squad', 'shortlist'):
@@ -2788,6 +2786,8 @@ class MainWindow(QMainWindow):
     def _nav_to_squad_view(self, checked=False):
         if self._squad:
             self._populate_squad_table(self._squad)
+        else:
+            self._status_info_lbl.setText('')
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['squad'])
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == 'squad')
@@ -3172,6 +3172,7 @@ class MainWindow(QMainWindow):
                     if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
         self._squad_info.setText(
             f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC")
+        self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
         """Route player search results into the Players view."""
