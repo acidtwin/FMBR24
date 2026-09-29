@@ -454,6 +454,7 @@ _STAFF_COL_TOOLTIPS = {
 
 # Position → (background, foreground) matching mockup color scheme
 _POS_BADGE_COLORS = {
+    'INJ': ('#8B1A1A', '#FFFFFF'),  # dark red injury badge
     'GK':  ('#C07B2A', '#FFFFFF'),
     'SW':  ('#3A6BA8', '#FFFFFF'),
     'DL':  ('#3A6BA8', '#FFFFFF'), 'DC': ('#3A6BA8', '#FFFFFF'),
@@ -2322,7 +2323,9 @@ class MainWindow(QMainWindow):
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
+        self._inj_delegate = _PosBadgeDelegate(self._table)
         self._pos_delegate = _PosBadgeDelegate(self._table)
+        self._table.setItemDelegateForColumn(1, self._inj_delegate)
         self._table.setItemDelegateForColumn(2, self._pos_delegate)
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
@@ -3744,10 +3747,7 @@ class MainWindow(QMainWindow):
                     item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 1 and injured:
-                    item.setForeground(QColor('#FFFFFF'))
-                    item.setBackground(QColor('#8B1A1A'))
-                elif col == 8:
+                if col == 8:
                     item.setForeground(QColor(COLORS['hgp_green'] if hgp
                                               else COLORS['text_dim']))
                 elif col == 9:
