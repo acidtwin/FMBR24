@@ -893,6 +893,195 @@ class PlayerDetailDialog(QDialog):
         self._patch_mode = mode
 
 
+class StaffDetailDialog(QDialog):
+    _PERS_LABELS = [
+        ('Adaptability', 0), ('Ambition', 1), ('Loyalty', 2), ('Pressure', 3),
+        ('Professionalism', 4), ('Sportsmanship', 5), ('Temperament', 6), ('Controversy', 7),
+    ]
+
+    def __init__(self, person, save_data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(person.get('name', 'Staff'))
+        self.setMinimumSize(560, 420)
+        self.resize(620, 500)
+        self._person = person
+        self._save_data = save_data
+        self._build()
+
+    def _build(self):
+        p = self._person
+        nation_name = NATIONS.get(p.get('nation', 0), f"n={p.get('nation', 0)}")
+        age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+        personality = p.get('personality', [])
+
+        # Resolve club name
+        club_name = ''
+        if self._save_data:
+            clubs = self._save_data.get('clubs', [])
+            club_by_id = {c['id']: c['name'] for c in clubs}
+            club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+            club_staff = self._save_data.get('club_staff', {})
+            employment = self._save_data.get('employment', {})
+            pid = p.get('id', -1)
+            staff_club: dict[int, int] = {}
+            for cid, pids in club_staff.items():
+                for ppid in pids:
+                    if ppid not in staff_club:
+                        staff_club[ppid] = cid
+            cid = staff_club.get(pid)
+            if cid is not None:
+                club_name = club_by_id.get(cid, '')
+            else:
+                entity_id = employment.get(pid)
+                club_name = club_by_entity.get(entity_id, '') if entity_id else ''
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Top bar
+        topbar = QFrame()
+        topbar.setFixedHeight(40)
+        topbar.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        tb_row = QHBoxLayout(topbar)
+        tb_row.setContentsMargins(14, 0, 10, 0)
+        tb_row.setSpacing(8)
+        title_wrap = QWidget()
+        title_wrap.setStyleSheet("background:transparent;")
+        tw_vbox = QVBoxLayout(title_wrap)
+        tw_vbox.setContentsMargins(0, 4, 0, 4)
+        tw_vbox.setSpacing(0)
+        name_lbl = QLabel(p.get('name', ''))
+        name_lbl.setStyleSheet(
+            f"color:{COLORS['text_primary']}; font-size:14px; font-weight:bold;")
+        sub_lbl = QLabel(f"{nation_name}  ·  Age {age}")
+        sub_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        tw_vbox.addWidget(name_lbl)
+        tw_vbox.addWidget(sub_lbl)
+        tb_row.addWidget(title_wrap, 1)
+        close_btn = QPushButton('✕')
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: none; border: none;
+                color: {COLORS['text_dim']}; font-size: 16px; border-radius: 2px;
+            }}
+            QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_primary']}; }}
+        """)
+        close_btn.clicked.connect(self.accept)
+        tb_row.addWidget(close_btn)
+        layout.addWidget(topbar)
+
+        # Body
+        body = QWidget()
+        body.setStyleSheet(f"background:{COLORS['window_bg']};")
+        body_hbox = QHBoxLayout(body)
+        body_hbox.setContentsMargins(0, 0, 0, 0)
+        body_hbox.setSpacing(0)
+
+        # Left panel
+        left = QFrame()
+        left.setFixedWidth(190)
+        left.setStyleSheet(
+            f"background:{COLORS['surface']}; border-right:1px solid {COLORS['border']};")
+        left_vbox = QVBoxLayout(left)
+        left_vbox.setContentsMargins(0, 0, 0, 0)
+        left_vbox.setSpacing(0)
+
+        photo = QFrame()
+        photo.setFixedSize(190, 120)
+        photo.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        photo_inner = QVBoxLayout(photo)
+        photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        photo_icon = QLabel()
+        photo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        photo_icon.setPixmap(_svg_icon(_SVG_STAFF, COLORS['text_dim'], 48).pixmap(48, 48))
+        photo_inner.addWidget(photo_icon)
+        left_vbox.addWidget(photo)
+
+        info_frame = QFrame()
+        info_frame.setStyleSheet(
+            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
+        info_vbox = QVBoxLayout(info_frame)
+        info_vbox.setContentsMargins(12, 8, 12, 8)
+        info_vbox.setSpacing(0)
+
+        def _info_row(label: str, value: str):
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 3, 0, 3)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+            val = QLabel(value)
+            val.setStyleSheet(
+                f"color:{COLORS['text_primary']}; font-size:11px; font-weight:500;")
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            row.addWidget(lbl)
+            row.addStretch()
+            row.addWidget(val)
+            return row
+
+        if club_name:
+            info_vbox.addLayout(_info_row('Club', club_name))
+        info_vbox.addLayout(_info_row('Nation', nation_name))
+        info_vbox.addLayout(_info_row('Age', str(age)))
+        left_vbox.addWidget(info_frame)
+        left_vbox.addStretch()
+        body_hbox.addWidget(left)
+
+        # Center: personality bars
+        center_scroll = QScrollArea()
+        center_scroll.setWidgetResizable(True)
+        center_scroll.setStyleSheet(
+            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
+        center_w = QWidget()
+        center_w.setStyleSheet(f"background:{COLORS['window_bg']};")
+        center_vbox = QVBoxLayout(center_w)
+        center_vbox.setContentsMargins(16, 16, 16, 16)
+        center_vbox.setSpacing(6)
+
+        title_lbl = QLabel('PERSONALITY')
+        title_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;"
+            f"border-bottom:1px solid {COLORS['border']}; padding-bottom:4px; margin-bottom:4px;")
+        center_vbox.addWidget(title_lbl)
+
+        if personality:
+            for attr_name, idx in self._PERS_LABELS:
+                v = personality[idx] if idx < len(personality) else 0
+                bar_row = QHBoxLayout()
+                bar_row.setSpacing(6)
+                n = QLabel(attr_name)
+                n.setFixedWidth(120)
+                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+                bar_bg = QFrame()
+                bar_bg.setFixedHeight(4)
+                bar_bg.setStyleSheet(f"background:{COLORS['border']}; border-radius:2px;")
+                bar_fill = QFrame(bar_bg)
+                bar_fill.setFixedHeight(4)
+                bar_fill.setStyleSheet(f"background:{COLORS['accent']}; border-radius:2px;")
+                bar_fill.setMaximumWidth(int(200 * v / 20))
+                v_lbl = QLabel(f"{v}/20")
+                v_lbl.setFixedWidth(36)
+                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                v_lbl.setStyleSheet(
+                    f"color:{_attr_val_color(v)}; font-size:11px; font-weight:bold;")
+                bar_row.addWidget(n)
+                bar_row.addWidget(bar_bg, 1)
+                bar_row.addWidget(v_lbl)
+                center_vbox.addLayout(bar_row)
+        else:
+            no_data = QLabel('No personality data available.')
+            no_data.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+            center_vbox.addWidget(no_data)
+
+        center_vbox.addStretch()
+        center_scroll.setWidget(center_w)
+        body_hbox.addWidget(center_scroll, 1)
+        layout.addWidget(body)
+
+
 # -- Role attribute names for weight editor ------------------------------------
 
 _ATTR_DISPLAY = [
@@ -1443,14 +1632,20 @@ class MainWindow(QMainWindow):
             }}
             QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_secondary']}; }}
         """
-        back_btn = QPushButton('◀')
-        back_btn.setFixedSize(26, 26)
-        back_btn.setEnabled(False)
-        back_btn.setStyleSheet(_nav_ss)
-        fwd_btn = QPushButton('▶')
-        fwd_btn.setFixedSize(26, 26)
-        fwd_btn.setEnabled(False)
-        fwd_btn.setStyleSheet(_nav_ss)
+        self._back_btn = QPushButton('◀')
+        self._back_btn.setFixedSize(26, 26)
+        self._back_btn.setEnabled(False)
+        self._back_btn.setStyleSheet(_nav_ss)
+        self._back_btn.clicked.connect(self._nav_back)
+        self._fwd_btn = QPushButton('▶')
+        self._fwd_btn.setFixedSize(26, 26)
+        self._fwd_btn.setEnabled(False)
+        self._fwd_btn.setStyleSheet(_nav_ss)
+        self._fwd_btn.clicked.connect(self._nav_fwd)
+        self._nav_history: list[tuple] = []
+        self._nav_pos: int = -1
+        back_btn = self._back_btn
+        fwd_btn = self._fwd_btn
 
         self._breadcrumb = QLabel('FM Save Editor')
         self._breadcrumb.setStyleSheet(
@@ -2017,16 +2212,17 @@ class MainWindow(QMainWindow):
         shdr = self._staff_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Club', 'Nation', 'Age']
+        cols = ['Name', 'Club', 'Nation', 'Age', 'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
         self._staff_table.setColumnCount(len(cols))
         self._staff_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 200, 1: 160, 2: 50, 3: 40}.items():
+        for i, cw in {0: 200, 1: 160, 2: 50, 3: 40, 4: 35, 5: 35, 6: 35, 7: 35, 8: 35, 9: 35, 10: 35, 11: 35}.items():
             self._staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
-        shdr.setStretchLastSection(True)
+        shdr.setStretchLastSection(False)
+        self._staff_table.cellDoubleClicked.connect(self._on_staff_double_click)
         vbox.addWidget(self._staff_table, 1)
         return w
 
@@ -2061,13 +2257,16 @@ class MainWindow(QMainWindow):
             nation_id = p.get('nation', 0)
             nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-            items = [_SortItem(name), _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)]
+            pers = p.get('personality', [])
+            pers_items = []
+            for idx in range(8):
+                v = pers[idx] if idx < len(pers) else None
+                pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
+            items = [_SortItem(name), _SortItem(club_name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
         self._staff_table.setSortingEnabled(True)
-        for i in range(self._staff_table.columnCount()):
-            self._staff_table.resizeColumnToContents(i)
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
         self._status_info_lbl.setText(f'{total:,} staff')
@@ -2102,16 +2301,17 @@ class MainWindow(QMainWindow):
         shdr = self._club_staff_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Nation', 'Age']
+        cols = ['Name', 'Nation', 'Age', 'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
         self._club_staff_table.setColumnCount(len(cols))
         self._club_staff_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 250, 1: 50, 2: 40}.items():
+        for i, cw in {0: 250, 1: 50, 2: 40, 3: 35, 4: 35, 5: 35, 6: 35, 7: 35, 8: 35, 9: 35, 10: 35}.items():
             self._club_staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
-        shdr.setStretchLastSection(True)
+        shdr.setStretchLastSection(False)
+        self._club_staff_table.cellDoubleClicked.connect(self._on_club_staff_double_click)
         vbox.addWidget(self._club_staff_table, 1)
         return w
 
@@ -2146,13 +2346,16 @@ class MainWindow(QMainWindow):
             nation_id = p.get('nation', 0)
             nation_name = NATIONS.get(nation_id, str(nation_id) if nation_id else '')
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)]
+            pers = p.get('personality', [])
+            pers_items = []
+            for idx in range(8):
+                v = pers[idx] if idx < len(pers) else None
+                pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
+            items = [_SortItem(name), _SortItem(nation_name), _SortItem(str(age), age)] + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._club_staff_table.setItem(row, col, item)
         self._club_staff_table.setSortingEnabled(True)
-        for i in range(self._club_staff_table.columnCount()):
-            self._club_staff_table.resizeColumnToContents(i)
         self._status_info_lbl.setText(f'{len(staff):,} staff')
 
     def _make_view_shortlist(self):
@@ -2290,8 +2493,8 @@ class MainWindow(QMainWindow):
             f" border-bottom-right-radius:2px; }}"
             f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
             f" {{ background:{COLORS['border']}; }}"
-            f"QSpinBox::up-arrow {{ width:6px; height:6px; }}"
-            f"QSpinBox::down-arrow {{ width:6px; height:6px; }}"
+            f"QSpinBox::up-arrow {{ image:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMywwIDYsNCAwLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4='); width:6px; height:4px; }}"
+            f"QSpinBox::down-arrow {{ image:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMCwwIDYsMCAzLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4='); width:6px; height:4px; }}"
         )
         age_lbl = QLabel('Age:')
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
@@ -2774,6 +2977,9 @@ class MainWindow(QMainWindow):
         if key in ('club', 'squad', 'shortlist'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
+        # Push to history for non-squad views (squad is pushed by _show_squad)
+        if key != 'squad':
+            self._nav_push(idx, {})
         self._main_stack.setCurrentIndex(idx)
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == key)
@@ -2795,6 +3001,74 @@ class MainWindow(QMainWindow):
         self._scouting_staff_nav_btn.setChecked(False)
         for btn in self._report_btns.values():
             btn.setChecked(False)
+
+    def _nav_push(self, stack_idx: int, context: dict):
+        """Push a nav entry, truncate forward history, update back/fwd buttons."""
+        if not hasattr(self, '_nav_history'):
+            self._nav_history = []
+            self._nav_pos = -1
+        # Truncate forward history on new push
+        if self._nav_pos < len(self._nav_history) - 1:
+            self._nav_history = self._nav_history[:self._nav_pos + 1]
+        # Don't push duplicate of current
+        if self._nav_history and self._nav_history[self._nav_pos] == (stack_idx, context):
+            return
+        self._nav_history.append((stack_idx, context))
+        self._nav_pos = len(self._nav_history) - 1
+        self._back_btn.setEnabled(self._nav_pos > 0)
+        self._fwd_btn.setEnabled(False)
+
+    def _nav_back(self, checked=False):
+        if not hasattr(self, '_nav_history') or self._nav_pos <= 0:
+            return
+        self._nav_pos -= 1
+        self._nav_back_btn_update()
+        self._nav_restore(self._nav_history[self._nav_pos])
+
+    def _nav_fwd(self, checked=False):
+        if not hasattr(self, '_nav_history') or self._nav_pos >= len(self._nav_history) - 1:
+            return
+        self._nav_pos += 1
+        self._nav_back_btn_update()
+        self._nav_restore(self._nav_history[self._nav_pos])
+
+    def _nav_back_btn_update(self):
+        self._back_btn.setEnabled(self._nav_pos > 0)
+        self._fwd_btn.setEnabled(self._nav_pos < len(self._nav_history) - 1)
+
+    def _nav_restore(self, entry: tuple):
+        stack_idx, context = entry
+        key = next((k for k, v in self._VIEW_INDEX.items() if v == stack_idx), None)
+        if key == 'squad' and 'club' in context:
+            self._show_squad(context['club'])
+        elif key is not None:
+            self._nav_to(key)
+
+    # -- Staff double-click handlers ------------------------------------------
+
+    def _on_staff_double_click(self, row: int, col: int):
+        item = self._staff_table.item(row, 0)
+        if not item:
+            return
+        name = item.text()
+        people = self._save_data.get('people', []) if self._save_data else []
+        person = next((p for p in people if p.get('name') == name and 'ca' not in p), None)
+        if not person:
+            return
+        dlg = StaffDetailDialog(person, self._save_data, self)
+        dlg.exec()
+
+    def _on_club_staff_double_click(self, row: int, col: int):
+        item = self._club_staff_table.item(row, 0)
+        if not item:
+            return
+        name = item.text()
+        people = self._save_data.get('people', []) if self._save_data else []
+        person = next((p for p in people if p.get('name') == name and 'ca' not in p), None)
+        if not person:
+            return
+        dlg = StaffDetailDialog(person, self._save_data, self)
+        dlg.exec()
 
     # -- Table configuration --------------------------------------------------
 
@@ -3032,6 +3306,7 @@ class MainWindow(QMainWindow):
 
         self._populate_squad_table(squad)
         self._build_squad_tabs(club, squad)
+        self._nav_push(self._VIEW_INDEX['squad'], {'club': club})
         self._nav_to('squad')
         self._nav_btns['squad'].setChecked(True)
         self._update_ui_state()

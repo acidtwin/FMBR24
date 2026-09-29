@@ -284,6 +284,48 @@ QToolTip {{
     border-radius: 2px;
 }}
 
+/* -- Spin box ------------------------------------------------------ */
+QSpinBox {{
+    background-color: {COLORS['surface']};
+    color: {COLORS['text_primary']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 2px;
+    padding: 1px 2px 1px 4px;
+    font-size: 12px;
+}}
+QSpinBox::up-button {{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 14px;
+    height: 10px;
+    background: {COLORS['elevated']};
+    border-left: 1px solid {COLORS['border']};
+    border-bottom: 1px solid {COLORS['border']};
+    border-top-right-radius: 2px;
+}}
+QSpinBox::down-button {{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 14px;
+    height: 10px;
+    background: {COLORS['elevated']};
+    border-left: 1px solid {COLORS['border']};
+    border-bottom-right-radius: 2px;
+}}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background: {COLORS['border']};
+}}
+QSpinBox::up-arrow {{
+    image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMywwIDYsNCAwLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4=");
+    width: 6px;
+    height: 4px;
+}}
+QSpinBox::down-arrow {{
+    image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2IDQnPjxwb2x5Z29uIHBvaW50cz0nMCwwIDYsMCAzLDQnIGZpbGw9JyM4Qjk2QTgnLz48L3N2Zz4=");
+    width: 6px;
+    height: 4px;
+}}
+
 /* -- Status bar ---------------------------------------------------- */
 QStatusBar {{
     background-color: {COLORS['elevated']};
