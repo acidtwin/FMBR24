@@ -404,6 +404,20 @@ _NATION_FLAG = {
     172: '🇨🇭', 173: '🇹🇷', 175: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
 }
 
+_STAFF_COL_TOOLTIPS = {
+    'Age': 'Age', 'Club': 'Club',
+    'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
+    'Mnt': 'Mental',    'SPc': 'Set Pieces', 'Tac': 'Tactical',
+    'Tch': 'Technical', 'WwY': 'Working with Youngsters',
+    'Det': 'Determination', 'Mot': 'Motivating', 'PMg': 'People Management',
+    'JPA': 'Judging Player Ability', 'JSA': 'Judging Staff Ability',
+    'TKn': 'Tactical Knowledge',
+    'Neg': 'Negotiating', 'GKH': 'GK Handling', 'GKS': 'GK Shot Stopping',
+    'Adp': 'Adaptability', 'Amb': 'Ambition', 'Loy': 'Loyalty',
+    'Prs': 'Pressure',    'Pro': 'Professionalism', 'Spt': 'Sportsmanship',
+    'Tmp': 'Temperament', 'Ctr': 'Controversy',
+}
+
 # Position → (background, foreground) matching mockup color scheme
 _POS_BADGE_COLORS = {
     'GK':  ('#C07B2A', '#FFFFFF'),
@@ -2249,12 +2263,34 @@ class MainWindow(QMainWindow):
         shdr = self._staff_table.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'Club', 'Nation', 'Age', 'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
+        _COACHING_COLS = [
+            'Atk', 'Def', 'Fit', 'Mnt', 'SPc', 'Tac', 'Tch', 'WwY',
+            'Det', 'Mot', 'PMg',
+            'JPA', 'JSA', 'TKn',
+            'Neg', 'GKH', 'GKS',
+        ]
+        self._staff_coaching_cols = _COACHING_COLS
+        self._coaching_col_map = {
+            'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
+            'Mnt': 'Mental',    'SPc': 'Set Pieces', 'Tac': 'Tactical',
+            'Tch': 'Technical', 'WwY': 'WwY',
+            'Det': 'Determination', 'Mot': 'Motivating', 'PMg': 'People Mgt',
+            'JPA': 'JPA',       'JSA': 'JSA',       'TKn': 'Tact Knowledge',
+            'Neg': 'Negotiating', 'GKH': 'GK Handling', 'GKS': 'GK Shot Stop',
+        }
+        cols = ['Name', 'Club', 'Nation', 'Age'] + _COACHING_COLS + [
+            'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
         self._staff_table.setColumnCount(len(cols))
         self._staff_table.setHorizontalHeaderLabels(cols)
+        for i, col in enumerate(cols):
+            if col in _STAFF_COL_TOOLTIPS:
+                self._staff_table.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 200, 1: 160, 2: 50, 3: 40, 4: 35, 5: 35, 6: 35, 7: 35, 8: 35, 9: 35, 10: 35, 11: 35}.items():
+        widths = {0: 200, 1: 160, 2: 50, 3: 40}
+        for i in range(4, len(cols)):
+            widths[i] = 35
+        for i, cw in widths.items():
             self._staff_table.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
@@ -2279,6 +2315,8 @@ class MainWindow(QMainWindow):
                 if pid not in staff_club:
                     staff_club[pid] = cid
         staff = [p for p in people if 'ca' not in p]
+        coaching_cols = getattr(self, '_staff_coaching_cols', [])
+        coaching_col_map = getattr(self, '_coaching_col_map', {})
         self._staff_table.setSortingEnabled(False)
         self._staff_table.setRowCount(len(staff))
         for row, p in enumerate(staff):
@@ -2294,6 +2332,12 @@ class MainWindow(QMainWindow):
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            coaching = p.get('coaching', {})
+            coaching_items = []
+            for short_label in coaching_cols:
+                key = coaching_col_map.get(short_label, short_label)
+                v = coaching.get(key)
+                coaching_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             pers = p.get('personality', [])
             pers_items = []
             for idx in range(8):
@@ -2301,7 +2345,7 @@ class MainWindow(QMainWindow):
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
-            items = [name_item, _SortItem(club_name), _SortItem(flag), _SortItem(str(age), age)] + pers_items
+            items = [name_item, _SortItem(club_name), _SortItem(flag), _SortItem(str(age), age)] + coaching_items + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._staff_table.setItem(row, col, item)
@@ -2363,6 +2407,9 @@ class MainWindow(QMainWindow):
             'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
         self._club_staff_table.setColumnCount(len(cols))
         self._club_staff_table.setHorizontalHeaderLabels(cols)
+        for i, col in enumerate(cols):
+            if col in _STAFF_COL_TOOLTIPS:
+                self._club_staff_table.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         widths = {0: 220, 1: 45, 2: 38}
