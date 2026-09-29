@@ -2175,6 +2175,7 @@ class MainWindow(QMainWindow):
         header_row.addStretch()
 
         self._squad_info = QLabel('')
+        self._squad_info.setTextFormat(Qt.TextFormat.RichText)
         self._squad_info.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
         header_row.addWidget(self._squad_info)
         vbox.addWidget(header_bar)
@@ -2250,17 +2251,9 @@ class MainWindow(QMainWindow):
         self._patch_hgc_btn.setToolTip('Set selected players as Homegrown at Club')
         self._patch_hgc_btn.clicked.connect(self._do_patch_hgc)
         self._patch_hgc_btn.setEnabled(False)
-        self._clear_sel_btn = QPushButton('Clear')
-        self._clear_sel_btn.setStyleSheet(_clear_ss)
-        self._clear_sel_btn.setFixedHeight(24)
-        self._clear_sel_btn.clicked.connect(self._table.clearSelection if hasattr(self, '_table') else lambda: None)
-        self._clear_sel_btn.setEnabled(False)
-
         tab_row.addWidget(self._patch_hgp_btn)
         tab_row.addSpacing(4)
         tab_row.addWidget(self._patch_hgc_btn)
-        tab_row.addSpacing(8)
-        tab_row.addWidget(self._clear_sel_btn)
         tab_row.addSpacing(4)
         vbox.addWidget(tab_bar)
 
@@ -2283,9 +2276,6 @@ class MainWindow(QMainWindow):
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 
-        # Fix Clear button now that table exists
-        self._clear_sel_btn.clicked.disconnect()
-        self._clear_sel_btn.clicked.connect(self._table.clearSelection)
 
         return w
 
@@ -3390,7 +3380,6 @@ class MainWindow(QMainWindow):
         has_sel = has_squad and bool(self._table.selectedItems())
         self._patch_hgp_btn.setEnabled(has_sel)
         self._patch_hgc_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
-        self._clear_sel_btn.setEnabled(has_squad)
 
     # -- File loading ---------------------------------------------------------
 
@@ -3697,8 +3686,14 @@ class MainWindow(QMainWindow):
         from fm_editor.patch import is_hgc
         n_hgc = sum(1 for p in squad
                     if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
+        def _stat(val, label, color=COLORS['text_secondary']):
+            return (f'<span style="color:{COLORS["text_primary"]};font-weight:600;">{val}</span>'
+                    f'&nbsp;<span style="color:{color};font-size:11px;">{label}</span>')
+        sep = f'<span style="color:{COLORS["border"]};">&nbsp;&nbsp;·&nbsp;&nbsp;</span>'
         self._squad_info.setText(
-            f"{len(squad)} players  ·  {n_hgp} HGP  ·  {n_hgc} HGC")
+            _stat(len(squad), 'players') + sep
+            + _stat(n_hgp, 'HGP', COLORS['hgp_green']) + sep
+            + _stat(n_hgc, 'HGC', COLORS['hgp_green']))
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
