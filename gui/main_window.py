@@ -925,8 +925,8 @@ class StaffDetailDialog(QDialog):
     def __init__(self, person, save_data, parent=None):
         super().__init__(parent)
         self.setWindowTitle(person.get('name', 'Staff'))
-        self.setMinimumSize(560, 420)
-        self.resize(620, 500)
+        self.setMinimumSize(680, 480)
+        self.resize(780, 560)
         self._person = person
         self._save_data = save_data
         self._shortlist_added = False
@@ -1054,7 +1054,22 @@ class StaffDetailDialog(QDialog):
         left_vbox.addStretch()
         body_hbox.addWidget(left)
 
-        # Center: personality bars
+        coaching = p.get('coaching', {})
+        _COACHING_DISPLAY = {
+            'WwY': 'Working w/ Youngsters', 'People Mgt': 'People Management',
+            'JPA': 'Judging Player Ability', 'JSA': 'Judging Staff Ability',
+            'Tact Knowledge': 'Tactical Knowledge', 'GK Shot Stop': 'GK Shot Stopping',
+        }
+        _COACHING_LEFT = [
+            'Attacking', 'Defending', 'Fitness', 'Mental', 'Set Pieces',
+            'Tactical', 'Technical', 'WwY', 'People Mgt',
+        ]
+        _COACHING_RIGHT = [
+            'Determination', 'Motivating', 'JPA', 'JSA',
+            'Tact Knowledge', 'Negotiating', 'GK Handling', 'GK Shot Stop',
+        ]
+
+        # Center: coaching + personality
         center_scroll = QScrollArea()
         center_scroll.setWidgetResizable(True)
         center_scroll.setStyleSheet(
@@ -1063,38 +1078,68 @@ class StaffDetailDialog(QDialog):
         center_w.setStyleSheet(f"background:{COLORS['window_bg']};")
         center_vbox = QVBoxLayout(center_w)
         center_vbox.setContentsMargins(16, 16, 16, 16)
-        center_vbox.setSpacing(6)
+        center_vbox.setSpacing(8)
 
-        title_lbl = QLabel('PERSONALITY')
-        title_lbl.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;"
-            f"border-bottom:1px solid {COLORS['border']}; padding-bottom:4px; margin-bottom:4px;")
-        center_vbox.addWidget(title_lbl)
+        def _section_title(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;"
+                f"border-bottom:1px solid {COLORS['border']}; padding-bottom:4px; margin-bottom:2px;")
+            return lbl
 
+        def _attr_bar_row(label, v, label_w=150):
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            n = QLabel(label)
+            n.setFixedWidth(label_w)
+            n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+            bar_bg = QFrame()
+            bar_bg.setFixedHeight(4)
+            bar_bg.setStyleSheet(f"background:{COLORS['border']}; border-radius:2px;")
+            bar_fill = QFrame(bar_bg)
+            bar_fill.setFixedHeight(4)
+            bar_fill.setStyleSheet(f"background:{COLORS['accent']}; border-radius:2px;")
+            bar_fill.setMaximumWidth(int(120 * v / 20))
+            v_lbl = QLabel(str(v))
+            v_lbl.setFixedWidth(24)
+            v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            v_lbl.setStyleSheet(
+                f"color:{_attr_val_color(v)}; font-size:11px; font-weight:bold;")
+            row.addWidget(n)
+            row.addWidget(bar_bg, 1)
+            row.addWidget(v_lbl)
+            return row
+
+        if coaching:
+            center_vbox.addWidget(_section_title('COACHING ATTRIBUTES'))
+            cols_w = QWidget()
+            cols_w.setStyleSheet("background:transparent;")
+            cols_hbox = QHBoxLayout(cols_w)
+            cols_hbox.setContentsMargins(0, 0, 0, 0)
+            cols_hbox.setSpacing(16)
+
+            for col_keys in (_COACHING_LEFT, _COACHING_RIGHT):
+                col_w = QWidget()
+                col_w.setStyleSheet("background:transparent;")
+                col_vbox = QVBoxLayout(col_w)
+                col_vbox.setContentsMargins(0, 0, 0, 0)
+                col_vbox.setSpacing(4)
+                for key in col_keys:
+                    v = coaching.get(key)
+                    if v is None:
+                        continue
+                    display = _COACHING_DISPLAY.get(key, key)
+                    col_vbox.addLayout(_attr_bar_row(display, v))
+                col_vbox.addStretch()
+                cols_hbox.addWidget(col_w, 1)
+
+            center_vbox.addWidget(cols_w)
+
+        center_vbox.addWidget(_section_title('PERSONALITY'))
         if personality:
             for attr_name, idx in self._PERS_LABELS:
                 v = personality[idx] if idx < len(personality) else 0
-                bar_row = QHBoxLayout()
-                bar_row.setSpacing(6)
-                n = QLabel(attr_name)
-                n.setFixedWidth(120)
-                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-                bar_bg = QFrame()
-                bar_bg.setFixedHeight(4)
-                bar_bg.setStyleSheet(f"background:{COLORS['border']}; border-radius:2px;")
-                bar_fill = QFrame(bar_bg)
-                bar_fill.setFixedHeight(4)
-                bar_fill.setStyleSheet(f"background:{COLORS['accent']}; border-radius:2px;")
-                bar_fill.setMaximumWidth(int(200 * v / 20))
-                v_lbl = QLabel(f"{v}/20")
-                v_lbl.setFixedWidth(36)
-                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                v_lbl.setStyleSheet(
-                    f"color:{_attr_val_color(v)}; font-size:11px; font-weight:bold;")
-                bar_row.addWidget(n)
-                bar_row.addWidget(bar_bg, 1)
-                bar_row.addWidget(v_lbl)
-                center_vbox.addLayout(bar_row)
+                center_vbox.addLayout(_attr_bar_row(attr_name, v))
         else:
             no_data = QLabel('No personality data available.')
             no_data.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")

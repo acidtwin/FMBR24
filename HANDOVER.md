@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-29 (session 6)
+**Last updated:** 2026-09-29 (session 7)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,7 +9,35 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 
-All changes on `master`.
+All changes on `master`. Uncommitted: staff table column auto-sizing, nation flags, shortlist staff support, status bar staff count.
+
+### Session 7 (2026-09-29) — Coaching attrs binary reverse engineering (IN PROGRESS)
+
+**Goal**: Add coaching attribute columns to club staff table.
+
+**Coaching block binary structure** (per-person, after linked records):
+- Located by scanning for magic suffix `\x1a\xea\x07` near `records_end + 10`
+- First byte of magic varies per save (e.g. `0x60` or `0xc2`) — search for suffix only
+- Person ID verified at magic+12 (LE u32, low 16 bits)
+- **Section B** (magic+81..+94, 14 bytes) = coaching attrs, divide by 5, clamp 1-20:
+  - [0]=WwY(14) [1]=Motivating(12) [2]=?(15) [3]=Determination(17) [4]=Tech(13) [5]=?(15)
+  - [6]=Fitness(5) [7]=Attacking(10) [8]=?(12) [9]=?(2) [10]=PeopleM(13) [11]=TactKnowledge(15)
+  - [12]=Negotiating(8) [13]=GKHandling(1)
+- **Still unknown**: Defending=18 (raw=90), Tactical=16 (raw=80), Level of Discipline=16, JPA=11, JSA=11
+- Need binary dumps of 2+ more coaches to find remaining attrs
+
+**Confirmed FM values** (Daniele Baldini id=355, 2026-27 Spurs save):
+`Attacking=10 Defending=18 Fitness=5 Mental=15 SetPieces=15 Tactical=16 Technical=13 WwY=14`
+`Adaptability=15 Determination=17 LevelOfDiscipline=16 Motivating=12 PeopleManagement=13`
+`JPA=11 JPP=10 JSA=11 Negotiating=8 TacticalKnowledge=15 GKHandling=1 GKShotStopping=1`
+
+**Script**: `scripts/probe_staff_attrs.py` — run with name filter to dump coaching block
+
+**Next steps**:
+1. Run probe on 2+ more coaches to find Defending/Tactical/etc positions
+2. Implement `parse_coaching_block()` in `fm_editor/gamedb.py`
+3. Add coaching columns to club staff table
+4. User will provide scout/other staff type screenshots after coaching done
 
 ### Session 6 (2026-09-29) — Club staff array discovery
 
@@ -207,10 +235,11 @@ Double-click a player in Players view → navigates to their club's squad.
 
 | Feature | Status |
 |---------|--------|
-| Staff view | Live — Name/Club/Nation/Age, no filters yet |
-| Club Staff view | Live — full roster from club-side arrays + employment; ~60-76 per big club |
+| Staff view | Live — Name/Club/Nation(flag)/Age + personality attrs; columns auto-sized; no filters yet |
+| Club Staff view | Live — full roster from club-side arrays + employment; ~60-76 per big club; nation flags, auto-sized cols |
+| Staff coaching attrs | IN PROGRESS — binary block partially mapped; Defending/Tactical/etc positions still unknown |
 | Staff load time | ~14s extra on first load (44k club scan), cached after |
-| My Shortlist | Stub — wire up Add to Shortlist from player modal |
+| My Shortlist | Live — Add to Shortlist works from both player and staff modals; shows Name/Club/Type/Pos/CA/PA/Age/Nation |
 | Best by Role report | Live — 4 bundled weight presets (FMScout Community default). Weight editor + import in Settings (⚙). |
 | ▶ / ▼ navigation buttons | Disabled (greyed) — no back/forward history yet |
 | Right tab nav in player modal | Only Profile tab active; Transfer/Positions/Ratings are future |
