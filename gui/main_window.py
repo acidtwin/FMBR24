@@ -1631,20 +1631,44 @@ class SettingsDialog(QDialog):
 class _HeaderHeroWidget(QWidget):
     """140px header bar painted with dark base + stadium image + gradient + pitch-line texture."""
 
+    _PAGE_IMAGE = {
+        'welcome':    'welcome.webp',
+        'club':       'stadium.webp',
+        'squad':      'squad.webp',
+        'staff':      'staff.webp',
+        'shortlist':  'shortlist.webp',
+        'reports':    'reports.webp',
+        'players':    'players.webp',
+        'club_staff': 'club_staff.webp',
+    }
+    _FALLBACK = 'stadium.webp'
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        import os as _os
-        _asset = _os.path.join(_os.path.dirname(__file__), 'assets', 'stadium.webp')
-        self._bg_pixmap = None
-        if _os.path.exists(_asset):
-            # QImageReader handles WebP more reliably than QPixmap() direct load
-            reader = QImageReader(_asset)
-            img = reader.read()
-            if not img.isNull():
-                self._bg_pixmap = QPixmap.fromImage(img)
-            else:
-                self._bg_pixmap = QPixmap(_asset)  # fallback
+        self._pixmap_cache = {}
+        self._bg_pixmap = self._load('welcome.webp')
         self.setFixedHeight(186)
+
+    def _load(self, filename):
+        import os as _os
+        if filename in self._pixmap_cache:
+            return self._pixmap_cache[filename]
+        assets = _os.path.join(_os.path.dirname(__file__), 'assets')
+        path = _os.path.join(assets, filename)
+        if not _os.path.exists(path):
+            path = _os.path.join(assets, self._FALLBACK)
+        if not _os.path.exists(path):
+            return None
+        reader = QImageReader(path)
+        img = reader.read()
+        px = QPixmap.fromImage(img) if not img.isNull() else QPixmap(path)
+        self._pixmap_cache[filename] = px
+        return px
+
+    def set_page(self, key: str):
+        filename = self._PAGE_IMAGE.get(key, self._FALLBACK)
+        self._bg_pixmap = self._load(filename)
+        self.update()
 
     def set_bg(self, pixmap):
         self._bg_pixmap = pixmap
@@ -1822,7 +1846,8 @@ class MainWindow(QMainWindow):
             QProgressBar::chunk {{ background:{COLORS['accent']}; }}
         """)
         right_vbox.addWidget(self._progress)
-        right_vbox.addWidget(self._make_header_bar())
+        self._hero = self._make_header_bar()
+        right_vbox.addWidget(self._hero)
 
         self._main_stack = QStackedWidget()
         self._main_stack.addWidget(self._make_view_club())        # 0
@@ -2144,6 +2169,7 @@ class MainWindow(QMainWindow):
         return w
 
     def _update_header_for_view(self, key: str):
+        self._hero.set_page(key)
         club = self._current_club
         club_name = club['name'] if club else ''
 
