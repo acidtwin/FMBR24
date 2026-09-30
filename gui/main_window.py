@@ -1903,14 +1903,14 @@ class MainWindow(QMainWindow):
         self._search_box.setStyleSheet("""
             QLineEdit {
                 background: rgba(0,0,0,0.30);
-                border: 1px solid rgba(255,255,255,0.15);
+                border: 1px solid rgba(255,255,255,0.18);
                 border-radius: 2px;
                 padding: 4px 10px;
                 font-size: 12px;
                 color: rgba(255,255,255,0.85);
             }
-            QLineEdit:focus { border-color: rgba(255,255,255,0.40); outline: none; }
-            QLineEdit:disabled { color: rgba(255,255,255,0.35); }
+            QLineEdit:focus { border-color: rgba(255,255,255,0.40); }
+            QLineEdit:disabled { color: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.08); }
         """)
         # SVG icons for nav — must use hex (QSvgRenderer doesn't support rgba in attributes)
         def _nav_icon(svg_tpl, size=13):
@@ -1927,22 +1927,22 @@ class MainWindow(QMainWindow):
         nav_row.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
-            "QPushButton { background: rgba(0,0,0,0.28); color: rgba(255,255,255,0.80);"
-            " border: 1px solid rgba(255,255,255,0.14); border-radius: 2px;"
+            "QPushButton { background: rgba(0,0,0,0.28); color: rgba(255,255,255,0.78);"
+            " border: 1px solid rgba(255,255,255,0.18); border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: rgba(255,255,255,0.12); color: #fff;"
-            " border-color: rgba(255,255,255,0.28); }"
-            "QPushButton:disabled { background: rgba(0,0,0,0.15); color: rgba(255,255,255,0.25);"
-            " border-color: rgba(255,255,255,0.07); }"
+            "QPushButton:hover { background: rgba(0,0,0,0.45); color: #fff;"
+            " border-color: rgba(255,255,255,0.32); }"
+            "QPushButton:disabled { background: rgba(0,0,0,0.15); color: rgba(255,255,255,0.22);"
+            " border-color: rgba(255,255,255,0.08); }"
         )
         _tbtn_accent_ss = (
-            "QPushButton { background: rgba(49,119,185,0.90); color: #fff;"
+            "QPushButton { background: rgba(49,119,185,0.82); color: #fff;"
             " border: none; border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
-            "QPushButton:hover { background: rgba(61,139,205,1.0); }"
+            "QPushButton:hover { background: rgba(61,139,205,0.95); }"
             "QPushButton:pressed { background: rgba(38,100,165,1.0); }"
-            "QPushButton:disabled { background: rgba(0,0,0,0.20); color: rgba(255,255,255,0.25);"
-            " border: 1px solid rgba(255,255,255,0.07); font-weight: normal; }"
+            "QPushButton:disabled { background: rgba(0,0,0,0.20); color: rgba(255,255,255,0.22);"
+            " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
         )
 
         self._save_btn = QPushButton('Save Changes')
@@ -1980,11 +1980,11 @@ class MainWindow(QMainWindow):
         self._settings_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(0,0,0,0.28);
-                border: 1px solid rgba(255,255,255,0.14);
+                border: 1px solid rgba(255,255,255,0.18);
                 border-radius: 2px;
                 padding: 0;
             }
-            QPushButton:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.28); }
+            QPushButton:hover { background: rgba(0,0,0,0.45); border-color: rgba(255,255,255,0.32); }
         """)
         self._settings_btn.clicked.connect(self._open_settings)
 
