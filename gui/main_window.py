@@ -1927,16 +1927,16 @@ class MainWindow(QMainWindow):
         self._search_box.setMaximumWidth(16777215)
         self._search_box.setStyleSheet("""
             QLineEdit {
-                background: rgba(8,14,24,0.92);
-                border: 1px solid rgba(255,255,255,0.18);
+                background: rgba(8,14,24,0.60);
+                border: 1px solid rgba(255,255,255,0.22);
                 border-radius: 2px;
                 padding: 4px 10px;
                 font-size: 12px;
-                color: rgba(255,255,255,0.85);
+                color: rgba(255,255,255,0.90);
             }
-            QLineEdit:focus { border-color: rgba(255,255,255,0.40); background: rgba(8,14,24,0.96); }
-            QLineEdit:disabled { color: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.08);
-                                 background: rgba(8,14,24,0.55); }
+            QLineEdit:focus { border-color: rgba(255,255,255,0.45); background: rgba(8,14,24,0.80); }
+            QLineEdit:disabled { color: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.06);
+                                 background: rgba(8,14,24,0.45); }
         """)
         # SVG icons for nav — must use hex (QSvgRenderer doesn't support rgba in attributes)
         def _nav_icon(svg_tpl, size=13):
@@ -2499,7 +2499,8 @@ class MainWindow(QMainWindow):
         vbox.setSpacing(0)
 
         # Content header: club name + squad switcher
-        header_bar = QFrame()
+        self._squad_header_bar = QFrame()
+        header_bar = self._squad_header_bar  # keep alive — children referenced as instance attrs
         header_bar.setFixedHeight(44)
         header_bar.setStyleSheet(
             f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
