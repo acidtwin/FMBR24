@@ -1668,10 +1668,13 @@ class _HeaderHeroWidget(QWidget):
         grad.setColorAt(1.0, QColor(8, 12, 18, 217))
         p.fillRect(0, 0, w, h, QBrush(grad))
 
-        # 4. Pitch line texture — horizontal only, every 32px
+        # 4. Pitch line texture — horizontal every 32px, vertical every 80px
         p.setPen(QColor(255, 255, 255, 5))
         for y in range(0, h, 32):
             p.drawLine(0, y, w, y)
+        p.setPen(QColor(255, 255, 255, 6))
+        for x in range(0, w, 80):
+            p.drawLine(x, 0, x, h)
 
         # 5. Bottom border
         p.setPen(QColor(255, 255, 255, 15))
