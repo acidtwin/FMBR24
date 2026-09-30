@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-30 (session 9)
+**Last updated:** 2026-09-30 (session 10)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,6 +9,43 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 All changes on `master`. Cache version: **15**.
+
+---
+
+## Session 10 (2026-09-30) — Hero header polish, per-page backgrounds, nav bar states
+
+### Hero header nav bar (COMPLETE)
+
+- **Topbar merged into hero** (session 9/10 boundary): Back/Fwd, Search, Save Changes, Reload, Settings all live inside `_HeaderHeroWidget` at 186px height (38px nav row + 148px content)
+- **Per-page background images**: `_HeaderHeroWidget._PAGE_IMAGE` maps view key → filename; `set_page(key)` loads lazily with pixmap cache; fallback to `stadium.webp` for missing files
+  - `gui/assets/welcome.webp` — empty stadium at dusk (Welcome view)
+  - `gui/assets/stadium.webp` — existing (Club view)
+  - `gui/assets/squad.webp` — dawn training session (Squads)
+  - `gui/assets/staff.webp` — coaches on touchline (Staff + Club Staff shares it)
+  - `gui/assets/club_staff.webp` — tactics board session (Club Staff)
+  - `gui/assets/shortlist.webp` — scout in stands (My Shortlist)
+  - `gui/assets/reports.webp` — scouting reports desk (Player Reports)
+  - `gui/assets/players.webp` — packed stadium crowd (All Players)
+- **`_update_header_for_view(key)`** calls `self._hero.set_page(key)` — this is the single hook for all page switches. `_run_report()` was missing this call; fixed.
+- **Progress bar** moved to bottom edge of hero (between hero and content stack) — 3px, `rgba(255,255,255,0.08)` background, accent chunk
+
+### Nav bar button states (COMPLETE)
+
+- **Save Changes** — dark green `#1a3d28` with subtle tinted border when enabled; dims on disabled
+- **Reload** — dark amber `#3a2608` with tinted border when enabled; dims on disabled
+- **Load** — blue `#2b6cb0`, always enabled
+- **Save / Reload icons** — white `#ffffff` in normal state, `#3A4A58` when disabled (same as Load)
+- **Search box** — `rgba(8,14,24,0.60)` enabled (hero bleeds through), `rgba(8,14,24,0.80)` on focus, `rgba(8,14,24,0.45)` disabled
+- **Regular buttons** — `rgba(8,14,24,0.70)` enabled, `rgba(8,14,24,0.45)` disabled
+- **Club nav button** greyed until a club is selected via search; My Shortlist always enabled
+
+### Squad view secondary header removed (COMPLETE)
+
+- Removed 44px `header_bar` from squad view (was showing club name + stats below hero)
+- Stats (players / HGP / HGC / injured) now live in hero's right slot as quiet rich-text `_stat()` labels
+- `_squad_header_bar` stored as instance attr to keep `_squad_info` / `_squad_club_label` child refs alive (prevent CTD)
+- Default sort changed col 1 (INJ) → col 2 (Pos)
+- HGP/HGC pill widget removed from hero right slot (was too loud; stats now in quieter inline style)
 
 ---
 
