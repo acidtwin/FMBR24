@@ -1902,14 +1902,14 @@ class MainWindow(QMainWindow):
         self._search_box.setMaximumWidth(16777215)
         self._search_box.setStyleSheet("""
             QLineEdit {
-                background: rgba(8,14,24,0.80);
+                background: rgba(8,14,24,0.92);
                 border: 1px solid rgba(255,255,255,0.18);
                 border-radius: 2px;
                 padding: 4px 10px;
                 font-size: 12px;
                 color: rgba(255,255,255,0.85);
             }
-            QLineEdit:focus { border-color: rgba(255,255,255,0.40); background: rgba(8,14,24,0.92); }
+            QLineEdit:focus { border-color: rgba(255,255,255,0.40); background: rgba(8,14,24,0.96); }
             QLineEdit:disabled { color: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.08);
                                  background: rgba(8,14,24,0.55); }
         """)
@@ -1928,7 +1928,7 @@ class MainWindow(QMainWindow):
         nav_row.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
-            "QPushButton { background: rgba(8,14,24,0.80); color: rgba(255,255,255,0.78);"
+            "QPushButton { background: rgba(8,14,24,0.92); color: rgba(255,255,255,0.78);"
             " border: 1px solid rgba(255,255,255,0.18); border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; }"
             "QPushButton:hover { background: rgba(20,32,50,0.92); color: #fff;"
@@ -1983,12 +1983,12 @@ class MainWindow(QMainWindow):
         self._settings_btn.setToolTip('Settings')
         self._settings_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(8,14,24,0.80);
+                background: rgba(8,14,24,0.92);
                 border: 1px solid rgba(255,255,255,0.18);
                 border-radius: 2px;
                 padding: 0;
             }
-            QPushButton:hover { background: rgba(20,32,50,0.92); border-color: rgba(255,255,255,0.32); }
+            QPushButton:hover { background: rgba(20,32,50,0.96); border-color: rgba(255,255,255,0.32); }
         """)
         self._settings_btn.clicked.connect(self._open_settings)
 
