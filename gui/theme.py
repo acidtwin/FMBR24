@@ -310,7 +310,7 @@ QSpinBox::up-button {{
     subcontrol-origin: border;
     subcontrol-position: top right;
     width: 14px;
-    height: 10px;
+    height: 13px;
     background: {COLORS['elevated']};
     border-left: 1px solid {COLORS['border']};
     border-bottom: 1px solid {COLORS['border']};
@@ -320,7 +320,7 @@ QSpinBox::down-button {{
     subcontrol-origin: border;
     subcontrol-position: bottom right;
     width: 14px;
-    height: 10px;
+    height: 13px;
     background: {COLORS['elevated']};
     border-left: 1px solid {COLORS['border']};
     border-bottom-right-radius: 2px;

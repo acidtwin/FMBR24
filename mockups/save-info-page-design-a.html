@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Save Info Page — Design A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap">
+<!--
+  SAVE INFO — DESIGN A  "KPI strip + three columns" (closest to the Club page)
+  Mockup only. Everything translates to QLabel/QFrame/QHBoxLayout/QGridLayout + QSS.
+
+  FIELD PARSE STATUS (what the app can do today)
+    AVAILABLE NOW : file name, folder, file size, file modified, clubs, players, staff, players+staff (derived sum)
+                    (manager status was cut from the page: it is implied by 'Current club' / 'No club')
+    PENDING       : manager name, current club, game name, in-game date, times saved, date created,
+                    game time, game start (nation + date), game version + build, dedication factor,
+                    database size, database version, database changes, future transfer mode, nations loaded,
+                    leagues loaded, manageable teams, in-game editor allowed/used
+  Pending fields render the .chip (exactly the Club page PENDING chip). The "Preview" switch in the masthead is
+  CONTEXT-ONLY: "Parsed" swaps chips for the screenshot values so the finished look can be judged. Ship = Pending.
+  "Current club (if at one)": when parsed and the manager is unemployed the Club row shows "No club" in text-dim.
+
+  CONTEXT-ONLY (not part of the page): .app sidebar, .mast masthead strip, .preview switch.
+  The page itself = .kpis + .body, flat on --bg, no outer panel, no footer.
+-->
+<style>
+/* ── Tokens (from club-page-design-a.html) ─────────────────────────── */
+:root {
+  --bg:        #080c12;
+  --surface:   #111720;
+  --surface2:  #18212d;
+  --surface3:  #202c3a;
+  --elev:      #141c27;   /* lifted KPI strip (in-app: #292B32 elevated) */
+  --border:    #263140;
+  --text:      #e8edf2;
+  --text-dim:  #7a8fa6;
+  --text-muted:#4a5f73;   /* decorative only (fails AA as text) */
+  --accent:    #3d8bcd;
+  --green:     #4caf82;
+  --red:       #c0392b;
+  --gold:      #e6b840;
+  --purple:    #8b5cf6;
+  --hair:      rgba(255,255,255,0.04);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 12px; min-height: 100vh; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── State switch: default = Pending (what ships) ──────────────────── */
+.pv { display: none; }
+body[data-state="parsed"] .pv { display: inline; }
+body[data-state="parsed"] .chip,
+body[data-state="parsed"] .pend-only { display: none; }
+
+/* ── Atoms ─────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-block;
+  font-family: 'Barlow Condensed', sans-serif; font-style: normal;
+  font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2;
+  padding: 3px 8px; border-radius: 10px;
+  background: rgba(122,143,166,0.12); color: var(--text-dim);
+}
+.sec-hdr {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
+  padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.sub { margin-top: 24px; }
+.kv {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 5px 0; min-height: 28px; border-bottom: 1px solid var(--hair);
+}
+.kv:last-child { border-bottom: none; }
+.kv-lbl { color: var(--text-dim); white-space: nowrap; }
+.kv-val { font-weight: 500; text-align: right; min-width: 0; font-variant-numeric: tabular-nums; }
+.kv-val .pv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv.stack { flex-direction: column; align-items: stretch; gap: 2px; }
+.kv.stack .kv-val { text-align: left; font-weight: 500; word-break: break-all; }
+.kv.stack .kv-val.dim { color: var(--text-dim); font-weight: 400; }
+.ok { color: var(--green); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 1px; }
+
+/* ── CONTEXT-ONLY app frame ────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+.sb { width: 192px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); }
+.sb-h { padding: 13px 15px 10px; border-bottom: 1px solid var(--border); }
+.sb-h b { display: block; font-size: 13px; }
+.sb-h span { font-size: 11px; color: var(--text-dim); }
+.sb-sec { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: var(--text-dim); padding: 14px 15px 6px; }
+.sb-i { display: block; padding: 8px 15px; color: var(--text-dim); font-size: 12px; }
+.sb-i.on { color: var(--text); background: rgba(61,139,205,0.14); }
+.main { flex: 1; min-width: 0; }
+.mast { height: 96px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 20px 14px;
+  background: linear-gradient(135deg, #0d1f35 0%, #0f2a1a 55%, #1a1208 100%); border-bottom: 1px solid var(--border); }
+.mast h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
+.mast p { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 4px; letter-spacing: 0.04em; }
+.preview { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+.preview button { background: rgba(8,14,24,0.7); border: 1px solid var(--border); padding: 5px 12px; cursor: pointer; font-size: 11px; color: var(--text-dim); }
+.preview button:first-of-type { border-radius: 3px 0 0 3px; }
+.preview button:last-of-type { border-radius: 0 3px 3px 0; border-left: none; }
+.preview button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── PAGE: KPI strip ───────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--elev); border-bottom: 1px solid var(--border); }
+.kpi { padding: 12px 4px 11px; text-align: center; border-right: 1px solid var(--border); min-width: 0; }
+.kpi:last-child { border-right: none; }
+.kpi-val { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; line-height: 28px; height: 28px; font-variant-numeric: tabular-nums; }
+.kpi-lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 2px; white-space: nowrap; }
+
+/* ── PAGE: body, 3 columns split by thin dividers ──────────────────── */
+.body { display: grid; grid-template-columns: 1.08fr 1fr 1fr; align-items: stretch; min-height: calc(100vh - 164px); }
+.col { padding: 20px 22px 24px; border-right: 1px solid var(--border); min-width: 0; }
+.col:last-child { border-right: none; }
+
+/* Manager & Club identity — the emotional centre of the page */
+.id { display: flex; gap: 14px; align-items: center; padding: 6px 0 14px; }
+.avatar { width: 84px; height: 84px; flex-shrink: 0; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border);
+  display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+.id-text { min-width: 0; }
+.id-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); }
+.id-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 0.02em; line-height: 34px; height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.id-name .chip { font-size: 13px; padding: 4px 12px; border-radius: 12px; vertical-align: 5px; }
+.id-club .chip { font-size: 12px; }
+.lbl2 { margin-top: 8px; }
+.id-club { display: flex; align-items: center; gap: 8px; height: 22px; line-height: 22px; margin-top: 2px; color: var(--text); font-size: 13px; font-weight: 500; }
+.note { color: var(--text-dim); font-size: 11px; line-height: 1.45; padding: 2px 0 4px; }
+
+/* Nations line */
+.nat { color: var(--text-dim); font-size: 11px; line-height: 1.5; padding: 6px 0 0; }
+
+@media (max-width: 1100px) {
+  .body { grid-template-columns: 1fr 1fr; }
+  .col:nth-child(2) { border-right: none; }
+  .col:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+}
+@media (max-width: 760px) {
+  .sb { display: none; }
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpi:nth-child(3) { border-right: none; }
+  .kpi:nth-child(n+4) { border-top: 1px solid var(--border); }
+  .body { grid-template-columns: 1fr; }
+  .col { border-right: none; border-bottom: 1px solid var(--border); }
+  .mast { flex-direction: column; align-items: flex-start; justify-content: flex-end; height: auto; min-height: 96px; padding-top: 12px; }
+}
+</style>
+</head>
+<body data-state="pending">
+<div class="app">
+
+  <!-- CONTEXT-ONLY: left sidebar -->
+  <nav class="sb" aria-label="App sidebar (context only)">
+    <div class="sb-h"><b>FM Save Editor</b><span>2026-27 &middot; Tottenham</span></div>
+    <div class="sb-sec">MAIN</div>
+    <a class="sb-i on">Save Info</a>
+    <a class="sb-i">Club</a>
+    <a class="sb-i">Squads</a>
+    <a class="sb-i">Club Staff</a>
+    <a class="sb-i">My Shortlist</a>
+    <div class="sb-sec">SCOUTING</div>
+    <a class="sb-i">Players</a>
+    <a class="sb-i">Staff</a>
+  </nav>
+
+  <div class="main">
+    <!-- CONTEXT-ONLY: shared masthead strip (title + subtitle come from the app hero) + preview switch -->
+    <header class="mast">
+      <div><h1>Save Info</h1><p>2026-27 START - Acid Twin Spurs.fm</p></div>
+      <div class="preview" role="group" aria-label="Preview state (mockup only)">
+        <span>Preview</span>
+        <button type="button" data-set="pending" aria-pressed="true">Pending (ships first)</button><button type="button" data-set="parsed" aria-pressed="false">Once parsed</button>
+      </div>
+    </header>
+
+    <!-- ═════ PAGE CONTENT STARTS HERE ═════ -->
+    <section class="kpis" aria-label="Save at a glance">
+      <div class="kpi"><div class="kpi-val" style="color:var(--accent)">44,035</div><div class="kpi-lbl">Clubs</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:var(--green)">77,966</div><div class="kpi-lbl">Players</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:var(--purple)">54,058</div><div class="kpi-lbl">Staff</div></div>
+      <div class="kpi"><div class="kpi-val">188.4 MB</div><div class="kpi-lbl">File size</div></div>
+      <div class="kpi"><div class="kpi-val">30 Sep 2026</div><div class="kpi-lbl">File modified</div></div>
+      <div class="kpi"><div class="kpi-val">132,024</div><div class="kpi-lbl">Players + staff</div></div>
+    </section>
+
+    <div class="body">
+
+      <!-- Col 1: who is playing, and the file on disk -->
+      <div class="col">
+        <div class="sec-hdr">Manager &amp; Club</div>
+        <div class="id">
+          <div class="avatar" aria-hidden="true">
+            <svg width="58" height="58" viewBox="0 0 44 44"><circle cx="22" cy="15" r="8" fill="#2a394b"/><path d="M4 44c0-11 8-17 18-17s18 6 18 17z" fill="#2a394b"/></svg>
+          </div>
+          <div class="id-text">
+            <div class="id-lbl">Manager</div>
+            <div class="id-name"><i class="chip">Pending</i><span class="pv">Elliot Nathan</span></div>
+            <div class="id-lbl lbl2">Current club</div>
+            <div class="id-club"><i class="chip">Pending</i><span class="pv">Tottenham Hotspur</span></div>
+          </div>
+        </div>
+        <p class="note pend-only">Manager and club are not read from the save yet.</p>
+
+        <div class="sec-hdr sub">Save File</div>
+        <div class="kv stack"><span class="kv-lbl">File name</span><span class="kv-val">2026-27 START - Acid Twin Spurs.fm</span></div>
+        <div class="kv stack"><span class="kv-lbl">Folder</span><span class="kv-val dim">…/Football Manager 2024/games</span></div>
+        <div class="kv"><span class="kv-lbl">Size on disk</span><span class="kv-val">188.4 MB</span></div>
+        <div class="kv"><span class="kv-lbl">Modified</span><span class="kv-val">30 Sep 2026, 14:22</span></div>
+      </div>
+
+      <!-- Col 2: the game inside the file -->
+      <div class="col">
+        <div class="sec-hdr">Game Details</div>
+        <div class="kv"><span class="kv-lbl">Game name</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">2026-27 START - Acid Twin Spurs</span></span></div>
+        <div class="kv"><span class="kv-lbl">Times saved</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">125</span></span></div>
+        <div class="kv"><span class="kv-lbl">In-game date</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Sun 2 Jan 2028</span></span></div>
+        <div class="kv"><span class="kv-lbl">Date created</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Fri 11 Sep 2026</span></span></div>
+        <div class="kv"><span class="kv-lbl">Game time</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">1 day, 8 h, 16 min</span></span></div>
+        <div class="kv"><span class="kv-lbl">Started</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Italy &middot; 13 Jul 2026</span></span></div>
+        <div class="kv"><span class="kv-lbl">Game version</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">24.4.2+2081827</span></span></div>
+        <div class="kv"><span class="kv-lbl">Dedication</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Mildly addicted</span></span></div>
+
+        <div class="sec-hdr sub">Save Rules</div>
+        <div class="kv"><span class="kv-lbl">Manageable teams</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">All</span></span></div>
+        <div class="kv"><span class="kv-lbl">In-game editor</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Allowed &middot; not used</span></span></div>
+      </div>
+
+      <!-- Col 3: the database -->
+      <div class="col">
+        <div class="sec-hdr">Database</div>
+        <div class="kv"><span class="kv-lbl">Database size</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Custom</span></span></div>
+        <div class="kv"><span class="kv-lbl">Database version</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">24.3.0 Update</span></span></div>
+        <div class="kv"><span class="kv-lbl">Database changes</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">8,809,924</span></span></div>
+        <div class="kv"><span class="kv-lbl">Future transfers</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Original</span></span></div>
+
+        <div class="sec-hdr sub">Nations &amp; Leagues</div>
+        <div class="kv"><span class="kv-lbl">Nations &middot; leagues</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">46 &middot; 46 (view only)</span></span></div>
+        <p class="nat"><span class="pv">Japan, Saudi Arabia, U.S.A. and 43 more</span></p>
+      </div>
+
+    </div>
+    <!-- ═════ PAGE CONTENT ENDS ═════ -->
+  </div>
+</div>
+
+<script>
+/* context-only preview switch; open with #parsed to start in the parsed state */
+if (location.hash === '#parsed') { document.body.dataset.state = 'parsed'; document.querySelectorAll('[data-set]').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.set === 'parsed')); }); }
+document.querySelectorAll('[data-set]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.body.dataset.state = b.dataset.set;
+    document.querySelectorAll('[data-set]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Save Info Page — Design B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap">
+<!--
+  SAVE INFO — DESIGN B  "Identity rail + settings-style ledger"
+  Mockup only. Everything translates to QLabel/QFrame/QHBoxLayout/QGridLayout + QSS.
+  Composition: left rail (fixed 280px, lifted surface, thin right divider) = manager identity + real database counts;
+  right = horizontal "bands" (section title in a 150px left column, fields in a 2-column grid), thin dividers between bands.
+
+  FIELD PARSE STATUS (what the app can do today)
+    AVAILABLE NOW : file name, folder, file size, file modified, clubs, players, staff, players+staff (derived sum)
+    PENDING       : manager name, current club, game name, in-game date, times saved, date created,
+                    game time, game start (nation + date), game version + build, dedication factor,
+                    database size, database version, database changes, future transfer mode, nations loaded,
+                    leagues loaded, manageable teams, in-game editor allowed/used
+  Pending fields render the .chip (exactly the Club page PENDING chip). The "Preview" switch in the masthead is
+  CONTEXT-ONLY: "Once parsed" swaps chips for the screenshot values. Ship = Pending.
+  "Current club (if at one)": when parsed and the manager is unemployed the club line shows "No club" in text-dim.
+
+  CONTEXT-ONLY (not part of the page): .app sidebar, .mast masthead strip, .preview switch.
+  The page itself = .page (rail + ledger), flat on --bg, no outer panel, no footer.
+-->
+<style>
+/* ── Tokens (from club-page-design-a.html) ─────────────────────────── */
+:root {
+  --bg:        #080c12;
+  --surface:   #111720;
+  --surface2:  #18212d;
+  --surface3:  #202c3a;
+  --elev:      #141c27;   /* lifted KPI strip (in-app: #292B32 elevated) */
+  --border:    #263140;
+  --text:      #e8edf2;
+  --text-dim:  #7a8fa6;
+  --text-muted:#4a5f73;   /* decorative only (fails AA as text) */
+  --accent:    #3d8bcd;
+  --green:     #4caf82;
+  --red:       #c0392b;
+  --gold:      #e6b840;
+  --purple:    #8b5cf6;
+  --hair:      rgba(255,255,255,0.04);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 12px; min-height: 100vh; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── State switch: default = Pending (what ships) ──────────────────── */
+.pv { display: none; }
+body[data-state="parsed"] .pv { display: inline; }
+body[data-state="parsed"] .chip,
+body[data-state="parsed"] .pend-only { display: none; }
+
+/* ── Atoms ─────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-block;
+  font-family: 'Barlow Condensed', sans-serif; font-style: normal;
+  font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2;
+  padding: 3px 8px; border-radius: 10px;
+  background: rgba(122,143,166,0.12); color: var(--text-dim);
+}
+.sec-hdr {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
+  padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.sub { margin-top: 24px; }
+.kv {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 5px 0; min-height: 28px; border-bottom: 1px solid var(--hair);
+}
+.kv:last-child { border-bottom: none; }
+.kv-lbl { color: var(--text-dim); white-space: nowrap; }
+.kv-val { font-weight: 500; text-align: right; min-width: 0; font-variant-numeric: tabular-nums; }
+.kv-val .pv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv.stack { flex-direction: column; align-items: stretch; gap: 2px; }
+.kv.stack .kv-val { text-align: left; font-weight: 500; word-break: break-all; }
+.kv.stack .kv-val.dim { color: var(--text-dim); font-weight: 400; }
+.ok { color: var(--green); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 1px; }
+
+/* ── CONTEXT-ONLY app frame ────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+.sb { width: 192px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); }
+.sb-h { padding: 13px 15px 10px; border-bottom: 1px solid var(--border); }
+.sb-h b { display: block; font-size: 13px; }
+.sb-h span { font-size: 11px; color: var(--text-dim); }
+.sb-sec { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: var(--text-dim); padding: 14px 15px 6px; }
+.sb-i { display: block; padding: 8px 15px; color: var(--text-dim); font-size: 12px; }
+.sb-i.on { color: var(--text); background: rgba(61,139,205,0.14); }
+.main { flex: 1; min-width: 0; }
+.mast { height: 96px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 20px 14px;
+  background: linear-gradient(135deg, #0d1f35 0%, #0f2a1a 55%, #1a1208 100%); border-bottom: 1px solid var(--border); }
+.mast h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
+.mast p { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 4px; letter-spacing: 0.04em; }
+.preview { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+.preview button { background: rgba(8,14,24,0.7); border: 1px solid var(--border); padding: 5px 12px; cursor: pointer; font-size: 11px; color: var(--text-dim); }
+.preview button:first-of-type { border-radius: 3px 0 0 3px; }
+.preview button:last-of-type { border-radius: 0 3px 3px 0; border-left: none; }
+.preview button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+
+/* ── PAGE: rail + ledger ───────────────────────────────────────────── */
+.page { display: grid; grid-template-columns: 280px 1fr; align-items: stretch; min-height: calc(100vh - 96px); }
+
+/* Rail: identity first, real numbers below */
+.rail { background: var(--elev); border-right: 1px solid var(--border); padding: 24px 22px 28px; min-width: 0; }
+.id { display: flex; flex-direction: column; gap: 16px; }
+.avatar { width: 88px; height: 88px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border);
+  display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+.id-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); }
+.id-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 38px; letter-spacing: 0.02em; line-height: 44px; height: 44px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.id-name .chip { font-size: 13px; padding: 4px 12px; border-radius: 12px; vertical-align: 6px; }
+.lbl2 { margin-top: 14px; }
+.id-club { display: flex; align-items: center; gap: 8px; height: 24px; margin-top: 2px; font-size: 15px; font-weight: 500; }
+.id-club .chip { font-size: 12px; }
+.note { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin-top: 16px; }
+
+.counts { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--border); }
+.count { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.count:last-child { border-bottom: none; }
+.count-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); }
+.count-val { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; line-height: 28px; font-variant-numeric: tabular-nums; }
+
+/* Ledger: one band per topic; label column + left-aligned values (FM Game-page style) */
+.ledger { min-width: 0; }
+.band { display: grid; grid-template-columns: 120px 1fr; column-gap: 24px; padding: 20px 28px 20px 28px; border-bottom: 1px solid var(--border); }
+.band:last-child { border-bottom: none; }
+.band-h { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); padding-top: 6px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; min-width: 0; }
+.fields > div { min-width: 0; }
+.fields .kv { display: grid; grid-template-columns: 112px 1fr; justify-content: start; align-items: baseline; }
+.fields .kv-val { text-align: left; }
+.fields .kv.full { grid-column: 1 / -1; }
+.fields .kv-val.dim { color: var(--text-dim); font-weight: 400; }
+.nat { grid-column: 1 / -1; color: var(--text-dim); font-size: 11px; line-height: 1.5; padding-top: 8px; }
+
+@media (max-width: 1100px) {
+  .page { grid-template-columns: 240px 1fr; }
+  .band { grid-template-columns: 1fr; row-gap: 4px; }
+  .band-h { padding-top: 0; }
+}
+@media (max-width: 860px) {
+  .page { grid-template-columns: 1fr; }
+  .rail { border-right: none; border-bottom: 1px solid var(--border); }
+  .fields { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .sb { display: none; }
+  .mast { flex-direction: column; align-items: flex-start; justify-content: flex-end; height: auto; min-height: 96px; padding-top: 12px; }
+}
+</style>
+</head>
+<body data-state="pending">
+<div class="app">
+
+  <!-- CONTEXT-ONLY: left sidebar -->
+  <nav class="sb" aria-label="App sidebar (context only)">
+    <div class="sb-h"><b>FM Save Editor</b><span>2026-27 &middot; Tottenham</span></div>
+    <div class="sb-sec">MAIN</div>
+    <a class="sb-i on">Save Info</a>
+    <a class="sb-i">Club</a>
+    <a class="sb-i">Squads</a>
+    <a class="sb-i">Club Staff</a>
+    <a class="sb-i">My Shortlist</a>
+    <div class="sb-sec">SCOUTING</div>
+    <a class="sb-i">Players</a>
+    <a class="sb-i">Staff</a>
+  </nav>
+
+  <div class="main">
+    <!-- CONTEXT-ONLY: shared masthead strip (title + subtitle come from the app hero) + preview switch -->
+    <header class="mast">
+      <div><h1>Save Info</h1><p>2026-27 START - Acid Twin Spurs.fm</p></div>
+      <div class="preview" role="group" aria-label="Preview state (mockup only)">
+        <span>Preview</span>
+        <button type="button" data-set="pending" aria-pressed="true">Pending (ships first)</button><button type="button" data-set="parsed" aria-pressed="false">Once parsed</button>
+      </div>
+    </header>
+
+
+    <!-- ═════ PAGE CONTENT STARTS HERE ═════ -->
+    <div class="page">
+
+      <!-- Rail: manager identity (pending first) + real database counts -->
+      <aside class="rail" aria-label="Manager and save contents">
+        <div class="id">
+          <div class="avatar" aria-hidden="true">
+            <svg width="62" height="62" viewBox="0 0 44 44"><circle cx="22" cy="15" r="8" fill="#2a394b"/><path d="M4 44c0-11 8-17 18-17s18 6 18 17z" fill="#2a394b"/></svg>
+          </div>
+          <div>
+            <div class="id-lbl">Manager</div>
+            <div class="id-name"><i class="chip">Pending</i><span class="pv">Elliot Nathan</span></div>
+            <div class="id-lbl lbl2">Current club</div>
+            <div class="id-club"><i class="chip">Pending</i><span class="pv">Tottenham Hotspur</span></div>
+          </div>
+        </div>
+        <p class="note pend-only">Manager and club are not read from the save yet.</p>
+
+        <div class="counts">
+          <div class="count"><span class="count-lbl">Clubs</span><span class="count-val" style="color:var(--accent)">44,035</span></div>
+          <div class="count"><span class="count-lbl">Players</span><span class="count-val" style="color:var(--green)">77,966</span></div>
+          <div class="count"><span class="count-lbl">Staff</span><span class="count-val" style="color:var(--purple)">54,058</span></div>
+        </div>
+      </aside>
+
+      <!-- Ledger: bands -->
+      <div class="ledger">
+        <section class="band">
+          <h2 class="band-h">Save File</h2>
+          <div class="fields">
+            <div class="kv full"><span class="kv-lbl">File name</span><span class="kv-val ">2026-27 START - Acid Twin Spurs.fm</span></div>
+            <div class="kv full"><span class="kv-lbl">Folder</span><span class="kv-val dim">…/Football Manager 2024/games</span></div>
+            <div class="kv "><span class="kv-lbl">Size on disk</span><span class="kv-val ">188.4 MB</span></div>
+            <div class="kv "><span class="kv-lbl">Modified</span><span class="kv-val ">30 Sep 2026, 14:22</span></div>
+          </div>
+        </section>
+
+        <section class="band">
+          <h2 class="band-h">Game</h2>
+          <div class="fields">
+            <div class="kv full"><span class="kv-lbl">Game name</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">2026-27 START - Acid Twin Spurs</span></span></div>
+            <div>
+              <div class="kv "><span class="kv-lbl">In-game date</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Sun 2 Jan 2028</span></span></div>
+              <div class="kv "><span class="kv-lbl">Date created</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Fri 11 Sep 2026</span></span></div>
+              <div class="kv "><span class="kv-lbl">Started</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Italy &middot; 13 Jul 2026</span></span></div>
+              <div class="kv "><span class="kv-lbl">Dedication</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Mildly addicted</span></span></div>
+            </div>
+            <div>
+              <div class="kv "><span class="kv-lbl">Times saved</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">125</span></span></div>
+              <div class="kv "><span class="kv-lbl">Game time</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">1 day, 8 h, 16 min</span></span></div>
+              <div class="kv "><span class="kv-lbl">Game version</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">24.4.2+2081827</span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="band">
+          <h2 class="band-h">Database</h2>
+          <div class="fields">
+            <div>
+              <div class="kv "><span class="kv-lbl">Players + staff</span><span class="kv-val ">132,024</span></div>
+              <div class="kv "><span class="kv-lbl">Size</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Custom</span></span></div>
+              <div class="kv "><span class="kv-lbl">Version</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">24.3.0 Update</span></span></div>
+            </div>
+            <div>
+              <div class="kv "><span class="kv-lbl">Changes</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">8,809,924</span></span></div>
+              <div class="kv "><span class="kv-lbl">Future transfers</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Original</span></span></div>
+              <div class="kv "><span class="kv-lbl">Nations &middot; leagues</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">46 &middot; 46</span></span></div>
+            </div>
+            <p class="nat"><span class="pv">Japan, Saudi Arabia, U.S.A. and 43 more &middot; all view only</span></p>
+          </div>
+        </section>
+
+        <section class="band">
+          <h2 class="band-h">Save Rules</h2>
+          <div class="fields">
+            <div class="kv "><span class="kv-lbl">Manageable teams</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">All</span></span></div>
+            <div class="kv "><span class="kv-lbl">In-game editor</span><span class="kv-val"><i class="chip">Pending</i><span class="pv">Allowed &middot; not used</span></span></div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+    <!-- ═════ PAGE CONTENT ENDS ═════ -->
+  </div>
+</div>
+
+<script>
+/* context-only preview switch; open with #parsed to start in the parsed state */
+if (location.hash === '#parsed') { document.body.dataset.state = 'parsed'; document.querySelectorAll('[data-set]').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.set === 'parsed')); }); }
+document.querySelectorAll('[data-set]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.body.dataset.state = b.dataset.set;
+    document.querySelectorAll('[data-set]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,13 +1,14 @@
 """FM24 Save Editor - main window."""
 import os
 import shutil
+from datetime import date
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
-    QInputDialog,
+    QInputDialog, QGridLayout,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
 from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
@@ -255,6 +256,175 @@ class _HoverTable(QTableWidget):
 
 def _primary_pos(positions):
     return POSITIONS[positions.index(max(positions))]
+
+
+# -- Club overview page (mockups/club-page-design-a.html 1:1 translation) -----
+# Position badge colors (bg, fg) — mockup .badge.pos-XX rules, literal hex.
+_CLUB_POS_BADGE = {
+    'GK':  ('#1a3a6e', '#7aaeff'),
+    'DC':  ('#1a3a1a', '#6fdd6f'),
+    'ST':  ('#3a1a1a', '#ff7777'),
+    'AMC': ('#1a3030', '#66ddcc'),
+    'AMR': ('#2a2a1a', '#ddcc66'),
+    'AML': ('#3a1a3a', '#cc88ff'),
+    'MC':  ('#1e2850', '#88aaee'),
+    'DR':  ('#1a2a2a', '#66cccc'),
+    'DL':  ('#1a2a2a', '#66cccc'),
+    'DM':  ('#2a1a4a', '#aa88ff'),
+    'INJ': ('#4a0f0f', '#ff6666'),
+}
+_CLUB_POS_BADGE_FALLBACK = ('#202c3a', '#7a8fa6')
+
+# 3x3 position-count grid (mockup .a-pos-grid) — 9 cells, mockup-exact
+# order/colors, a curated subset of POSITIONS (not the full position list).
+_CLUB_POS_GRID = [
+    ('GK', '#7aaeff'), ('DR', '#66cccc'), ('DC', '#6fdd6f'),
+    ('DL', '#66cccc'), ('MC', '#88aaee'), ('AMR', '#ddcc66'),
+    ('AML', '#cc88ff'), ('AMC', '#66ddcc'), ('ST', '#ff7777'),
+]
+
+_CLUB_PENDING_QSS = (
+    "background:rgba(122,143,166,0.12); color:#7a8fa6; font-weight:bold;"
+    " font-size:10px; letter-spacing:0.06em; text-transform:uppercase;"
+    " padding:3px 8px; border-radius:10px;"
+)
+
+
+def _contract_expiry_counts(squad, today):
+    """Pure helper for the club page 'Contracts' panel — no Qt involved.
+
+    Returns (n_expiring_6mo, n_expiring_1yr, longest_deal) from each squad
+    player's p['contract_end'] 'YYYY-MM' string. Both counts are cumulative
+    (the 1yr bucket includes the 6mo one) and exclude already-expired
+    contracts. longest_deal is the max 'YYYY-MM' string, or '' if none.
+    """
+    today_months = today.year * 12 + today.month
+    n6 = n12 = 0
+    longest = ''
+    for p in squad:
+        ce = p.get('contract_end')
+        if not ce:
+            continue
+        try:
+            y_str, m_str = ce.split('-')
+            months_out = (int(y_str) * 12 + int(m_str)) - today_months
+        except (ValueError, AttributeError):
+            continue
+        if 0 <= months_out < 6:
+            n6 += 1
+        if 0 <= months_out < 12:
+            n12 += 1
+        if ce > longest:
+            longest = ce
+    return n6, n12, longest
+
+
+def _club_badge(text, bg, fg, font_size=11, padding='2px 6px'):
+    lbl = QLabel(text)
+    lbl.setStyleSheet(
+        f"background:{bg}; color:{fg}; font-weight:bold; font-size:{font_size}px;"
+        f" letter-spacing:0.06em; text-transform:uppercase; padding:{padding};"
+        " border-radius:2px;")
+    return lbl
+
+
+def _club_pending_chip(text='PENDING'):
+    lbl = QLabel(text)
+    lbl.setStyleSheet(_CLUB_PENDING_QSS)
+    return lbl
+
+
+def _club_set_pending(lbl):
+    lbl.setText('PENDING')
+    lbl.setStyleSheet(_CLUB_PENDING_QSS)
+
+
+def _club_set_value(lbl, text, color='#e8edf2'):
+    lbl.setText(text)
+    lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:500; background:transparent;")
+
+
+def _club_sec_hdr(text, sub=False):
+    lbl = QLabel(text)
+    margin = "margin-top:16px; " if sub else ""
+    lbl.setStyleSheet(
+        f"{margin}color:#4a5f73; font-size:12px; font-weight:bold;"
+        " letter-spacing:0.12em; text-transform:uppercase;"
+        " padding-bottom:8px; border-bottom:1px solid #263140; background:transparent;")
+    return lbl
+
+
+def _club_kv_row(label_text, value_widget):
+    row = QWidget()
+    row.setObjectName('clubKvRow')
+    lay = QHBoxLayout(row)
+    lay.setContentsMargins(0, 5, 0, 5)
+    lay.setSpacing(8)
+    lbl = QLabel(label_text)
+    lbl.setStyleSheet("color:#4a5f73; font-size:12px; background:transparent;")
+    lay.addWidget(lbl)
+    lay.addStretch(1)
+    lay.addWidget(value_widget)
+    row.setStyleSheet(
+        "QWidget#clubKvRow { border-bottom:1px solid rgba(255,255,255,0.04); background:transparent; }")
+    return row
+
+
+def _club_kv_value(text='', color='#e8edf2'):
+    lbl = QLabel(text)
+    lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:500; background:transparent;")
+    lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    return lbl
+
+
+def _club_player_row(rank, pos_code, name, injured):
+    row = QWidget()
+    row.setObjectName('clubPlayerRow')
+    lay = QHBoxLayout(row)
+    lay.setContentsMargins(0, 6, 0, 6)
+    lay.setSpacing(8)
+    rank_lbl = QLabel(str(rank))
+    rank_lbl.setFixedWidth(14)
+    rank_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    rank_lbl.setStyleSheet("color:#4a5f73; font-size:10px; background:transparent;")
+    lay.addWidget(rank_lbl)
+    bg, fg = _CLUB_POS_BADGE.get(pos_code, _CLUB_POS_BADGE_FALLBACK)
+    lay.addWidget(_club_badge(pos_code, bg, fg))
+    name_lbl = QLabel(name)
+    name_lbl.setStyleSheet("color:#e8edf2; font-size:12px; font-weight:500; background:transparent;")
+    lay.addWidget(name_lbl, 1)
+    if injured:
+        ibg, ifg = _CLUB_POS_BADGE['INJ']
+        lay.addWidget(_club_badge('INJ', ibg, ifg, font_size=9, padding='1px 4px'))
+    lay.addWidget(_club_pending_chip())
+    row.setStyleSheet(
+        "QWidget#clubPlayerRow { border-bottom:1px solid rgba(255,255,255,0.04); background:transparent; }")
+    return row
+
+
+def _club_inj_row(name, days):
+    row = QWidget()
+    row.setObjectName('clubInjRow')
+    lay = QHBoxLayout(row)
+    lay.setContentsMargins(0, 6, 0, 6)
+    lay.setSpacing(8)
+    bg, fg = _CLUB_POS_BADGE['INJ']
+    lay.addWidget(_club_badge('INJ', bg, fg, font_size=9))
+    name_lbl = QLabel(name)
+    name_lbl.setStyleSheet("color:#e8edf2; font-size:12px; background:transparent;")
+    lay.addWidget(name_lbl, 1)
+    days_lbl = QLabel(f"{days}d")
+    days_lbl.setStyleSheet("color:#c0392b; font-size:11px; font-weight:bold; background:transparent;")
+    lay.addWidget(days_lbl)
+    row.setStyleSheet(
+        "QWidget#clubInjRow { border-bottom:1px solid rgba(255,255,255,0.04); background:transparent; }")
+    return row
+
+
+def _club_muted_row(text):
+    lbl = QLabel(text)
+    lbl.setStyleSheet("color:#4a5f73; font-size:12px; padding:6px 0; background:transparent;")
+    return lbl
 
 
 def _progress_rate(person):
@@ -505,6 +675,13 @@ _POS_SORT_ORDER = {
     'DM': 7, 'MC': 8,
     'MR': 9, 'AMR': 10, 'ML': 11, 'AML': 12,
     'AMC': 13, 'ST': 14,
+}
+
+_REPORT_LABELS = {
+    'prospects': 'Best Prospects (PA 160+)',
+    'wonderkids': 'Wonderkids (U21, PA 150+)',
+    'best_pos':   'Best in Position',
+    'best_role':  'Best by Role',
 }
 
 
@@ -1325,7 +1502,7 @@ _BTN_SS = lambda accent=False: (
     f" border: {'none' if accent else '1px solid ' + COLORS['border']};"
     f" border-radius: 3px; padding: 5px 14px; font-size: 12px; }}"
     f"QPushButton:hover {{ background: {COLORS['accent'] if accent else COLORS['selection_bg']}; }}"
-    f"QPushButton:disabled {{ opacity: 0.4; }}"
+    f"QPushButton:disabled {{ background: {COLORS['elevated']}; color: {COLORS['text_dim']}; border: 1px solid {COLORS['border']}; }}"
 )
 
 
@@ -2152,17 +2329,31 @@ class MainWindow(QMainWindow):
 
         if right_widget is not None:
             self._header_right_slot_layout.addStretch(1)
-            self._header_right_slot_layout.addWidget(right_widget)
+            self._header_right_slot_layout.addWidget(right_widget, 0, Qt.AlignmentFlag.AlignBottom)
             self._header_right_slot.show()
         else:
             self._header_right_slot.hide()
 
     def _make_header_rep_widget(self, stars: int) -> QWidget:
+        # stars=0 renders all-empty — used until reputation is actually parsed
         w = QWidget()
         w.setStyleSheet("background: transparent;")
-        row = QHBoxLayout(w)
+        outer = QVBoxLayout(w)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(3)
+
+        caption = QLabel('CLUB REPUTATION')
+        caption.setAlignment(Qt.AlignmentFlag.AlignRight)
+        caption.setStyleSheet(
+            f"color:{COLORS['text_secondary']}; font-size:10px; font-weight:600;"
+            " letter-spacing:1.2px; background: transparent;"
+        )
+        outer.addWidget(caption)
+
+        row_widget = QWidget()
+        row_widget.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(row_widget)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(2)
         row.setSpacing(4)
         for i in range(5):
             lbl = QLabel('★' if i < stars else '☆')
@@ -2171,6 +2362,7 @@ class MainWindow(QMainWindow):
                 " font-size: 14px; background: transparent;"
             )
             row.addWidget(lbl)
+        outer.addWidget(row_widget, 0, Qt.AlignmentFlag.AlignRight)
         return w
 
     def _make_header_pill_widget(self, pairs: list) -> QWidget:
@@ -2203,7 +2395,8 @@ class MainWindow(QMainWindow):
         club_name = club['name'] if club else ''
 
         if key == 'club':
-            self._set_header(club_name or 'Club', '', self._make_header_rep_widget(3))
+            club_sub = "Division pending · Country pending · Position pending"
+            self._set_header(club_name or 'Club', club_sub, self._make_header_rep_widget(3))
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
             self._set_header('Squads', f"{club_name} · {n} players")
@@ -2212,7 +2405,10 @@ class MainWindow(QMainWindow):
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
             self._set_header('Staff', sub)
         elif key == 'reports':
-            self._set_header('Player Reports', '')
+            label = _REPORT_LABELS.get(self._current_report_key, '')
+            n = self._reports_table.rowCount() if hasattr(self, '_reports_table') else 0
+            parts = [p for p in (label, f'{n:,} players' if n else '') if p]
+            self._set_header('Player Reports', ' · '.join(parts))
         elif key == 'players':
             n = len(self._all_players_cache) if hasattr(self, '_all_players_cache') else 0
             self._set_header('All Players', f"{n} players")
@@ -2317,6 +2513,16 @@ class MainWindow(QMainWindow):
         return sidebar
 
     def _make_view_club(self):
+        """1:1 translation of mockups/club-page-design-a.html (Design A).
+
+        The mockup's own hero (.a-hero) is skipped — _HeaderHeroWidget
+        already renders the stadium bg / club name / rep stars for the
+        'club' page key (see _update_header_for_view). This content starts
+        at the KPI bar and ends after the 3-column body — the mockup's own
+        card styling (.a-wrap) and footer actions (.a-actions) are dropped
+        so this sits flush on the page background like every other tab
+        (see _make_view_squad's header bar for the convention).
+        """
         w = QWidget()
         w.setObjectName('view_club')
         scroll = QScrollArea()
@@ -2333,97 +2539,198 @@ class MainWindow(QMainWindow):
         outer_vbox.addWidget(scroll, 1)
 
         vbox = QVBoxLayout(w)
-        vbox.setContentsMargins(28, 28, 28, 28)
-        vbox.setSpacing(20)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
 
-        # These labels are kept as refs (updated elsewhere) but not shown —
-        # the persistent header bar owns the club name and squad info now.
-        self._club_view_name = QLabel('No save loaded')
+        # Orphan label kept only so external .setText() calls (_on_parse_done,
+        # _show_squad) don't crash — pre-existing behavior, never laid out.
         self._club_view_info = QLabel('Load an FM24 save file to get started.')
 
-        # Stats cards row
-        self._club_stats_frame = QFrame()
-        self._club_stats_frame.setVisible(False)
-        stats_row = QHBoxLayout(self._club_stats_frame)
-        stats_row.setContentsMargins(0, 0, 0, 0)
-        stats_row.setSpacing(12)
+        self._club_empty_lbl = QLabel('Load an FM24 save file to get started.')
+        self._club_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._club_empty_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:13px; padding:40px 0; background:transparent;")
+        vbox.addWidget(self._club_empty_lbl)
 
-        def _stat_card(title, attr):
-            card = QFrame()
-            card.setStyleSheet(
-                f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
-                "border-radius:4px; }")
-            card.setFixedHeight(72)
-            cvbox = QVBoxLayout(card)
-            cvbox.setContentsMargins(14, 10, 14, 10)
-            cvbox.setSpacing(2)
-            val_lbl = QLabel('--')
-            val_lbl.setStyleSheet(
-                f"color:{COLORS['text_primary']}; font-size:22px; font-weight:bold;")
-            ttl_lbl = QLabel(title)
-            ttl_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
+        # ── Content container (was .a-wrap card; now a plain layout box —
+        # no background/border/radius of its own, so it sits flush on the
+        # page background like every other tab. Kept only so
+        # _update_club_view has something to show/hide for the empty state. ──
+        wrap = QFrame()
+        wrap.setObjectName('clubWrap')
+        wrap.setVisible(False)
+        self._club_wrap = wrap
+        # Old attribute names some call sites outside these two functions
+        # still toggle on save-clear/load — they all alias the one card now.
+        self._club_stats_frame = self._club_pos_frame = self._club_top_frame = wrap
+        wrap_vbox = QVBoxLayout(wrap)
+        wrap_vbox.setContentsMargins(0, 0, 0, 0)
+        wrap_vbox.setSpacing(0)
+
+        def _col(border_right=True, fixed_width=None):
+            cw = QFrame()
+            # Scoped by #clubCol, not a bare "QFrame" type selector — QLabel
+            # is itself a QFrame subclass, so an unscoped selector's border
+            # leaks onto every descendant QLabel that doesn't set its own
+            # border (visible as a stray box around each label's text).
+            cw.setObjectName('clubCol')
+            border = "border-right:1px solid #263140;" if border_right else ""
+            cw.setStyleSheet(f"QFrame#clubCol {{ background:transparent; {border} }}")
+            if fixed_width:
+                cw.setFixedWidth(fixed_width)
+            cl = QVBoxLayout(cw)
+            cl.setContentsMargins(16, 16, 16, 16)
+            cl.setSpacing(6)
+            return cw, cl
+
+        # ── KPI bar (.a-kpis) — same bar convention as _squad_header_bar /
+        # club-staff hdr: elevated bg + border-bottom only, no card look ──
+        kpis = QFrame()
+        kpis.setObjectName('clubKpiBar')
+        kpis.setStyleSheet(
+            f"QFrame#clubKpiBar {{ background:{COLORS['elevated']};"
+            f" border-bottom:1px solid {COLORS['border']}; }}")
+        kpi_row = QHBoxLayout(kpis)
+        kpi_row.setContentsMargins(0, 0, 0, 0)
+        kpi_row.setSpacing(0)
+        self._club_kpi_labels = {}
+        kpi_defs = [
+            ('squad', 'Squad', '#3d8bcd'),
+            ('avg_ca', 'Avg CA', '#e8edf2'),
+            ('hgp', 'HGP', '#4caf82'),
+            ('hgc', 'HGC', '#e6b840'),
+            ('injured', 'Injured', '#c0392b'),
+            ('staff', 'Staff', '#8b5cf6'),
+        ]
+        for idx, (key, label, color) in enumerate(kpi_defs):
+            cell = QFrame()
+            cell.setObjectName('clubKpiCell')
+            border = f"border-right:1px solid {COLORS['border']};" if idx < len(kpi_defs) - 1 else ""
+            cell.setStyleSheet(f"QFrame#clubKpiCell {{ background:transparent; {border} }}")
+            cvbox = QVBoxLayout(cell)
+            cvbox.setContentsMargins(4, 10, 4, 10)
+            cvbox.setSpacing(3)
+            val_lbl = QLabel('0')
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val_lbl.setStyleSheet(f"color:{color}; font-size:22px; font-weight:bold; background:transparent;")
+            lbl_lbl = QLabel(label.upper())
+            lbl_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_lbl.setStyleSheet(
+                "color:#4a5f73; font-size:10px; letter-spacing:0.07em; background:transparent;")
             cvbox.addWidget(val_lbl)
-            cvbox.addWidget(ttl_lbl)
-            setattr(self, attr, val_lbl)
-            return card
+            cvbox.addWidget(lbl_lbl)
+            kpi_row.addWidget(cell, 1)
+            self._club_kpi_labels[key] = val_lbl
+        wrap_vbox.addWidget(kpis)
 
-        stats_row.addWidget(_stat_card('Squad size', '_cv_squad_size'))
-        stats_row.addWidget(_stat_card('Avg CA', '_cv_avg_ca'))
-        stats_row.addWidget(_stat_card('HGP', '_cv_hgp'))
-        stats_row.addWidget(_stat_card('HGC', '_cv_hgc'))
-        stats_row.addStretch()
-        vbox.addWidget(self._club_stats_frame)
+        # ── Body (.a-body): 3 columns ────────────────────────────────────
+        body = QFrame()
+        body_row = QHBoxLayout(body)
+        body_row.setContentsMargins(0, 0, 0, 0)
+        body_row.setSpacing(0)
+        wrap_vbox.addWidget(body)
 
-        # Position breakdown
-        self._club_pos_frame = QFrame()
-        self._club_pos_frame.setVisible(False)
-        self._club_pos_frame.setStyleSheet(
-            f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
-            "border-radius:4px; }")
-        pos_vbox = QVBoxLayout(self._club_pos_frame)
-        pos_vbox.setContentsMargins(14, 12, 14, 12)
-        pos_vbox.setSpacing(6)
-        pos_hdr = QLabel('SQUAD BREAKDOWN')
-        pos_hdr.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:0.8px;")
-        pos_vbox.addWidget(pos_hdr)
-        self._club_pos_grid = QHBoxLayout()
-        self._club_pos_grid.setSpacing(24)
-        pos_vbox.addLayout(self._club_pos_grid)
-        vbox.addWidget(self._club_pos_frame)
+        # -- Col 1: Top Players / Positions ---------------------------------
+        col1, col1_l = _col()
+        col1_l.addWidget(_club_sec_hdr('Top Players · Avg Rating'))
+        self._club_top_list_w = QWidget()
+        top_list_l = QVBoxLayout(self._club_top_list_w)
+        top_list_l.setContentsMargins(0, 0, 0, 0)
+        top_list_l.setSpacing(0)
+        col1_l.addWidget(self._club_top_list_w)
 
-        # Top players
-        self._club_top_frame = QFrame()
-        self._club_top_frame.setVisible(False)
-        self._club_top_frame.setStyleSheet(
-            f"QFrame {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']};"
-            "border-radius:4px; }")
-        top_vbox = QVBoxLayout(self._club_top_frame)
-        top_vbox.setContentsMargins(14, 12, 14, 12)
-        top_vbox.setSpacing(6)
-        top_hdr = QLabel('TOP PLAYERS BY CA')
-        top_hdr.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:0.8px;")
-        top_vbox.addWidget(top_hdr)
-        self._club_top_list = QVBoxLayout()
-        self._club_top_list.setSpacing(2)
-        top_vbox.addLayout(self._club_top_list)
-        vbox.addWidget(self._club_top_frame)
+        col1_l.addWidget(_club_sec_hdr('Positions', sub=True))
+        pos_grid_w = QWidget()
+        pos_grid = QGridLayout(pos_grid_w)
+        pos_grid.setSpacing(6)
+        self._club_pos_vals = {}
+        for idx, (code, color) in enumerate(_CLUB_POS_GRID):
+            cell = QFrame()
+            cell.setObjectName('clubPosCell')
+            cell.setStyleSheet(
+                "QFrame#clubPosCell { background:#18212d; border:1px solid #263140;"
+                " border-radius:3px; }")
+            cell_l = QVBoxLayout(cell)
+            cell_l.setContentsMargins(4, 7, 4, 7)
+            cell_l.setSpacing(1)
+            n_lbl = QLabel(code)
+            n_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            n_lbl.setStyleSheet(
+                "color:#4a5f73; font-size:10px; font-weight:bold; letter-spacing:0.06em;"
+                " text-transform:uppercase; background:transparent;")
+            v_lbl = QLabel('0')
+            v_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            v_lbl.setStyleSheet(f"color:{color}; font-size:17px; font-weight:bold; background:transparent;")
+            cell_l.addWidget(n_lbl)
+            cell_l.addWidget(v_lbl)
+            pos_grid.addWidget(cell, idx // 3, idx % 3)
+            self._club_pos_vals[code] = v_lbl
+        col1_l.addWidget(pos_grid_w)
+        col1_l.addStretch(1)
+        body_row.addWidget(col1, 1)
 
-        # View Squad button
-        self._club_view_squad_btn = QPushButton('View Squad')
-        self._club_view_squad_btn.setFixedHeight(34)
-        self._club_view_squad_btn.setVisible(False)
-        self._club_view_squad_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _btn_ss = (f"QPushButton {{ background:{COLORS['accent']}; color:#fff; border:none;"
-                   f"padding:6px 18px; font-weight:bold; border-radius:2px; font-size:12px; }}"
-                   f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
-                   f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}")
-        self._club_view_squad_btn.setStyleSheet(_btn_ss)
-        self._club_view_squad_btn.clicked.connect(self._nav_to_squad_view)
-        vbox.addWidget(self._club_view_squad_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        # -- Col 2: Club Info / Facilities / Finances (fully static — every
+        # value is PENDING, the parser has no club-metadata fields yet) -----
+        col2, col2_l = _col()
+        col2_l.addWidget(_club_sec_hdr('Club Info'))
+        for label in ('Region', 'Founded', 'Status', 'Reputation'):
+            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+        col2_l.addWidget(_club_sec_hdr('Facilities', sub=True))
+        for label in ('Training', 'Youth', 'Junior coaching', 'Youth recruitment'):
+            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+        col2_l.addWidget(_club_sec_hdr('Finances', sub=True))
+        for label in ('Transfer budget', 'Wage budget', 'Scouting budget', 'Balance'):
+            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+        col2_l.addStretch(1)
+        body_row.addWidget(col2, 1)
 
-        vbox.addStretch()
+        # -- Col 3: Injuries / Staff / Contracts / Homegrown (220px). The
+        # mockup's .a-col3-inner is only a 2-col grid inside the
+        # @media(max-width:860px) block — at the width this 220px rail
+        # actually renders, its two child <div>s (Injuries+Staff,
+        # Contracts+Homegrown) are plain blocks and simply stack, so this
+        # is a single QVBoxLayout in literal DOM order, not a QHBoxLayout
+        # of two sub-columns. ------------------------------------------------
+        col3, col3_l = _col(border_right=False, fixed_width=220)
+
+        self._club_inj_hdr = _club_sec_hdr('Injuries (0)')
+        col3_l.addWidget(self._club_inj_hdr)
+        self._club_inj_list_w = QWidget()
+        inj_list_l = QVBoxLayout(self._club_inj_list_w)
+        inj_list_l.setContentsMargins(0, 0, 0, 0)
+        inj_list_l.setSpacing(0)
+        col3_l.addWidget(self._club_inj_list_w)
+
+        self._club_staff_hdr = _club_sec_hdr('Staff (0)', sub=True)
+        col3_l.addWidget(self._club_staff_hdr)
+        self._club_avg_coaching_val = _club_pending_chip()
+        col3_l.addWidget(_club_kv_row('Avg coaching attr', self._club_avg_coaching_val))
+        self._club_best_staff_ca_val = _club_pending_chip()
+        col3_l.addWidget(_club_kv_row('Best staff CA', self._club_best_staff_ca_val))
+        col3_l.addWidget(_club_kv_row('Manager', _club_pending_chip()))
+
+        col3_l.addWidget(_club_sec_hdr('Contracts', sub=True))
+        self._club_exp6_val = _club_kv_value('0', color='#c0392b')
+        col3_l.addWidget(_club_kv_row('Expiring <6mo', self._club_exp6_val))
+        self._club_exp1yr_val = _club_kv_value('0', color='#e6b840')
+        col3_l.addWidget(_club_kv_row('Expiring <1yr', self._club_exp1yr_val))
+        self._club_longest_val = _club_kv_value('—')
+        col3_l.addWidget(_club_kv_row('Longest deal', self._club_longest_val))
+
+        col3_l.addWidget(_club_sec_hdr('Homegrown', sub=True))
+        self._club_hgp_val = _club_kv_value('0 / 0', color='#4caf82')
+        col3_l.addWidget(_club_kv_row('HGP', self._club_hgp_val))
+        self._club_hgc_val = _club_kv_value('0 / 0', color='#e6b840')
+        col3_l.addWidget(_club_kv_row('HGC', self._club_hgc_val))
+        col3_l.addStretch(1)
+
+        body_row.addWidget(col3, 0)
+
+        # Footer actions (.a-actions: View Squad / Staff buttons) removed —
+        # those options already live in the sidebar nav (Squads, Club Staff).
+
+        vbox.addWidget(wrap, 1)
+        vbox.addStretch(1)
         return outer
 
     def _update_club_view(self):
@@ -2433,99 +2740,92 @@ class MainWindow(QMainWindow):
         club = self._current_club
 
         has_club = bool(club and squad is not None)
-        self._club_stats_frame.setVisible(has_club)
-        self._club_pos_frame.setVisible(has_club)
-        self._club_top_frame.setVisible(has_club)
-        self._club_view_squad_btn.setVisible(has_club)
+        self._club_empty_lbl.setVisible(not has_club)
+        self._club_wrap.setVisible(has_club)
 
         if not has_club:
             return
+
+        club_staff = self._save_data.get('club_staff', {}) if self._save_data else {}
+        people = self._save_data.get('people', []) if self._save_data else []
+        people_by_id = {p.get('id'): p for p in people}
+        staff = [people_by_id[pid] for pid in club_staff.get(club['id'], [])
+                 if pid in people_by_id]
 
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         n_hgc = sum(1 for p in squad
                     if b is not None and self._club_entity_id
                     and is_hgc(b, p, self._club_entity_id))
+        n_injured = sum(1 for p in squad if p.get('injured', False))
         cas = [p['ca'] for p in squad if p.get('ca') is not None]
         avg_ca = round(sum(cas) / len(cas)) if cas else 0
 
-        self._cv_squad_size.setText(str(len(squad)))
-        self._cv_avg_ca.setText(str(avg_ca))
-        self._cv_hgp.setText(str(n_hgp))
-        self._cv_hgc.setText(str(n_hgc))
+        self._club_kpi_labels['squad'].setText(str(len(squad)))
+        self._club_kpi_labels['avg_ca'].setText(str(avg_ca))
+        self._club_kpi_labels['hgp'].setText(str(n_hgp))
+        self._club_kpi_labels['hgc'].setText(str(n_hgc))
+        self._club_kpi_labels['injured'].setText(str(n_injured))
+        self._club_kpi_labels['staff'].setText(str(len(staff)))
 
-        # Position breakdown
-        while self._club_pos_grid.count():
-            item = self._club_pos_grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        # -- Col 1: top 7 by CA (real ranking; PENDING rating chip — the
+        # parser has no per-player match-rating stat), and the 9-cell grid --
+        while self._club_top_list_w.layout().count():
+            cw_item = self._club_top_list_w.layout().takeAt(0)
+            if cw_item.widget():
+                cw_item.widget().deleteLater()
+        top = sorted((p for p in squad if p.get('ca') is not None),
+                     key=lambda p: -p['ca'])[:7]
+        for rank, p in enumerate(top, start=1):
+            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+            self._club_top_list_w.layout().addWidget(
+                _club_player_row(rank, pos, p.get('name', ''), p.get('injured', False)))
 
-        groups = {'GK': 0, 'DEF': 0, 'MID': 0, 'FWD': 0}
-        _group_map = {
-            'GK': 'GK', 'SW': 'DEF', 'DL': 'DEF', 'DC': 'DEF', 'DR': 'DEF',
-            'DM': 'DEF', 'WBL': 'DEF', 'WBR': 'DEF',
-            'ML': 'MID', 'MC': 'MID', 'MR': 'MID',
-            'AML': 'MID', 'AMC': 'MID', 'AMR': 'MID',
-            'ST': 'FWD',
-        }
+        pos_counts = {code: 0 for code, _ in _CLUB_POS_GRID}
         for p in squad:
             if p.get('positions'):
                 pos = _primary_pos(p['positions'])
-                g = _group_map.get(pos, 'MID')
-                groups[g] += 1
+                if pos in pos_counts:
+                    pos_counts[pos] += 1
+        for code, val_lbl in self._club_pos_vals.items():
+            val_lbl.setText(str(pos_counts.get(code, 0)))
 
-        _group_colors = {
-            'GK': COLORS.get('warning', '#C07B2A'),
-            'DEF': COLORS.get('accent', '#3A6BA8'),
-            'MID': '#3A8A5A',
-            'FWD': '#A83A3A',
-        }
-        for g, count in groups.items():
-            grp_w = QWidget()
-            grp_layout = QVBoxLayout(grp_w)
-            grp_layout.setContentsMargins(0, 0, 0, 0)
-            grp_layout.setSpacing(2)
-            cnt_lbl = QLabel(str(count))
-            cnt_lbl.setStyleSheet(
-                f"color:{_group_colors.get(g, COLORS['text_primary'])};"
-                "font-size:20px; font-weight:bold;")
-            lbl = QLabel(g)
-            lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:10px;")
-            grp_layout.addWidget(cnt_lbl)
-            grp_layout.addWidget(lbl)
-            self._club_pos_grid.addWidget(grp_w)
+        # -- Col 3 left: injuries + staff -------------------------------------
+        self._club_inj_hdr.setText(f'Injuries ({n_injured})')
+        while self._club_inj_list_w.layout().count():
+            cw_item = self._club_inj_list_w.layout().takeAt(0)
+            if cw_item.widget():
+                cw_item.widget().deleteLater()
+        injured_players = [p for p in squad if p.get('injured', False)][:5]
+        if injured_players:
+            for p in injured_players:
+                self._club_inj_list_w.layout().addWidget(
+                    _club_inj_row(p.get('name', ''), p.get('injury_days', 0)))
+        else:
+            self._club_inj_list_w.layout().addWidget(_club_muted_row('None'))
 
-        # Top 5 players
-        while self._club_top_list.count():
-            item = self._club_top_list.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self._club_staff_hdr.setText(f'Staff ({len(staff)})')
+        coaching_vals = [v for p in staff for v in p.get('coaching', {}).values() if v is not None]
+        if coaching_vals:
+            _club_set_value(self._club_avg_coaching_val,
+                             f'{sum(coaching_vals) / len(coaching_vals):.0f} / 20')
+        else:
+            _club_set_pending(self._club_avg_coaching_val)
 
-        top = sorted([p for p in squad if p.get('ca')], key=lambda p: -p['ca'])[:5]
-        for p in top:
-            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
-            ca = p.get('ca', '?')
-            pa = p.get('pa', '?')
-            row_w = QWidget()
-            row_layout = QHBoxLayout(row_w)
-            row_layout.setContentsMargins(0, 2, 0, 2)
-            row_layout.setSpacing(8)
-            name_lbl = QLabel(p['name'])
-            name_lbl.setStyleSheet(
-                f"color:{COLORS['text_primary']}; font-size:12px;")
-            pos_lbl = QLabel(pos)
-            pos_lbl.setStyleSheet(
-                f"color:{COLORS['text_secondary']}; font-size:11px;")
-            pos_lbl.setFixedWidth(36)
-            ca_lbl = QLabel(f"CA {ca}")
-            ca_lbl.setStyleSheet(
-                f"color:{COLORS['accent']}; font-size:11px; font-weight:bold;")
-            pa_lbl = QLabel(f"PA {pa}")
-            pa_lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
-            row_layout.addWidget(name_lbl, 1)
-            row_layout.addWidget(pos_lbl)
-            row_layout.addWidget(ca_lbl)
-            row_layout.addWidget(pa_lbl)
-            self._club_top_list.addWidget(row_w)
+        staff_cas = [p['staff_ca'] for p in staff if p.get('staff_ca') is not None]
+        if staff_cas:
+            _club_set_value(self._club_best_staff_ca_val, str(max(staff_cas)), color='#e6b840')
+        else:
+            _club_set_pending(self._club_best_staff_ca_val)
+
+        # -- Col 3 right: contracts + homegrown --------------------------------
+        n6, n12, longest = _contract_expiry_counts(squad, date.today())
+        self._club_exp6_val.setText(str(n6))
+        self._club_exp1yr_val.setText(str(n12))
+        self._club_longest_val.setText(longest or '—')
+
+        total = len(squad)
+        self._club_hgp_val.setText(f'{n_hgp} / {total}')
+        self._club_hgc_val.setText(f'{n_hgc} / {total}')
 
     def _make_view_squad(self):
         w = QWidget()
@@ -2656,23 +2956,65 @@ class MainWindow(QMainWindow):
 
         return w
 
+    def _make_quick_filters_frame(self):
+        """Elevated 'Quick Filters' strip (caption row above, filter row below).
+        Mirrors the Players view; returns (frame, filter_row_layout)."""
+        frame = QFrame()
+        frame.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        frame_vbox = QVBoxLayout(frame)
+        frame_vbox.setContentsMargins(0, 0, 0, 0)
+        frame_vbox.setSpacing(0)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(16, 10, 16, 6)
+        title_lbl = QLabel('Quick Filters')
+        title_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        title_row.addWidget(title_lbl)
+        title_row.addStretch()
+        frame_vbox.addLayout(title_row)
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(16, 0, 16, 10)
+        filter_row.setSpacing(8)
+        frame_vbox.addLayout(filter_row)
+        return frame, filter_row
+
     def _make_view_staff(self):
         w = QWidget()
         vbox = QVBoxLayout(w)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        hdr = QFrame()
-        hdr.setFixedHeight(44)
-        hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        hdr_row = QHBoxLayout(hdr)
-        hdr_row.setContentsMargins(16, 0, 16, 0)
-        hdr_lbl = QLabel('Quick Filters')
-        hdr_lbl.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:11px;")
-        hdr_row.addWidget(hdr_lbl)
+        hdr, hdr_row = self._make_quick_filters_frame()
+
+        staff_age_lbl = QLabel('Age:')
+        staff_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        hdr_row.addWidget(staff_age_lbl)
+        self._staff_age_min = QSpinBox()
+        self._staff_age_min.setRange(15, 60)
+        self._staff_age_min.setValue(15)
+        self._staff_age_min.setFixedSize(52, 26)
+        self._staff_age_min.valueChanged.connect(lambda _v: self._populate_staff_table())
+        hdr_row.addWidget(self._staff_age_min)
+        staff_dash = QLabel('-')
+        staff_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        hdr_row.addWidget(staff_dash)
+        self._staff_age_max = QSpinBox()
+        self._staff_age_max.setRange(15, 60)
+        self._staff_age_max.setValue(60)
+        self._staff_age_max.setFixedSize(52, 26)
+        self._staff_age_max.valueChanged.connect(lambda _v: self._populate_staff_table())
+        hdr_row.addWidget(self._staff_age_max)
+
         hdr_row.addStretch()
+
+        staff_clear_btn = QPushButton('Clear')
+        staff_clear_btn.setFixedHeight(26)
+        staff_clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
+        staff_clear_btn.clicked.connect(self._clear_staff_filter)
+        hdr_row.addWidget(staff_clear_btn)
+
         self._staff_count_lbl = QLabel('')
         vbox.addWidget(hdr)
 
@@ -2738,6 +3080,9 @@ class MainWindow(QMainWindow):
                 if pid not in staff_club:
                     staff_club[pid] = cid
         staff = [p for p in people if 'ca' not in p]
+        if hasattr(self, '_staff_age_min'):
+            mn, mx = self._staff_age_min.value(), self._staff_age_max.value()
+            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
         coaching_cols = getattr(self, '_staff_coaching_cols', [])
         coaching_col_map = getattr(self, '_coaching_col_map', {})
         self._staff_table.setSortingEnabled(False)
@@ -2778,6 +3123,15 @@ class MainWindow(QMainWindow):
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
         self._status_info_lbl.setText(f'{total:,} staff')
+
+    def _clear_staff_filter(self):
+        self._staff_age_min.blockSignals(True)
+        self._staff_age_max.blockSignals(True)
+        self._staff_age_min.setValue(15)
+        self._staff_age_max.setValue(60)
+        self._staff_age_min.blockSignals(False)
+        self._staff_age_max.blockSignals(False)
+        self._populate_staff_table()
 
     def _make_view_welcome(self):
         w = QWidget()
@@ -2822,12 +3176,12 @@ class MainWindow(QMainWindow):
         vbox.addSpacing(28)
 
         # Load button
-        load_btn = QPushButton('Load Save')
-        load_btn.setFixedHeight(36)
-        load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        load_btn.setStyleSheet(_BTN_SS(accent=True))
-        load_btn.clicked.connect(self._load_file)
-        vbox.addWidget(load_btn)
+        self._welcome_load_btn = QPushButton('Load Save')
+        self._welcome_load_btn.setFixedHeight(36)
+        self._welcome_load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._welcome_load_btn.setStyleSheet(_BTN_SS(accent=True))
+        self._welcome_load_btn.clicked.connect(self._load_file)
+        vbox.addWidget(self._welcome_load_btn)
         vbox.addSpacing(12)
 
         # Hint
@@ -2847,29 +3201,37 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        hdr = QFrame()
-        hdr.setFixedHeight(44)
-        hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        hdr_row = QHBoxLayout(hdr)
-        hdr_row.setContentsMargins(16, 0, 16, 0)
-        self._club_staff_title_lbl = QLabel('Club Staff')
-        self._club_staff_title_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
-        hdr_row.addWidget(self._club_staff_title_lbl)
-        hdr_row.addStretch()
-        vbox.addWidget(hdr)
+        qf_bar, qf_row = self._make_quick_filters_frame()
 
-        qf_bar = QFrame()
-        qf_bar.setFixedHeight(38)
-        qf_bar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        qf_row = QHBoxLayout(qf_bar)
-        qf_row.setContentsMargins(16, 0, 16, 0)
-        qf_lbl = QLabel('Quick Filters')
-        qf_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-        qf_row.addWidget(qf_lbl)
+        cstaff_age_lbl = QLabel('Age:')
+        cstaff_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        qf_row.addWidget(cstaff_age_lbl)
+        self._club_staff_age_min = QSpinBox()
+        self._club_staff_age_min.setRange(15, 60)
+        self._club_staff_age_min.setValue(15)
+        self._club_staff_age_min.setFixedSize(52, 26)
+        self._club_staff_age_min.valueChanged.connect(lambda _v: self._populate_club_staff_table())
+        qf_row.addWidget(self._club_staff_age_min)
+        cstaff_dash = QLabel('-')
+        cstaff_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        qf_row.addWidget(cstaff_dash)
+        self._club_staff_age_max = QSpinBox()
+        self._club_staff_age_max.setRange(15, 60)
+        self._club_staff_age_max.setValue(60)
+        self._club_staff_age_max.setFixedSize(52, 26)
+        self._club_staff_age_max.valueChanged.connect(lambda _v: self._populate_club_staff_table())
+        qf_row.addWidget(self._club_staff_age_max)
+
         qf_row.addStretch()
+
+        cstaff_clear_btn = QPushButton('Clear')
+        cstaff_clear_btn.setFixedHeight(26)
+        cstaff_clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
+        cstaff_clear_btn.clicked.connect(self._clear_club_staff_filter)
+        qf_row.addWidget(cstaff_clear_btn)
+
         vbox.addWidget(qf_bar)
 
         self._club_staff_table = _HoverTable()
@@ -2942,9 +3304,11 @@ class MainWindow(QMainWindow):
         people_by_id = {p.get('id'): p for p in people}
         staff = [people_by_id[pid] for pid in staff_pids
                  if pid in people_by_id and 'ca' not in people_by_id[pid]]
+        if hasattr(self, '_club_staff_age_min'):
+            mn, mx = self._club_staff_age_min.value(), self._club_staff_age_max.value()
+            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
         staff.sort(key=lambda p: p.get('name', ''))
 
-        self._club_staff_title_lbl.setText(f'{club["name"]} - Club Staff')
         self._club_staff_table.setSortingEnabled(False)
         self._club_staff_table.setRowCount(len(staff))
         coaching_col_map = getattr(self, '_coaching_col_map', {})
@@ -2977,28 +3341,123 @@ class MainWindow(QMainWindow):
             self._club_staff_table.resizeColumnToContents(i)
         self._status_info_lbl.setText(f'{len(staff):,} staff')
 
+    def _clear_club_staff_filter(self):
+        self._club_staff_age_min.blockSignals(True)
+        self._club_staff_age_max.blockSignals(True)
+        self._club_staff_age_min.setValue(15)
+        self._club_staff_age_max.setValue(60)
+        self._club_staff_age_min.blockSignals(False)
+        self._club_staff_age_max.blockSignals(False)
+        self._populate_club_staff_table()
+
     def _make_view_shortlist(self):
         w = QWidget()
         vbox = QVBoxLayout(w)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        hdr = QFrame()
-        hdr.setFixedHeight(44)
-        hdr.setStyleSheet(
+        # Filter bar — same structure as Players' Quick Filters
+        filter_hdr = QFrame()
+        filter_hdr.setStyleSheet(
             f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        hdr_row = QHBoxLayout(hdr)
-        hdr_row.setContentsMargins(16, 0, 16, 0)
-        hdr_lbl = QLabel('My Shortlist')
-        hdr_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
-        hdr_row.addWidget(hdr_lbl)
-        hdr_row.addStretch()
-        self._shortlist_count_lbl = QLabel('0 people')
-        self._shortlist_count_lbl.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:11px;")
-        hdr_row.addWidget(self._shortlist_count_lbl)
-        vbox.addWidget(hdr)
+        filter_vbox = QVBoxLayout(filter_hdr)
+        filter_vbox.setContentsMargins(0, 0, 0, 0)
+        filter_vbox.setSpacing(0)
+
+        sl_title_row = QHBoxLayout()
+        sl_title_row.setContentsMargins(16, 10, 16, 6)
+        sl_title_lbl = QLabel('Quick Filters')
+        sl_title_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_title_row.addWidget(sl_title_lbl)
+        sl_title_row.addStretch()
+        filter_vbox.addLayout(sl_title_row)
+
+        sl_filter_row = QHBoxLayout()
+        sl_filter_row.setContentsMargins(16, 0, 16, 10)
+        sl_filter_row.setSpacing(8)
+
+        self._shortlist_name_filter = QLineEdit()
+        self._shortlist_name_filter.setPlaceholderText('Filter by name...')
+        self._shortlist_name_filter.setFixedHeight(26)
+        self._shortlist_name_filter.setMaximumWidth(220)
+        self._shortlist_name_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 8px; font-size:11px;")
+        self._shortlist_name_filter.returnPressed.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_name_filter)
+
+        self._shortlist_pos_filter = QComboBox()
+        self._shortlist_pos_filter.addItem('All Positions')
+        self._shortlist_pos_filter.addItems(POSITIONS)
+        self._shortlist_pos_filter.setFixedHeight(26)
+        self._shortlist_pos_filter.setFixedWidth(130)
+        self._shortlist_pos_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
+        self._shortlist_pos_filter.currentIndexChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_pos_filter)
+
+        sl_min_ca_lbl = QLabel('Min CA:')
+        sl_min_ca_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_filter_row.addWidget(sl_min_ca_lbl)
+        self._shortlist_ca_filter = QSpinBox()
+        self._shortlist_ca_filter.setRange(0, 200)
+        self._shortlist_ca_filter.setValue(0)
+        self._shortlist_ca_filter.setFixedSize(56, 26)
+        self._shortlist_ca_filter.valueChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_ca_filter)
+
+        sl_min_pa_lbl = QLabel('Min PA:')
+        sl_min_pa_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_filter_row.addWidget(sl_min_pa_lbl)
+        self._shortlist_pa_filter = QSpinBox()
+        self._shortlist_pa_filter.setRange(0, 200)
+        self._shortlist_pa_filter.setValue(0)
+        self._shortlist_pa_filter.setFixedSize(56, 26)
+        self._shortlist_pa_filter.valueChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_pa_filter)
+
+        sl_age_lbl = QLabel('Age:')
+        sl_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_filter_row.addWidget(sl_age_lbl)
+        self._shortlist_age_min = QSpinBox()
+        self._shortlist_age_min.setRange(15, 60)
+        self._shortlist_age_min.setValue(15)
+        self._shortlist_age_min.setFixedSize(52, 26)
+        self._shortlist_age_min.valueChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_age_min)
+        sl_dash = QLabel('-')
+        sl_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_filter_row.addWidget(sl_dash)
+        self._shortlist_age_max = QSpinBox()
+        self._shortlist_age_max.setRange(15, 60)
+        self._shortlist_age_max.setValue(60)
+        self._shortlist_age_max.setFixedSize(52, 26)
+        self._shortlist_age_max.valueChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_age_max)
+
+        sl_dev_lbl = QLabel('Min Dev:')
+        sl_dev_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        sl_filter_row.addWidget(sl_dev_lbl)
+        self._shortlist_dev_filter = QSpinBox()
+        self._shortlist_dev_filter.setRange(0, 20)
+        self._shortlist_dev_filter.setValue(0)
+        self._shortlist_dev_filter.setFixedSize(52, 26)
+        self._shortlist_dev_filter.valueChanged.connect(self._apply_shortlist_filter)
+        sl_filter_row.addWidget(self._shortlist_dev_filter)
+
+        sl_filter_row.addStretch()
+
+        sl_clear_btn = QPushButton('Clear')
+        sl_clear_btn.setFixedHeight(26)
+        sl_clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
+        sl_clear_btn.clicked.connect(self._clear_shortlist_filter)
+        sl_filter_row.addWidget(sl_clear_btn)
+
+        filter_vbox.addLayout(sl_filter_row)
+        vbox.addWidget(filter_hdr)
 
         self._shortlist_table = _HoverTable()
         self._shortlist_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -3042,8 +3501,8 @@ class MainWindow(QMainWindow):
         self._populate_shortlist()
         self._status.showMessage(f'Added {person.get("name", "")} to shortlist', 2000)
 
-    def _populate_shortlist(self):
-        people = self._shortlist
+    def _populate_shortlist(self, people=None):
+        people = people if people is not None else self._shortlist
         self._shortlist_table.setSortingEnabled(False)
         self._shortlist_table.setRowCount(len(people))
         clubs = self._save_data.get('clubs', []) if self._save_data else []
@@ -3097,8 +3556,63 @@ class MainWindow(QMainWindow):
         for c in range(self._shortlist_table.columnCount()):
             self._shortlist_table.resizeColumnToContents(c)
         n = len(people)
-        self._shortlist_count_lbl.setText(f'{n} {"person" if n == 1 else "people"}')
         self._shortlist_stack.setCurrentIndex(1 if n > 0 else 0)
+
+    def _clear_shortlist_filter(self):
+        self._shortlist_name_filter.blockSignals(True)
+        self._shortlist_pos_filter.blockSignals(True)
+        self._shortlist_ca_filter.blockSignals(True)
+        self._shortlist_pa_filter.blockSignals(True)
+        self._shortlist_age_min.blockSignals(True)
+        self._shortlist_age_max.blockSignals(True)
+        self._shortlist_dev_filter.blockSignals(True)
+        self._shortlist_name_filter.clear()
+        self._shortlist_pos_filter.setCurrentIndex(0)
+        self._shortlist_ca_filter.setValue(0)
+        self._shortlist_pa_filter.setValue(0)
+        self._shortlist_age_min.setValue(15)
+        self._shortlist_age_max.setValue(60)
+        self._shortlist_dev_filter.setValue(0)
+        self._shortlist_name_filter.blockSignals(False)
+        self._shortlist_pos_filter.blockSignals(False)
+        self._shortlist_ca_filter.blockSignals(False)
+        self._shortlist_pa_filter.blockSignals(False)
+        self._shortlist_age_min.blockSignals(False)
+        self._shortlist_age_max.blockSignals(False)
+        self._shortlist_dev_filter.blockSignals(False)
+        self._apply_shortlist_filter()
+
+    def _apply_shortlist_filter(self):
+        name_q = self._shortlist_name_filter.text().strip().lower()
+        pos_q = self._shortlist_pos_filter.currentText()
+        if pos_q == 'All Positions':
+            pos_q = ''
+        min_ca = self._shortlist_ca_filter.value()
+        min_pa = self._shortlist_pa_filter.value()
+        age_min = self._shortlist_age_min.value()
+        age_max = self._shortlist_age_max.value()
+        min_dev = self._shortlist_dev_filter.value()
+
+        filtered = self._shortlist
+        if name_q:
+            filtered = [p for p in filtered if name_q in p.get('name', '').lower()]
+        if pos_q and pos_q in POSITIONS:
+            pos_idx = POSITIONS.index(pos_q)
+            filtered = [p for p in filtered
+                        if p.get('positions') and pos_idx < len(p['positions'])
+                        and p['positions'][pos_idx] == max(p['positions'])]
+        if min_ca:
+            filtered = [p for p in filtered if 'ca' not in p or (p.get('ca') or 0) >= min_ca]
+        if min_pa:
+            filtered = [p for p in filtered if 'ca' not in p or (p.get('pa') or 0) >= min_pa]
+        age_min_eff = age_min if age_min > 15 else 0
+        age_max_eff = age_max if age_max < 60 else 999
+        if age_min_eff or age_max_eff < 999:
+            filtered = [p for p in filtered if age_min_eff <= (FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)) <= age_max_eff]
+        if min_dev:
+            filtered = [p for p in filtered if 'ca' not in p or (_progress_rate(p) or 0) >= min_dev]
+
+        self._populate_shortlist(filtered)
 
     def _make_view_reports(self):
         from PyQt6.QtWidgets import QComboBox
@@ -3107,50 +3621,36 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        hdr = QFrame()
-        hdr.setFixedHeight(44)
-        hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        hdr_row = QHBoxLayout(hdr)
-        hdr_row.setContentsMargins(16, 0, 16, 0)
-        hdr_row.setSpacing(12)
-
-        self._report_title_lbl = QLabel('Scouting Reports')
-        self._report_title_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
-        hdr_row.addWidget(self._report_title_lbl)
-        hdr_row.addStretch()
-
-        self._report_count_lbl = QLabel('')
-        vbox.addWidget(hdr)
-
-        filter_frame = QFrame()
-        filter_frame.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        filter_frame.setFixedHeight(38)
-        filter_row2 = QHBoxLayout(filter_frame)
-        filter_row2.setContentsMargins(16, 0, 16, 0)
-        filter_row2.setSpacing(12)
+        filter_frame, filter_row2 = self._make_quick_filters_frame()
         vbox.addWidget(filter_frame)
 
-        _qf_lbl = QLabel('Quick Filters')
-        _qf_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-        filter_row2.addWidget(_qf_lbl)
-        filter_row2.addSpacing(8)
+        self._report_name_filter = QLineEdit()
+        self._report_name_filter.setPlaceholderText('Filter by name...')
+        self._report_name_filter.setFixedHeight(26)
+        self._report_name_filter.setMaximumWidth(220)
+        # Players' name box ends up ~156px wide via layout slack; the extra
+        # Position/Role bar here would otherwise squeeze it to ~125px.
+        self._report_name_filter.setMinimumWidth(156)
+        self._report_name_filter.setStyleSheet(
+            f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:3px 8px; font-size:11px;")
+        self._report_name_filter.returnPressed.connect(self._on_report_age_changed)
+        filter_row2.addWidget(self._report_name_filter)
 
         self._report_pos_bar = QWidget()
         pos_row = QHBoxLayout(self._report_pos_bar)
         pos_row.setContentsMargins(0, 0, 0, 0)
         pos_row.setSpacing(6)
         pos_lbl = QLabel('Position:')
-        pos_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        pos_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         pos_row.addWidget(pos_lbl)
         self._report_pos_combo = QComboBox()
         self._report_pos_combo.addItems(POSITIONS)
+        self._report_pos_combo.setFixedHeight(26)
         self._report_pos_combo.setFixedWidth(130)
         self._report_pos_combo.setStyleSheet(
             f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px;")
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
         self._report_pos_combo.currentTextChanged.connect(self._on_report_pos_changed)
         pos_row.addWidget(self._report_pos_combo)
         self._report_pos_bar.setVisible(False)
@@ -3162,13 +3662,14 @@ class MainWindow(QMainWindow):
         role_row.setContentsMargins(0, 0, 0, 0)
         role_row.setSpacing(6)
         role_lbl = QLabel('Role:')
-        role_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        role_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         role_row.addWidget(role_lbl)
         self._report_role_combo = QComboBox()
+        self._report_role_combo.setFixedHeight(26)
         self._report_role_combo.setFixedWidth(220)
         self._report_role_combo.setStyleSheet(
             f"background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px;")
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:2px 6px; font-size:11px;")
         for group, names in role_names_by_group():
             sep = self._report_role_combo.count()
             self._report_role_combo.addItem(f'── {group} ──')
@@ -3182,44 +3683,65 @@ class MainWindow(QMainWindow):
         self._report_role_bar.setVisible(False)
         filter_row2.addWidget(self._report_role_bar)
 
-        filter_row2.addStretch()
+        min_ca_lbl = QLabel('Min CA:')
+        min_ca_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row2.addWidget(min_ca_lbl)
+        self._report_ca_filter = QSpinBox()
+        self._report_ca_filter.setRange(0, 200)
+        self._report_ca_filter.setValue(0)
+        self._report_ca_filter.setFixedSize(56, 26)
+        self._report_ca_filter.valueChanged.connect(self._on_report_age_changed)
+        filter_row2.addWidget(self._report_ca_filter)
+
+        min_pa_lbl = QLabel('Min PA:')
+        min_pa_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row2.addWidget(min_pa_lbl)
+        self._report_pa_filter = QSpinBox()
+        self._report_pa_filter.setRange(0, 200)
+        self._report_pa_filter.setValue(0)
+        self._report_pa_filter.setFixedSize(56, 26)
+        self._report_pa_filter.valueChanged.connect(self._on_report_age_changed)
+        filter_row2.addWidget(self._report_pa_filter)
 
         # Age range filter — always visible
-        _spin_ss = (
-            f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:1px 2px 1px 4px; font-size:12px; }}"
-            f"QSpinBox::up-button {{ subcontrol-origin:border; subcontrol-position:top right;"
-            f" width:14px; height:10px; background:{COLORS['elevated']};"
-            f" border-left:1px solid {COLORS['border']}; border-bottom:1px solid {COLORS['border']};"
-            f" border-top-right-radius:2px; }}"
-            f"QSpinBox::down-button {{ subcontrol-origin:border; subcontrol-position:bottom right;"
-            f" width:14px; height:10px; background:{COLORS['elevated']};"
-            f" border-left:1px solid {COLORS['border']};"
-            f" border-bottom-right-radius:2px; }}"
-            f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
-            f" {{ background:{COLORS['border']}; }}"
-        )
         age_lbl = QLabel('Age:')
-        age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row2.addWidget(age_lbl)
         self._report_age_min = QSpinBox()
         self._report_age_min.setRange(15, 60)
         self._report_age_min.setValue(15)
-        self._report_age_min.setFixedWidth(52)
-        self._report_age_min.setStyleSheet(_spin_ss)
+        self._report_age_min.setFixedSize(52, 26)
         filter_row2.addWidget(self._report_age_min)
         dash_lbl = QLabel('-')
-        dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:12px;")
+        dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row2.addWidget(dash_lbl)
         self._report_age_max = QSpinBox()
         self._report_age_max.setRange(15, 60)
         self._report_age_max.setValue(45)
-        self._report_age_max.setFixedWidth(52)
-        self._report_age_max.setStyleSheet(_spin_ss)
+        self._report_age_max.setFixedSize(52, 26)
         filter_row2.addWidget(self._report_age_max)
         self._report_age_min.valueChanged.connect(self._on_report_age_changed)
         self._report_age_max.valueChanged.connect(self._on_report_age_changed)
+
+        dev_lbl = QLabel('Min Dev:')
+        dev_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row2.addWidget(dev_lbl)
+        self._report_dev_filter = QSpinBox()
+        self._report_dev_filter.setRange(0, 20)
+        self._report_dev_filter.setValue(0)
+        self._report_dev_filter.setFixedSize(52, 26)
+        self._report_dev_filter.valueChanged.connect(self._on_report_age_changed)
+        filter_row2.addWidget(self._report_dev_filter)
+
+        filter_row2.addStretch()
+
+        self._report_clear_btn = QPushButton('Clear')
+        self._report_clear_btn.setFixedHeight(26)
+        self._report_clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
+        self._report_clear_btn.clicked.connect(self._clear_report_filter)
+        filter_row2.addWidget(self._report_clear_btn)
 
         self._reports_table = _HoverTable()
         self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -3296,14 +3818,26 @@ class MainWindow(QMainWindow):
                 if r is not None:
                     rated.append((p, r))
             rated.sort(key=lambda x: -x[1])
-            rated = rated[:200]
             self._report_ratings = {p.get('id', -1): r for p, r in rated}
-            return [p for p, _ in rated]
+            c = [p for p, _ in rated]
         else:
             return []
+        # Quick-filter fields (name/CA/PA/age/dev) — shared by every report mode.
         mn_age = self._report_age_min.value()
         mx_age = self._report_age_max.value()
         c = [p for p in c if mn_age <= (season_year - p.get('birth_year', season_year)) <= mx_age]
+        name_q = self._report_name_filter.text().strip().lower()
+        if name_q:
+            c = [p for p in c if name_q in p.get('name', '').lower()]
+        min_ca = self._report_ca_filter.value()
+        if min_ca:
+            c = [p for p in c if (p.get('ca') or 0) >= min_ca]
+        min_pa = self._report_pa_filter.value()
+        if min_pa:
+            c = [p for p in c if (p.get('pa') or 0) >= min_pa]
+        min_dev = self._report_dev_filter.value()
+        if min_dev:
+            c = [p for p in c if (_progress_rate(p) or 0) >= min_dev]
         return c[:200]
 
     def _populate_reports_table(self, players):
@@ -3381,7 +3915,9 @@ class MainWindow(QMainWindow):
                 self._reports_table.setItem(row, col, item)
         self._reports_table.setSortingEnabled(True)
         self._reports_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
-        self._report_count_lbl.setText(f'{len(players):,} players')
+        # Same as Players; safe here because reports are capped at 200 rows.
+        for i in range(self._reports_table.columnCount()):
+            self._reports_table.resizeColumnToContents(i)
         info = f'{len(players):,} players'
         if self._current_report_key == 'best_role':
             preset = self._weights_lbl.text().strip('[]')
@@ -3399,10 +3935,12 @@ class MainWindow(QMainWindow):
             if not role or role.startswith('──'):
                 return
             players = self._get_report_players('best_role', role_name=role)
-            self._report_title_lbl.setText('Best by Role')
             self._populate_reports_table(players)
 
     def _on_report_age_changed(self):
+        # Despite the name, this re-derives the report for every quick-filter
+        # field (name/CA/PA/age/dev), not just age — kept as-is to avoid
+        # touching every connect() call site.
         if not self._current_report_key or not self._save_data:
             return
         mn, mx = self._report_age_min.value(), self._report_age_max.value()
@@ -3415,6 +3953,27 @@ class MainWindow(QMainWindow):
             return
         players = self._get_report_players(key, pos, role)
         self._populate_reports_table(players)
+
+    def _clear_report_filter(self):
+        self._report_name_filter.blockSignals(True)
+        self._report_ca_filter.blockSignals(True)
+        self._report_pa_filter.blockSignals(True)
+        self._report_age_min.blockSignals(True)
+        self._report_age_max.blockSignals(True)
+        self._report_dev_filter.blockSignals(True)
+        self._report_name_filter.clear()
+        self._report_ca_filter.setValue(0)
+        self._report_pa_filter.setValue(0)
+        self._report_age_min.setValue(15)
+        self._report_age_max.setValue(45)
+        self._report_dev_filter.setValue(0)
+        self._report_name_filter.blockSignals(False)
+        self._report_ca_filter.blockSignals(False)
+        self._report_pa_filter.blockSignals(False)
+        self._report_age_min.blockSignals(False)
+        self._report_age_max.blockSignals(False)
+        self._report_dev_filter.blockSignals(False)
+        self._on_report_age_changed()
 
     def _on_reports_table_dblclick(self, index):
         item = self._reports_table.item(index.row(), 0)
@@ -3472,21 +4031,6 @@ class MainWindow(QMainWindow):
         self._players_pos_filter.currentIndexChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_pos_filter)
 
-        _spin_ss = (
-            f"QSpinBox {{ background:{COLORS['surface']}; color:{COLORS['text_primary']};"
-            f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:1px 2px 1px 4px; font-size:12px; }}"
-            f"QSpinBox::up-button {{ subcontrol-origin:border; subcontrol-position:top right;"
-            f" width:14px; height:10px; background:{COLORS['elevated']};"
-            f" border-left:1px solid {COLORS['border']}; border-bottom:1px solid {COLORS['border']};"
-            f" border-top-right-radius:2px; }}"
-            f"QSpinBox::down-button {{ subcontrol-origin:border; subcontrol-position:bottom right;"
-            f" width:14px; height:10px; background:{COLORS['elevated']};"
-            f" border-left:1px solid {COLORS['border']};"
-            f" border-bottom-right-radius:2px; }}"
-            f"QSpinBox::up-button:hover, QSpinBox::down-button:hover"
-            f" {{ background:{COLORS['border']}; }}"
-        )
         min_ca_lbl = QLabel('Min CA:')
         min_ca_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row.addWidget(min_ca_lbl)
@@ -3494,7 +4038,6 @@ class MainWindow(QMainWindow):
         self._players_ca_filter.setRange(0, 200)
         self._players_ca_filter.setValue(0)
         self._players_ca_filter.setFixedSize(56, 26)
-        self._players_ca_filter.setStyleSheet(_spin_ss)
         self._players_ca_filter.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_ca_filter)
 
@@ -3505,7 +4048,6 @@ class MainWindow(QMainWindow):
         self._players_pa_filter.setRange(0, 200)
         self._players_pa_filter.setValue(0)
         self._players_pa_filter.setFixedSize(56, 26)
-        self._players_pa_filter.setStyleSheet(_spin_ss)
         self._players_pa_filter.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_pa_filter)
 
@@ -3516,7 +4058,6 @@ class MainWindow(QMainWindow):
         self._players_age_min.setRange(15, 60)
         self._players_age_min.setValue(15)
         self._players_age_min.setFixedSize(52, 26)
-        self._players_age_min.setStyleSheet(_spin_ss)
         self._players_age_min.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_age_min)
         dash = QLabel('-')
@@ -3526,7 +4067,6 @@ class MainWindow(QMainWindow):
         self._players_age_max.setRange(15, 60)
         self._players_age_max.setValue(60)
         self._players_age_max.setFixedSize(52, 26)
-        self._players_age_max.setStyleSheet(_spin_ss)
         self._players_age_max.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_age_max)
 
@@ -3537,7 +4077,6 @@ class MainWindow(QMainWindow):
         self._players_dev_filter.setRange(0, 20)
         self._players_dev_filter.setValue(0)
         self._players_dev_filter.setFixedSize(52, 26)
-        self._players_dev_filter.setStyleSheet(_spin_ss)
         self._players_dev_filter.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_dev_filter)
 
@@ -3785,8 +4324,8 @@ class MainWindow(QMainWindow):
         if key in ('club', 'squad', 'shortlist'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
-        # Push to history for non-squad views (squad is pushed by _show_squad)
-        if key != 'squad':
+        # Push to history for non-club views (club is pushed by _show_squad)
+        if key != 'club':
             self._nav_push(idx, {})
         self._main_stack.setCurrentIndex(idx)
         for k, btn in self._nav_btns.items():
@@ -3849,7 +4388,7 @@ class MainWindow(QMainWindow):
     def _nav_restore(self, entry: tuple):
         stack_idx, context = entry
         key = next((k for k, v in self._VIEW_INDEX.items() if v == stack_idx), None)
-        if key == 'squad' and 'club' in context:
+        if key == 'club' and 'club' in context:
             self._show_squad(context['club'])
         elif key is not None:
             self._nav_to(key)
@@ -4015,7 +4554,6 @@ class MainWindow(QMainWindow):
         self._club_stats_frame.setVisible(False)
         self._club_pos_frame.setVisible(False)
         self._club_top_frame.setVisible(False)
-        self._club_view_squad_btn.setVisible(False)
         self._staff_loaded = False
         self._update_ui_state()
 
@@ -4041,13 +4579,19 @@ class MainWindow(QMainWindow):
         matches = [c for c in clubs if query_l in c['name'].lower()]
         if not matches:
             people = self._save_data.get('people', [])
-            player_matches = [p for p in people
-                              if p.get('id', -1) != -1 and query_l in p.get('name', '').lower()]
-            if not player_matches:
-                self._status.showMessage(f"No club or player matching '{query}'.")
+            name_matches = [p for p in people
+                            if p.get('id', -1) != -1 and query_l in p.get('name', '').lower()]
+            player_matches = [p for p in name_matches if p.get('ca') is not None]
+            staff_matches = [p for p in name_matches if p.get('ca') is None]
+            if player_matches:
+                player_matches.sort(key=lambda p: p.get('name', ''))
+                self._show_player_results(player_matches)
                 return
-            player_matches.sort(key=lambda p: p.get('name', ''))
-            self._show_player_results(player_matches)
+            if staff_matches:
+                staff_matches.sort(key=lambda p: p.get('name', ''))
+                self._show_staff_results(staff_matches)
+                return
+            self._status.showMessage(f"No club, player, or staff matching '{query}'.")
             return
         if len(matches) == 1:
             self._show_squad(matches[0])
@@ -4068,8 +4612,9 @@ class MainWindow(QMainWindow):
             except RuntimeError:
                 pass
         popup = QFrame(self, Qt.WindowType.Popup)
+        popup.setObjectName('searchDropdown')
         popup.setStyleSheet(
-            f"QFrame {{ background:{COLORS['elevated']};"
+            f"QFrame#searchDropdown {{ background:{COLORS['elevated']};"
             f" border:1px solid {COLORS['border_bright']}; border-radius:4px; }}"
         )
         vbox = QVBoxLayout(popup)
@@ -4126,9 +4671,9 @@ class MainWindow(QMainWindow):
 
         self._populate_squad_table(squad)
         self._build_squad_tabs(club, squad)
-        self._nav_push(self._VIEW_INDEX['squad'], {'club': club})
-        self._nav_to('squad')
-        self._nav_btns['squad'].setChecked(True)
+        self._nav_push(self._VIEW_INDEX['club'], {'club': club})
+        self._nav_to('club')
+        self._nav_btns['club'].setChecked(True)
         self._update_ui_state()
         try:
             self._table.itemSelectionChanged.disconnect()
@@ -4309,6 +4854,20 @@ class MainWindow(QMainWindow):
         if len(players) == 1:
             self._players_name_filter.setText(players[0]['name'])
 
+    def _show_staff_results(self, staff):
+        """Route staff search results into the Staff view."""
+        self._nav_to('staff')
+        self._staff_table.clearSelection()
+        names = {p['name'] for p in staff}
+        first = True
+        for r in range(self._staff_table.rowCount()):
+            item = self._staff_table.item(r, 0)
+            if item and item.text() in names:
+                if first:
+                    self._staff_table.scrollToItem(item)
+                    first = False
+                self._staff_table.selectRow(r)
+
     def _on_row_double_clicked(self, index):
         if self._table_mode == 'squad':
             self._open_player_detail(index.row())
@@ -4423,12 +4982,6 @@ class MainWindow(QMainWindow):
         try:
             if not self._save_data:
                 return
-            _labels = {
-                'prospects': 'Best Prospects (PA 160+)',
-                'wonderkids': 'Wonderkids (U21, PA 150+)',
-                'best_pos':   'Best in Position',
-                'best_role':  'Best by Role',
-            }
             self._current_report_key = key
             for k, btn in self._report_btns.items():
                 btn.setChecked(k == key)
@@ -4444,7 +4997,6 @@ class MainWindow(QMainWindow):
             pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
             role = self._report_role_combo.currentText() if key == 'best_role' else None
             players = self._get_report_players(key, pos, role)
-            self._report_title_lbl.setText(_labels.get(key, key))
             self._populate_reports_table(players)
             self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
             self._update_header_for_view('reports')
@@ -4651,7 +5203,8 @@ class MainWindow(QMainWindow):
 
     def _tick_dots(self):
         self._dot_phase = (self._dot_phase + 1) % len(_DOT_SEQ)
-        self._status.showMessage(self._status_base + '.' * _DOT_SEQ[self._dot_phase])
+        dots = '.' * _DOT_SEQ[self._dot_phase]
+        self._status.showMessage(self._status_base + dots)
 
     def _on_progress_pct(self, pct: int):
         self._progress_target = float(pct)
@@ -4708,6 +5261,13 @@ class MainWindow(QMainWindow):
             self._status_base = msg or self._status_base
             self._status.showMessage(self._status_base)
             self._dot_timer.start()
+            self._load_btn.setText('Loading')
+            for btn in self._nav_btns.values():
+                btn.setEnabled(False)
+            self._players_nav_btn.setEnabled(False)
+            self._scouting_staff_nav_btn.setEnabled(False)
+            self._welcome_load_btn.setEnabled(False)
+            self._welcome_load_btn.setText('Loading Save')
         else:
             self._shimmer_timer.stop()
             self._progress.setStyleSheet(
@@ -4716,8 +5276,11 @@ class MainWindow(QMainWindow):
             )
             self._dot_timer.stop()
             self._status.clearMessage()
+            self._load_btn.setText('Load')
+            self._welcome_load_btn.setText('Load Save')
         self._progress.setVisible(busy)
         self._load_btn.setEnabled(not busy)
+        self._welcome_load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
         self._save_btn.setEnabled(not busy and bool(self._save_data) and 'b' in (self._save_data or {}))
         self._search_box.setEnabled(not busy and self._save_data is not None)
@@ -4725,3 +5288,5 @@ class MainWindow(QMainWindow):
         self._patch_hgc_btn.setEnabled(False)
         if msg and not busy:
             self._status.showMessage(msg)
+        if not busy:
+            self._update_ui_state()
