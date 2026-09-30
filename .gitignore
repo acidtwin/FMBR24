@@ -11,3 +11,6 @@ dist/
 build/
 .impeccable/mocks/
 .impeccable/review/
+
+.claude/worktrees/
+.claude/settings.local.json
