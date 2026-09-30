@@ -12,45 +12,44 @@ delegated: PyQt6 desktop application with QSS styling; Flask-free since this is 
 
 ## Users
 
-FM24 players (Football Manager 2024) who want to edit squad registration data in save files — specifically making players count as homegrown for Premier League squad registration. Used solo, on Linux, typically during or between FM sessions.
+FM24 players (Football Manager 2024) who want to look inside their save: browse any club's squad and staff, scout the whole database, check save metadata, and optionally patch players to count as homegrown (Premier League squad registration). Used solo, on Linux, typically during or between FM sessions.
 
 ## Product Purpose
 
-A desktop GUI tool that parses FM24 binary save files, shows any club's squad with their current homegrown status, and lets the user patch selected players to count as homegrown — without requiring any paid editor software (FMRTE etc.).
+FM Backroom 24 (FMBR24): a desktop GUI that parses FM24 binary save files and shows what the game hides or buries in menus — club overview, squads with all attributes, injuries and contracts, staff (coaching attributes, CA/PA, personality), scouting reports over every player, a shortlist, and save info — plus homegrown (HGP/HGC) patching, without paid editors (FMRTE etc.). Unofficial fan tool; not affiliated with Sports Interactive / SEGA.
 
 ## Positioning
 
-The only free, open, Linux-native FM24 homegrown editor that shows you the squad first and lets you decide, rather than requiring you to know player names in advance.
+The free, open, Linux-native FM24 save browser: look first, then decide. Read-mostly with one focused edit (homegrown); no need to know player names in advance.
 
 ## Operating Context
 
-- User has FM24 running (or closed) on Linux via Steam/Proton
-- Save files are large binary archives (~180–220 MB) that require decompression
-- First parse of a save is slow (~30–60 sec); subsequent runs can cache results
-- User wants to load a specific save file, search for a team, review their squad, then patch chosen players and save to a new file
+- FM24 runs via Steam/Proton on Linux; saves are large binary archives (~180-220 MB), zstd members
+- First parse of a save is slow (~60 s); results are cached by file mtime (cache read-back currently not wired up, see HANDOVER)
+- Flow: load a save, land on Save Info, search a club/player/staff name, review, optionally patch and save to a new file
+- Roadmap: 1.0 polish, then Flatpak and Windows builds
 
 ## Capabilities and Constraints
 
-- Read and write FMF (FM archive format) files: zstd-compressed members, binary index
-- Parse game_db.dat: name pools, club structs, squad membership, player registration records, ability blocks, personality bytes
-- Detect and patch HGP (Homegrown Player / nation): secondary nation qual record `b10=0x08, b11=0x46`
-- Detect and patch HGC (Homegrown at Club): training record `b10=0x01, b11=0x48`, bytes 0–3 = club entity ID
-- `mode='save_only'` write: archive write without patching, for Save Changes flow
-- Caching: parse results keyed by file mtime — instant on reload
-- Scouting reports: Best Prospects (PA≥160), Wonderkids (age≤21, PA≥150), Best in Position (by CA), Best by Role (stub)
-- All Players view: all parsed players, filterable by name/position/min-CA/nation, double-click navigates to club squad
-- Staff view: all non-player people (no CA/PA) — Name, Nation, Age table; populated on load
-- Platform: Linux desktop, PyQt6; FM24-skin UI with QSS theming
+- Read/write FMF archives (zstd members, binary index); FM24 saves only (FM23 fails)
+- Parse game_db.dat: names, clubs, squads, people, ability blocks, personality, contracts, injuries, coaching attributes, staff CA/PA, club staff arrays
+- Save Info: game name, dates, game time/version, database version/changes, manager and club, nations/leagues, start date. Rows with no data are hidden; database size, start nation, future transfer mode, editor and manageable-teams are not decodable yet
+- Club page: squad KPIs, top players, injuries, contracts, homegrown counts; unparsed data (reputation, facilities, finances, manager rating) is marked PENDING
+- Scouting reports: Best Prospects, Wonderkids, Best in Position, Best by Role (weight presets); All Players view; Staff and Club Staff tables; My Shortlist; shared Quick Filters bars
+- HGP: secondary nation qualification record `b10=0x08, b11=0x46`. HGC: training record `b10=0x01, b11=0x48` (bytes 0-3 = club entity id). `mode='save_only'` writes without patching
+- Search routes club -> Club page, player -> Players, staff -> Staff
+- Transfer values, player photos and staff reputation are not stored in the save
+- Platform: Linux desktop, PyQt6; dark FM24-style skin (QSS)
 
 ## Evidence on Hand
 
-- Working Python backend scripts in /tmp scratchpad (fm24_editor.py, fm24_parse.py)
-- Verified against a real 188 MB FM24 save: correctly identifies 5/25 Tottenham players as homegrown
-- Confirmed patch approach works: in-place b11=0x46 n-byte rewrite + optional b11=0x40→0x47 flip
+- Verified against real FM24 saves (Tottenham 2026-27, 188 MB): 5/25 homegrown detected correctly, patch approach confirmed (in-place b11=0x46 rewrite + optional b11=0x40 to 0x47 flip)
+- Save Info fields checked against the in-game Game screen; unit-style checks in `tests/`
 
 ## Product Principles
 
-1. Show first, decide after — display the full squad before committing any change
-2. Non-destructive — always write a new file, never overwrite the original
-3. Speed through caching — the slow parse runs once; subsequent opens are instant
-4. No friction — file picker, type a team name, click players, hit patch: four steps maximum
+1. Show first, decide after: display before committing any change
+2. Non-destructive: always write a new file, never overwrite the original
+3. Speed through caching: the slow parse should run once
+4. No friction: pick a save, type a name, see the answer; patching stays four steps
+5. Never fabricate data: hide it, or mark it PENDING

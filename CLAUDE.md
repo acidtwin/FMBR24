@@ -1,51 +1,44 @@
-# FM-Save-Editor
+# FM Backroom 24 (FMBR24)
 
-PyQt6 6.11.0 desktop app, Linux, Python 3.12. Single file: `gui/main_window.py`.
+PyQt6 6.11 desktop app, Linux, Python 3.12, FM24 saves only (formerly "FM24 Homegrown Editor"). Unofficial: never imply affiliation with Sports Interactive / SEGA.
 
-## PyQt6 Gotchas (burned us before)
-
-- `clicked(bool)` passes checked state as first positional arg — always `lambda checked, k=key:` never `lambda k=key:`
-- `QHeaderView.ResizeMode.ResizeToContents` → O(n²) freeze on populate — use `Interactive` + fixed widths on ALL tables
-- `QApplication.processEvents()` in a slot → re-entrant event loop → qFatal abort — never call it mid-populate
-- Loop var name `w` in dict iteration overwrites widget ref → GC RuntimeError — rename loop vars to `cw`/`idx`/etc
-- Qt QSS has no keyframe animations — motion effects need QTimer + stylesheet update (see `_tick_shimmer`)
-- Signal `disconnect()` raises `RuntimeError` or `TypeError` depending on PyQt6 version — catch both: `except (RuntimeError, TypeError)`
-- `next()` without default → bare StopIteration crash — always `next(..., None)` + guard
-
-## Run
+## Run / test
 
 ```bash
 pip install -r requirements.txt  # PyQt6, zstandard
+python main.py                    # crash log: /tmp/fm_editor_debug.log
+python3 tests/test_saveinfo.py    # also test_saveinfo_format.py, test_club_contracts.py (plain scripts, skip if save absent)
 ```
-
-```bash
-python main.py
-```
-
-Crash log: `/tmp/fm_editor_crash.log`
 
 ## Key files
 
-- `gui/main_window.py` — all UI/logic (~2700 lines)
-- `gui/roles.py` — 82 FM24 role-duties + `role_rating()`
-- `fm_editor/patch.py` — HGP/HGC detection + patching
-- `fm_editor/archive.py` — FMF archive read/write (zstd members)
-- `fm_editor/gamedb.py` — game_db.dat parser (players, clubs, squads)
-- `fm_editor/cache.py` — parse result cache keyed by file mtime
-- `HANDOVER.md` — current state, bug history, UI layout
-- `PRODUCT.md` — product purpose and capabilities
+- `gui/main_window.py` — all UI/logic (~5900 lines); `gui/theme.py` (COLORS + app QSS), `gui/roles.py`, `gui/icon.py` (`make_app_icon`), `gui/assets/` (hero/sidebar/brand images)
+- `fm_editor/` — `archive.py` (FMF/zstd), `gamedb.py` (game_db.dat parser), `patch.py` (HGP/HGC), `saveinfo.py` (Save Info parser), `cache.py` (parse cache, `_CACHE_VERSION`), `weights.py`
+- `resources/icon-source.png` (master) + `resources/icons/icon-{16..512}.png`; `mockups/` design references
+- `HANDOVER.md` — state, UI map, key symbols, TODOs. `PRODUCT.md` — purpose/scope. Read both before big work.
+- FM24 binary format: memory file `fm24-binary-format.md` — always check before touching the parser.
 
-## Mockup → PyQt6 translation rule
+## PyQt6 / Qt gotchas (burned us before)
 
-When told to match a mockup artifact 1:1: **read the artifact HTML/CSS source first**, extract every value in scope (px heights, opacity floats, gradient stops, alpha ints, letter-spacing, font-size, border-radius), then translate each mechanically to its PyQt6 equivalent. Never approximate by eye.
+- `clicked(bool)` passes checked as first arg — `lambda checked, k=key:`, never `lambda k=key:`
+- `ResizeToContents` on headers → O(n²) freeze; use `Interactive` + fixed widths on ALL tables
+- `QApplication.processEvents()` in a slot → re-entrant loop → qFatal; never mid-populate
+- Loop var `w` overwriting a widget ref → GC RuntimeError; use `cw`/`idx`. Keep refs for widgets removed from layouts (`_squad_header_bar`)
+- `disconnect()` raises `RuntimeError` or `TypeError` by version — catch both; `next()` needs a default + guard
+- Bare `QFrame {…}` selectors leak onto child QLabels (QLabel is a QFrame) — scope with `QFrame#objectName`
+- A per-widget `setStyleSheet` shadows app QSS for overlapping selectors/subcontrols (caused the spinbox arrow gap); QSpinBox needs explicit up/down-button heights (theme.py)
+- QSS `opacity`, `letter-spacing`, `text-transform`, keyframes are not honoured — use `QFont` letter spacing, `.upper()`, QTimer + stylesheet (`_tick_shimmer`), `setOpacity` when painting
+- `border-radius` ≥ half the size renders square
+- Barlow Condensed / Inter are not installed (fallback Noto Sans)
 
-Key translations:
-- `rgba(r,g,b,a)` → `QColor(r,g,b, round(a*255))`
-- `background-position: center X%` → `y_off = int((h - scaled.height()) * (X/100))`
-- CSS `opacity: N` on image → `p.setOpacity(N)` before `drawPixmap`
-- Gradient stops → `grad.setColorAt(pos, QColor(...))`
+## Verify UI headlessly
 
-## FM24 binary format
+`QT_QPA_PLATFORM=offscreen`, construct `MainWindow()`, `.grab().save('x.png')` and LOOK at the PNG — reading QSS misses bugs. Sub-agents without Bash (cavecrew-builder) cannot run tests: verify their output yourself.
 
-See memory file `~/.claude/projects/…/memory/fm24-binary-format.md` — ability block offsets,
-attribute indices, HGP/HGC record format, personality bytes. Always check before touching the parser.
+## Mockup → PyQt6 rule
+
+When told to match a mockup 1:1: read the artifact HTML/CSS first, extract every value (px, opacity, gradient stops, alpha, letter-spacing, font-size, radius), translate mechanically, never by eye. `rgba(r,g,b,a)` → `QColor(r,g,b,round(a*255))`; `background-position: center X%` → `y_off=int((h-scaled.height())*X/100)`; CSS `opacity` on image → `p.setOpacity(N)`; gradient stops → `grad.setColorAt(pos, QColor(...))`.
+
+## Repo / GitHub
+
+Own git repo (branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, private). The parent `Claude Code Projects` folder is a separate monorepo: never push it. Commit/push only when asked, specific `git add` paths. SSH agent + `gh` details in memory `reference-github-setup.md`. Never store credentials/passphrases anywhere.
