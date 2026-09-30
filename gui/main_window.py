@@ -1842,12 +1842,12 @@ class MainWindow(QMainWindow):
         self._progress.setTextVisible(False)
         self._progress.setVisible(False)
         self._progress.setStyleSheet(f"""
-            QProgressBar {{ background:{COLORS['elevated']}; border:none; }}
+            QProgressBar {{ background: rgba(255,255,255,0.08); border:none; }}
             QProgressBar::chunk {{ background:{COLORS['accent']}; }}
         """)
-        right_vbox.addWidget(self._progress)
         self._hero = self._make_header_bar()
         right_vbox.addWidget(self._hero)
+        right_vbox.addWidget(self._progress)
 
         self._main_stack = QStackedWidget()
         self._main_stack.addWidget(self._make_view_club())        # 0
