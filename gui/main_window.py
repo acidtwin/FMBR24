@@ -189,6 +189,35 @@ class _SortItem(QTableWidgetItem):
             return False
 
 
+class _SidebarFrame(QFrame):
+    """QFrame subclass that paints a texture overlay over the QSS background."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bg_px = None
+
+    def set_bg(self, pixmap: 'QPixmap'):
+        self._bg_px = pixmap
+        self.update()
+
+    def paintEvent(self, event):
+        from PyQt6.QtWidgets import QStyleOption, QStyle
+        opt = QStyleOption()
+        opt.initFrom(self)
+        p = QPainter(self)
+        # Paint QSS-defined background (surface colour, border etc.)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+        # Texture overlay
+        if self._bg_px and not self._bg_px.isNull():
+            p.setOpacity(0.40)
+            scaled = self._bg_px.scaled(
+                self.width(), self.height(),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            p.drawPixmap(0, 0, scaled)
+        p.end()
+
+
 class _HoverTable(QTableWidget):
     """QTableWidget that highlights the full hovered row."""
     _HOVER_COLOR = QColor(105, 51, 189, 26)
@@ -2198,7 +2227,7 @@ class MainWindow(QMainWindow):
             self._set_header('FM24 Editor', 'Load a save to begin')
 
     def _make_sidebar(self):
-        sidebar = QFrame()
+        sidebar = _SidebarFrame()
         sidebar.setFixedWidth(192)
         sidebar.setObjectName('sidebar')
         sidebar.setStyleSheet(f"""
@@ -2278,6 +2307,13 @@ class MainWindow(QMainWindow):
         vbox.addWidget(staff_rpt_btn)
 
         vbox.addStretch()
+        import os as _os
+        _sb_img_path = _os.path.join(_os.path.dirname(__file__), 'assets', 'sidebar.webp')
+        if _os.path.exists(_sb_img_path):
+            _sb_reader = QImageReader(_sb_img_path)
+            _sb_img = _sb_reader.read()
+            if not _sb_img.isNull():
+                sidebar.set_bg(QPixmap.fromImage(_sb_img))
         return sidebar
 
     def _make_view_club(self):
