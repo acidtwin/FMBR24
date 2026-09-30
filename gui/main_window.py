@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction
+from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush
 
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
@@ -1626,6 +1626,58 @@ class SettingsDialog(QDialog):
         return ''
 
 
+# -- Hero header widget --------------------------------------------------------
+
+class _HeaderHeroWidget(QWidget):
+    """120px header bar painted with dark base + gradient + pitch-line texture."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bg_pixmap = None
+        self.setFixedHeight(120)
+
+    def set_bg(self, pixmap):
+        self._bg_pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # 1. Dark base
+        p.fillRect(0, 0, w, h, QColor('#080C12'))
+
+        # 2. Stadium image at 38% opacity (if set)
+        if self._bg_pixmap:
+            p.setOpacity(0.38)
+            scaled = self._bg_pixmap.scaled(
+                w, h,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            p.drawPixmap(0, (h - scaled.height()) // 2, scaled)
+            p.setOpacity(1.0)
+
+        # 3. Gradient overlay
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.0, QColor(8, 12, 18, 77))   # 0.30 * 255
+        grad.setColorAt(0.55, QColor(8, 12, 18, 140))  # 0.55 * 255
+        grad.setColorAt(1.0, QColor(8, 12, 18, 230))   # 0.90 * 255
+        p.fillRect(0, 0, w, h, QBrush(grad))
+
+        # 4. Pitch-line texture — horizontal lines every 32px
+        p.setPen(QColor(255, 255, 255, 5))  # ~0.018 opacity
+        for y in range(0, h, 32):
+            p.drawLine(0, y, w, y)
+
+        # 5. Bottom border
+        p.setPen(QColor(255, 255, 255, 15))
+        p.drawLine(0, h - 1, w, h - 1)
+
+        p.end()
+
+
 # -- Main window ---------------------------------------------------------------
 
 class MainWindow(QMainWindow):
@@ -1916,41 +1968,58 @@ class MainWindow(QMainWindow):
     # -- Persistent header bar ------------------------------------------------
 
     def _make_header_bar(self):
-        bar = QFrame()
-        bar.setObjectName('headerbar')
-        bar.setFixedHeight(48)
-        bar.setStyleSheet(
-            "QFrame#headerbar {"
-            f" background: #080C12;"
-            f" border-bottom: 1px solid rgba(255,255,255,0.06);"
-            "}"
-        )
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(8)
+        hero = _HeaderHeroWidget()
 
-        self._header_title = QLabel('')
-        self._header_title.setStyleSheet(
-            "color: #E8EDF3; font-size: 17px; font-weight: bold;"
-            " font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
-            " background: transparent;"
-        )
-        self._header_subtitle = QLabel('')
-        self._header_subtitle.setStyleSheet(
-            f"color: #8892A0; font-size: 11px; background: transparent;"
+        # Outer VBox: stretch pushes content strip to bottom
+        outer = QVBoxLayout(hero)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addStretch(1)
+
+        # Content row — bottom-aligned
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(16, 0, 16, 14)
+        content_row.setSpacing(12)
+
+        # Badge circle
+        self._header_badge_lbl = QLabel('')
+        self._header_badge_lbl.setFixedSize(44, 44)
+        self._header_badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._header_badge_lbl.setStyleSheet(
+            "border-radius: 22px;"
+            " background: rgba(255,255,255,0.12);"
+            " border: 1px solid rgba(255,255,255,0.2);"
+            " color: #E8EDF3;"
+            " font-size: 18px;"
+            " font-weight: bold;"
+            " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
         )
 
+        # Title + subtitle block
         text_block = QWidget()
         text_block.setStyleSheet("background: transparent;")
         tb_layout = QVBoxLayout(text_block)
         tb_layout.setContentsMargins(0, 0, 0, 0)
-        tb_layout.setSpacing(0)
-        tb_layout.addWidget(self._header_title)
-        tb_layout.addWidget(self._header_subtitle)
+        tb_layout.setSpacing(2)
 
-        layout.addWidget(text_block)
-        layout.addStretch(1)
+        self._header_title_lbl = QLabel('')
+        self._header_title_lbl.setStyleSheet(
+            "color: #E8EDF3; font-size: 22px; font-weight: bold;"
+            " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
+            " background: transparent;"
+        )
+        self._header_subtitle_lbl = QLabel('')
+        self._header_subtitle_lbl.setStyleSheet(
+            "color: #8892A0; font-size: 11px; background: transparent;"
+        )
+        tb_layout.addWidget(self._header_title_lbl)
+        tb_layout.addWidget(self._header_subtitle_lbl)
 
+        content_row.addWidget(self._header_badge_lbl)
+        content_row.addWidget(text_block)
+        content_row.addStretch(1)
+
+        # Right slot (220px, fixed)
         self._header_right_slot = QWidget()
         self._header_right_slot.setFixedWidth(220)
         self._header_right_slot.setStyleSheet("background: transparent;")
@@ -1959,14 +2028,16 @@ class MainWindow(QMainWindow):
         self._header_right_slot_layout.setSpacing(8)
         self._header_right_slot_layout.addStretch(1)
         self._header_right_slot.hide()
-        layout.addWidget(self._header_right_slot)
+        content_row.addWidget(self._header_right_slot)
 
-        return bar
+        outer.addLayout(content_row)
+        return hero
 
     def _set_header(self, title: str, subtitle: str = '', right_widget=None):
-        self._header_title.setText(title)
-        self._header_subtitle.setText(subtitle)
-        self._header_subtitle.setVisible(bool(subtitle))
+        self._header_title_lbl.setText(title)
+        self._header_subtitle_lbl.setText(subtitle)
+        self._header_subtitle_lbl.setVisible(bool(subtitle))
+        self._header_badge_lbl.setText(title[0].upper() if title else '')
 
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
@@ -2157,16 +2228,10 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(28, 28, 28, 28)
         vbox.setSpacing(20)
 
-        # Club name
+        # These labels are kept as refs (updated elsewhere) but not shown —
+        # the persistent header bar owns the club name and squad info now.
         self._club_view_name = QLabel('No save loaded')
-        self._club_view_name.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:26px; font-weight:bold;")
-        vbox.addWidget(self._club_view_name)
-
         self._club_view_info = QLabel('Load an FM24 save file to get started.')
-        self._club_view_info.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:13px;")
-        self._club_view_info.setWordWrap(True)
-        vbox.addWidget(self._club_view_info)
 
         # Stats cards row
         self._club_stats_frame = QFrame()
