@@ -1743,6 +1743,7 @@ class MainWindow(QMainWindow):
             QProgressBar::chunk {{ background:{COLORS['accent']}; }}
         """)
         right_vbox.addWidget(self._progress)
+        right_vbox.addWidget(self._make_header_bar())
 
         self._main_stack = QStackedWidget()
         self._main_stack.addWidget(self._make_view_club())        # 0
@@ -1911,6 +1912,148 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._reload_btn)
         layout.addWidget(self._settings_btn)
         return bar
+
+    # -- Persistent header bar ------------------------------------------------
+
+    def _make_header_bar(self):
+        bar = QFrame()
+        bar.setObjectName('headerbar')
+        bar.setFixedHeight(48)
+        bar.setStyleSheet(
+            "QFrame#headerbar {"
+            f" background: #080C12;"
+            f" border-bottom: 1px solid rgba(255,255,255,0.06);"
+            "}"
+        )
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(8)
+
+        self._header_title = QLabel('')
+        self._header_title.setStyleSheet(
+            "color: #E8EDF3; font-size: 17px; font-weight: bold;"
+            " font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
+            " background: transparent;"
+        )
+        self._header_subtitle = QLabel('')
+        self._header_subtitle.setStyleSheet(
+            f"color: #8892A0; font-size: 11px; background: transparent;"
+        )
+
+        text_block = QWidget()
+        text_block.setStyleSheet("background: transparent;")
+        tb_layout = QVBoxLayout(text_block)
+        tb_layout.setContentsMargins(0, 0, 0, 0)
+        tb_layout.setSpacing(0)
+        tb_layout.addWidget(self._header_title)
+        tb_layout.addWidget(self._header_subtitle)
+
+        layout.addWidget(text_block)
+        layout.addStretch(1)
+
+        self._header_right_slot = QWidget()
+        self._header_right_slot.setFixedWidth(220)
+        self._header_right_slot.setStyleSheet("background: transparent;")
+        self._header_right_slot_layout = QHBoxLayout(self._header_right_slot)
+        self._header_right_slot_layout.setContentsMargins(0, 0, 0, 0)
+        self._header_right_slot_layout.setSpacing(8)
+        self._header_right_slot_layout.addStretch(1)
+        self._header_right_slot.hide()
+        layout.addWidget(self._header_right_slot)
+
+        return bar
+
+    def _set_header(self, title: str, subtitle: str = '', right_widget=None):
+        self._header_title.setText(title)
+        self._header_subtitle.setText(subtitle)
+        self._header_subtitle.setVisible(bool(subtitle))
+
+        # Clear old right slot contents
+        while self._header_right_slot_layout.count():
+            item = self._header_right_slot_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if right_widget is not None:
+            self._header_right_slot_layout.addStretch(1)
+            self._header_right_slot_layout.addWidget(right_widget)
+            self._header_right_slot.show()
+        else:
+            self._header_right_slot.hide()
+
+    def _make_header_rep_widget(self, stars: int) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(w)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        for i in range(5):
+            lbl = QLabel('★' if i < stars else '☆')
+            lbl.setStyleSheet(
+                f"color: {'#F5C518' if i < stars else '#3A4050'};"
+                " font-size: 14px; background: transparent;"
+            )
+            row.addWidget(lbl)
+        return w
+
+    def _make_header_pill_widget(self, pairs: list) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(w)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        _pill_ss = (
+            "background: rgba(0,255,135,0.08);"
+            " border: 1px solid rgba(0,255,135,0.15);"
+            " border-radius: 4px;"
+            " padding: 2px 8px;"
+            " font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
+            " font-size: 12px;"
+        )
+        for label, value in pairs:
+            pill = QLabel(
+                f"<span style='color:#8892A0'>{label}</span>"
+                f" <span style='color:#00FF87'>{value}</span>"
+            )
+            pill.setTextFormat(Qt.TextFormat.RichText)
+            pill.setStyleSheet(_pill_ss)
+            row.addWidget(pill)
+        return w
+
+    def _update_header_for_view(self, key: str):
+        club = self._current_club
+        club_name = club['name'] if club else ''
+
+        if key == 'club':
+            self._set_header(club_name or 'Club', '', self._make_header_rep_widget(3))
+        elif key == 'squad':
+            squad = getattr(self, '_squad', [])
+            n = len(squad)
+            n_hgp = sum(1 for p in squad if p.get('hgp'))
+            b = self._save_data.get('b') if self._save_data else None
+            if b and self._club_entity_id:
+                from fm_editor.patch import is_hgc as _is_hgc_fn
+                n_hgc = sum(1 for p in squad if _is_hgc_fn(b, p, self._club_entity_id))
+            else:
+                n_hgc = 0
+            self._set_header('Squads', f"{club_name} · {n} players",
+                             self._make_header_pill_widget([('HGP', n_hgp), ('HGC', n_hgc)]))
+        elif key == 'staff':
+            n = self._staff_table.rowCount() if hasattr(self, '_staff_table') else 0
+            sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
+            self._set_header('Staff', sub)
+        elif key == 'reports':
+            self._set_header('Player Reports', '')
+        elif key == 'players':
+            n = len(self._all_players_cache) if hasattr(self, '_all_players_cache') else 0
+            self._set_header('All Players', f"{n} players")
+        elif key == 'shortlist':
+            n = len(self._shortlist)
+            self._set_header('My Shortlist', f"{n} players")
+        elif key == 'club_staff':
+            n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
+            sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
+            self._set_header('Club Staff', sub)
 
     def _make_sidebar(self):
         sidebar = QFrame()
@@ -3221,6 +3364,7 @@ class MainWindow(QMainWindow):
 
         self._clear_players_filter(silent=True)
         self._populate_players_table(self._all_players_cache)
+        self._update_header_for_view('players')
 
         if highlight_name:
             for r in range(self._players_table.rowCount()):
@@ -3398,6 +3542,7 @@ class MainWindow(QMainWindow):
         if key not in ('squad',):
             for btn in self._report_btns.values():
                 btn.setChecked(False)
+        self._update_header_for_view(key)
 
     def _nav_to_squad_view(self, checked=False):
         if self._squad:
@@ -3411,6 +3556,7 @@ class MainWindow(QMainWindow):
         self._scouting_staff_nav_btn.setChecked(False)
         for btn in self._report_btns.values():
             btn.setChecked(False)
+        self._update_header_for_view('squad')
 
     def _nav_push(self, stack_idx: int, context: dict):
         """Push a nav entry, truncate forward history, update back/fwd buttons."""
