@@ -5,8 +5,11 @@ Sources (all verified against a real FM24 save, see memory fm24-binary-format.md
   game_info.dat  (small member) -> times_saved @0x42, date_created @0x46, game_build @0x4a
   save_game_summary.dat (small) -> nations/leagues, game_version, manager, club, in_game_date, game_time
   game_db.dat header (optional) -> database_version @0x14, database_changes @0x28
-  rgman/rgman.dat header        -> start_date (ISO): the in-game "Game Start Date" (the nation part,
-                                   e.g. "Italy", is NOT stored anywhere found yet)
+  rgman/rgman.dat header        -> start_date (ISO): the in-game "Game Start Date". The nation part
+                                   ("Italy") is the wizard's explicit "Starting Nation" option, NOT the
+                                   human manager's first job (his only job link is the current club, and
+                                   tc_manager_history holds no entry for him) -> start_nation not derivable
+                                   yet, deliberately omitted (see memory fm24-binary-format.md)
 
 Returns a plain JSON-serialisable dict; a key is present ONLY if it was found and passed
 sanity checks. Never raises for a missing/odd member - just returns a smaller dict.

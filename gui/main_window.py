@@ -397,7 +397,7 @@ def _club_kv_value(text='', color='#e8edf2'):
 _SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
 # Brand shown in the sidebar header (mockups/sidebar-header-options.html, option A).
 # The app is due a rename: change these two lines (plus the hard-coded titles listed in main.py / MainWindow).
-_APP_MARK = 'FM'
+_BRAND_MARK_PX = 34
 _APP_WORDMARK = 'Save Editor'
 
 _SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -2677,21 +2677,23 @@ class MainWindow(QMainWindow):
 
         brand_row = QHBoxLayout()
         brand_row.setSpacing(9)
-        mark = QLabel(_APP_MARK)
+        mark = QLabel()
         mark.setObjectName('sbMark')
-        mark.setFixedSize(26, 26)
-        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark.setStyleSheet(
-            f"QLabel#sbMark {{ background:{COLORS['accent']}; color:#FFFFFF; border-radius:4px;"
-            " font-family:'Barlow Condensed','Arial Narrow',sans-serif;"
-            " font-size:14px; font-weight:700; letter-spacing:0.04em; }")
+        mark.setFixedSize(_BRAND_MARK_PX, _BRAND_MARK_PX)
+        mark.setStyleSheet("QLabel#sbMark { background:transparent; }")
+        _mark_px = QPixmap(os.path.join(os.path.dirname(__file__), 'assets', 'brand_mark.png'))
+        if not _mark_px.isNull():
+            mark.setPixmap(_mark_px.scaled(
+                _BRAND_MARK_PX * 2, _BRAND_MARK_PX * 2, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            mark.setScaledContents(True)
         wordmark = QLabel(_APP_WORDMARK.upper())
         wordmark.setObjectName('sbWordmark')
-        wordmark.setFixedHeight(26)
+        wordmark.setFixedHeight(_BRAND_MARK_PX)
         wordmark.setStyleSheet(
             f"QLabel#sbWordmark {{ background:transparent; color:{COLORS['text_primary']};"
             " font-family:'Barlow Condensed','Arial Narrow',sans-serif;"
-            " font-size:19px; font-weight:700; letter-spacing:0.07em; }")
+            " font-size:16px; font-weight:700; letter-spacing:0.05em; }")
         brand_row.addWidget(mark)
         brand_row.addWidget(wordmark, 1)
         bb.addLayout(brand_row)
