@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush
+from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
@@ -1629,14 +1629,22 @@ class SettingsDialog(QDialog):
 # -- Hero header widget --------------------------------------------------------
 
 class _HeaderHeroWidget(QWidget):
-    """120px header bar painted with dark base + gradient + pitch-line texture."""
+    """140px header bar painted with dark base + stadium image + gradient + pitch-line texture."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         import os as _os
         _asset = _os.path.join(_os.path.dirname(__file__), 'assets', 'stadium.webp')
-        self._bg_pixmap = QPixmap(_asset) if _os.path.exists(_asset) else None
-        self.setFixedHeight(120)
+        self._bg_pixmap = None
+        if _os.path.exists(_asset):
+            # QImageReader handles WebP more reliably than QPixmap() direct load
+            reader = QImageReader(_asset)
+            img = reader.read()
+            if not img.isNull():
+                self._bg_pixmap = QPixmap.fromImage(img)
+            else:
+                self._bg_pixmap = QPixmap(_asset)  # fallback
+        self.setFixedHeight(140)
 
     def set_bg(self, pixmap):
         self._bg_pixmap = pixmap
@@ -1644,13 +1652,12 @@ class _HeaderHeroWidget(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
 
-        # 1. Base
+        # 1. Dark base
         p.fillRect(0, 0, w, h, QColor('#080C12'))
 
-        # 2. Stadium image
+        # 2. Stadium at 38% opacity, horizontally centered, vertically at 40% position
         if self._bg_pixmap and not self._bg_pixmap.isNull():
             p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
@@ -1658,21 +1665,26 @@ class _HeaderHeroWidget(QWidget):
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            y_offset = -int(scaled.height() * 0.10) + (h - scaled.height()) // 2
-            p.drawPixmap(0, y_offset, scaled)
+            x_off = (w - scaled.width()) // 2
+            y_off = int((h - scaled.height()) * 0.40)
+            p.drawPixmap(x_off, y_off, scaled)
             p.setOpacity(1.0)
 
-        # 3. Gradient overlay
+        # 3. Gradient overlay — rgba(8,12,18,0.4) → rgba(8,12,18,0.85)
         grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0, QColor(8, 12, 18, 102))
-        grad.setColorAt(1.0, QColor(8, 12, 18, 217))
+        grad.setColorAt(0.0, QColor(8, 12, 18, 102))   # 0.4 * 255
+        grad.setColorAt(1.0, QColor(8, 12, 18, 217))   # 0.85 * 255
         p.fillRect(0, 0, w, h, QBrush(grad))
 
-        # 4. Pitch line texture — horizontal every 32px, vertical every 80px
-        p.setPen(QColor(255, 255, 255, 5))
+        # 4. Pitch grid texture — horizontal every 32px, vertical every 80px
+        pen = QPen(QColor(255, 255, 255, 5))
+        pen.setWidth(1)
+        p.setPen(pen)
         for y in range(0, h, 32):
             p.drawLine(0, y, w, y)
-        p.setPen(QColor(255, 255, 255, 6))
+        pen2 = QPen(QColor(255, 255, 255, 6))
+        pen2.setWidth(1)
+        p.setPen(pen2)
         for x in range(0, w, 80):
             p.drawLine(x, 0, x, h)
 
@@ -1991,10 +2003,10 @@ class MainWindow(QMainWindow):
 
         # Badge circle
         self._header_badge_lbl = QLabel('')
-        self._header_badge_lbl.setFixedSize(44, 44)
+        self._header_badge_lbl.setFixedSize(48, 48)
         self._header_badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._header_badge_lbl.setStyleSheet(
-            "border-radius: 22px;"
+            "border-radius: 24px;"
             " background: rgba(255,255,255,0.12);"
             " border: 1.5px solid rgba(255,255,255,0.2);"
             " color: #E8EDF3;"
