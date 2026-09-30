@@ -155,7 +155,7 @@ QLineEdit:disabled {{
 }}
 
 /* -- Table --------------------------------------------------------- */
-QTableWidget {{
+QTableView {{
     background-color: #14151A;
     color: {COLORS['text_primary']};
     gridline-color: transparent;
@@ -164,12 +164,12 @@ QTableWidget {{
     selection-color: {COLORS['text_primary']};
     alternate-background-color: #161721;
 }}
-QTableWidget::item {{
+QTableView::item {{
     padding: 7px 10px;
     border: none;
     border-bottom: 1px solid rgba(52,55,64,153);
 }}
-QTableWidget::item:selected {{
+QTableView::item:selected {{
     background-color: #2A1B4A;
 }}
 
