@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-30 (session 10)
+**Last updated:** 2026-09-30 (session 11)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -9,6 +9,40 @@
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
 All changes on `master`. Cache version: **15**.
+
+---
+
+## Session 11 (2026-09-30) — Filter bar labels, squad tab bar, sidebar texture
+
+### Filter bars renamed to "Quick Filters" (COMPLETE)
+
+- **Players**: title label "Players" → "Quick Filters" (secondary/11px — was bold primary)
+- **Scouting Staff**: header label "Staff" → "Quick Filters"
+- **Reports**: "Quick Filters" label added at start of `filter_frame` row (below "Scouting Reports" header)
+- **Club Staff**: new 38px "Quick Filters" placeholder bar added below "Club Staff" header (no filters yet)
+- **Squads tab bar**: unchanged (user approved current state)
+
+### Squad tab bar background (COMPLETE)
+
+- Background changed from `COLORS['surface']` (`#1A2226`, greenish-tinted) → `COLORS['elevated']` (`#292B32`, grey) — matches all other page filter bars
+- Make HGP / Make HGC disabled state: was `background:elevated` (invisible on new elevated bar) → `background:surface + border:1px solid border` so disabled buttons stay visible
+
+### Sidebar brushed-metal texture overlay (COMPLETE)
+
+- `_SidebarFrame(QFrame)` subclass — overrides `paintEvent`: calls `PE_Widget` first (respects QSS bg + border), then draws `sidebar.webp` scaled to fill at **0.22 opacity**
+- Image: `gui/assets/sidebar.webp` — dark brushed-metal carbon texture (192×900-ish portrait)
+- `_make_sidebar` creates `_SidebarFrame()` instead of `QFrame()`, loads image after `vbox.addStretch()`
+- Opacity dial: change `p.setOpacity(0.22)` in `_SidebarFrame.paintEvent` to adjust
+
+### Club page mockup saved (COMPLETE)
+
+- `mockups/club-page-design-a.html` — local copy of the Claude artifact (Design A "Stadium Hero")
+- Artifact URL: `https://claude.ai/artifact/ShmMMFy65UH5r4NZ4u4RqH`
+
+### Subagent workflow established
+
+- Coding edits now delegated to `caveman:cavecrew-builder` subagents; main thread handles planning/review/commit
+- Saved in memory: `feedback-use-subagent.md`
 
 ---
 
