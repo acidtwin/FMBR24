@@ -2517,8 +2517,6 @@ class MainWindow(QMainWindow):
         self._squad_info.setTextFormat(Qt.TextFormat.RichText)
         self._squad_info.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:12px;")
         header_row.addWidget(self._squad_info)
-        vbox.addWidget(header_bar)
-
         # Squad tab row — shows "First Team" + sub-squads when loaded
         tab_bar = QFrame()
         tab_bar.setFixedHeight(40)
@@ -4223,7 +4221,7 @@ class MainWindow(QMainWindow):
                 self._table.setItem(row, col, item)
 
         self._table.setSortingEnabled(True)
-        self._table.sortByColumn(1, Qt.SortOrder.AscendingOrder)
+        self._table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         for c in range(self._table.columnCount()):
             self._table.resizeColumnToContents(c)
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
@@ -4237,11 +4235,16 @@ class MainWindow(QMainWindow):
                     f'&nbsp;<span style="color:{color};font-size:11px;">{label}</span>')
         sep = f'<span style="color:{COLORS["border"]};">&nbsp;&nbsp;·&nbsp;&nbsp;</span>'
         inj_part = (sep + _stat(n_inj, 'injured', '#C0392B')) if n_inj > 0 else ''
-        self._squad_info.setText(
-            _stat(len(squad), 'players') + sep
-            + _stat(n_hgp, 'HGP', COLORS['hgp_green']) + sep
-            + _stat(n_hgc, 'HGC', COLORS['hgp_green'])
-            + inj_part)
+        stats_html = (_stat(len(squad), 'players') + sep
+                      + _stat(n_hgp, 'HGP', COLORS['hgp_green']) + sep
+                      + _stat(n_hgc, 'HGC', COLORS['hgp_green'])
+                      + inj_part)
+        self._squad_info.setText(stats_html)
+        _stats_lbl = QLabel(stats_html)
+        _stats_lbl.setTextFormat(Qt.TextFormat.RichText)
+        _stats_lbl.setStyleSheet("background: transparent; font-size: 12px;")
+        club_name = self._current_club['name'] if self._current_club else ''
+        self._set_header('Squads', f"{club_name} · {len(squad)} players", _stats_lbl)
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
