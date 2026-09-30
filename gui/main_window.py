@@ -1871,7 +1871,8 @@ class MainWindow(QMainWindow):
                 color: rgba(255,255,255,0.55); font-size: 13px;
                 padding: 4px 6px; border-radius: 2px;
             }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+            QPushButton:hover { background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.85); }
+            QPushButton:disabled { color: rgba(255,255,255,0.20); }
         """
         self._back_btn = QPushButton('◀')
         self._back_btn.setFixedSize(26, 26)
@@ -1911,32 +1912,44 @@ class MainWindow(QMainWindow):
             QLineEdit:focus { border-color: rgba(255,255,255,0.40); outline: none; }
             QLineEdit:disabled { color: rgba(255,255,255,0.35); }
         """)
-        search_action = QAction(
-            _svg_icon(_SVG_SEARCH, 'rgba(255,255,255,0.55)', 14), '', self._search_box)
+        # SVG icons for nav — must use hex (QSvgRenderer doesn't support rgba in attributes)
+        def _nav_icon(svg_tpl, size=13):
+            """QIcon with distinct normal (#B8C8D8) and disabled (#3A4A58) states."""
+            icon = QIcon()
+            nm = _svg_icon(svg_tpl, '#B8C8D8', size)
+            dis = _svg_icon(svg_tpl, '#3A4A58', size)
+            icon.addPixmap(nm.pixmap(size, size), QIcon.Mode.Normal)
+            icon.addPixmap(dis.pixmap(size, size), QIcon.Mode.Disabled)
+            return icon
+
+        search_action = QAction(_nav_icon(_SVG_SEARCH, 14), '', self._search_box)
         self._search_box.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
         nav_row.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
-            "QPushButton { background: rgba(0,0,0,0.25); color: rgba(255,255,255,0.75);"
-            " border: 1px solid rgba(255,255,255,0.15); border-radius: 2px;"
-            " padding: 4px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.9); }"
-            "QPushButton:disabled { color: rgba(255,255,255,0.30); }"
+            "QPushButton { background: rgba(0,0,0,0.28); color: rgba(255,255,255,0.80);"
+            " border: 1px solid rgba(255,255,255,0.14); border-radius: 2px;"
+            " padding: 3px 10px; font-size: 11px; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.12); color: #fff;"
+            " border-color: rgba(255,255,255,0.28); }"
+            "QPushButton:disabled { background: rgba(0,0,0,0.15); color: rgba(255,255,255,0.25);"
+            " border-color: rgba(255,255,255,0.07); }"
         )
         _tbtn_accent_ss = (
-            "QPushButton { background: rgba(61,139,205,0.85); color: #fff;"
+            "QPushButton { background: rgba(49,119,185,0.90); color: #fff;"
             " border: none; border-radius: 2px;"
-            " padding: 4px 10px; font-size: 11px; font-weight: bold; }"
-            "QPushButton:hover { background: rgba(77,155,221,0.9); }"
-            "QPushButton:disabled { background: rgba(0,0,0,0.25); color: rgba(255,255,255,0.30);"
-            " border: 1px solid rgba(255,255,255,0.15); font-weight: normal; }"
+            " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
+            "QPushButton:hover { background: rgba(61,139,205,1.0); }"
+            "QPushButton:pressed { background: rgba(38,100,165,1.0); }"
+            "QPushButton:disabled { background: rgba(0,0,0,0.20); color: rgba(255,255,255,0.25);"
+            " border: 1px solid rgba(255,255,255,0.07); font-weight: normal; }"
         )
 
         self._save_btn = QPushButton('Save Changes')
         self._save_btn.setFixedHeight(26)
         self._save_btn.setEnabled(False)
         self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
-        self._save_btn.setIcon(_svg_icon(_SVG_SAVE, 'rgba(255,255,255,0.75)', 13))
+        self._save_btn.setIcon(_nav_icon(_SVG_SAVE))
         self._save_btn.setIconSize(QSize(13, 13))
         self._save_btn.setStyleSheet(_tbtn_ss)
         self._save_btn.clicked.connect(self._do_save)
@@ -1945,7 +1958,7 @@ class MainWindow(QMainWindow):
         self._load_btn.setFixedHeight(26)
         self._load_btn.setObjectName('accent')
         self._load_btn.setToolTip('Open an FM24 save file')
-        self._load_btn.setIcon(_svg_icon(_SVG_LOAD, '#fff', 13))
+        self._load_btn.setIcon(_svg_icon(_SVG_LOAD, '#ffffff', 13))
         self._load_btn.setIconSize(QSize(13, 13))
         self._load_btn.setStyleSheet(_tbtn_accent_ss)
         self._load_btn.clicked.connect(self._load_file)
@@ -1954,24 +1967,24 @@ class MainWindow(QMainWindow):
         self._reload_btn.setFixedHeight(26)
         self._reload_btn.setEnabled(False)
         self._reload_btn.setToolTip('Re-parse the current save file')
-        self._reload_btn.setIcon(_svg_icon(_SVG_RELOAD, 'rgba(255,255,255,0.75)', 13))
+        self._reload_btn.setIcon(_nav_icon(_SVG_RELOAD))
         self._reload_btn.setIconSize(QSize(13, 13))
         self._reload_btn.setStyleSheet(_tbtn_ss)
         self._reload_btn.clicked.connect(self._reload_save)
 
         self._settings_btn = QPushButton()
         self._settings_btn.setFixedSize(28, 26)
-        self._settings_btn.setIcon(_svg_icon(_SVG_COG, 'rgba(255,255,255,0.75)', 15))
+        self._settings_btn.setIcon(_nav_icon(_SVG_COG, 15))
         self._settings_btn.setIconSize(QSize(15, 15))
         self._settings_btn.setToolTip('Settings')
         self._settings_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(0,0,0,0.25);
-                border: 1px solid rgba(255,255,255,0.15);
+                background: rgba(0,0,0,0.28);
+                border: 1px solid rgba(255,255,255,0.14);
                 border-radius: 2px;
                 padding: 0;
             }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+            QPushButton:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.28); }
         """)
         self._settings_btn.clicked.connect(self._open_settings)
 
