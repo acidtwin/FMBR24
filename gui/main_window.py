@@ -1644,7 +1644,7 @@ class _HeaderHeroWidget(QWidget):
                 self._bg_pixmap = QPixmap.fromImage(img)
             else:
                 self._bg_pixmap = QPixmap(_asset)  # fallback
-        self.setFixedHeight(140)
+        self.setFixedHeight(148)
 
     def set_bg(self, pixmap):
         self._bg_pixmap = pixmap
@@ -1654,39 +1654,44 @@ class _HeaderHeroWidget(QWidget):
         p = QPainter(self)
         w, h = self.width(), self.height()
 
-        # 1. Dark base
+        # 1. Base
         p.fillRect(0, 0, w, h, QColor('#080C12'))
 
-        # 2. Stadium at 38% opacity, horizontally centered, vertically at 40% position
+        # 2. Stadium image at exactly 0.38 opacity
         if self._bg_pixmap and not self._bg_pixmap.isNull():
-            p.setOpacity(0.50)
+            p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
                 w, h,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
+                Qt.TransformationMode.SmoothTransformation
             )
             x_off = (w - scaled.width()) // 2
             y_off = int((h - scaled.height()) * 0.40)
             p.drawPixmap(x_off, y_off, scaled)
             p.setOpacity(1.0)
 
-        # 3. Gradient overlay — rgba(8,12,18,0.4) → rgba(8,12,18,0.85)
+        # 3. Gradient overlay — 3-stop, exact from mockup:
+        # rgba(8,12,18,0.30) 0%, rgba(8,12,18,0.55) 55%, rgba(8,12,18,0.90) 100%
         grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0, QColor(8, 12, 18, 51))    # 0.2 * 255
-        grad.setColorAt(1.0, QColor(8, 12, 18, 204))  # 0.8 * 255
+        grad.setColorAt(0.00, QColor(8, 12, 18, 77))   # 0.30 * 255 = 76.5
+        grad.setColorAt(0.55, QColor(8, 12, 18, 140))  # 0.55 * 255 = 140.25
+        grad.setColorAt(1.00, QColor(8, 12, 18, 230))  # 0.90 * 255 = 229.5
         p.fillRect(0, 0, w, h, QBrush(grad))
 
-        # 4. Pitch grid texture — horizontal every 32px, vertical every 80px
-        pen = QPen(QColor(255, 255, 255, 12))
-        pen.setWidth(1)
+        # 4. Pitch texture — from mockup ::before:
+        # Vertical lines: repeating every 40px, 2px wide, alpha ~4 (0.016*255)
+        # Horizontal lines: repeating every 60px, 2px wide, alpha ~4
+        pen = QPen(QColor(255, 255, 255, 4))
+        pen.setWidth(2)
         p.setPen(pen)
-        for y in range(0, h, 32):
-            p.drawLine(0, y, w, y)
-        pen2 = QPen(QColor(255, 255, 255, 8))
-        pen2.setWidth(1)
-        p.setPen(pen2)
-        for x in range(0, w, 80):
+        x = 38
+        while x < w:
             p.drawLine(x, 0, x, h)
+            x += 40
+        y = 58
+        while y < h:
+            p.drawLine(0, y, w, y)
+            y += 60
 
         # 5. Bottom border
         p.setPen(QColor(255, 255, 255, 15))
@@ -2003,14 +2008,14 @@ class MainWindow(QMainWindow):
 
         # Badge circle
         self._header_badge_lbl = QLabel('')
-        self._header_badge_lbl.setFixedSize(48, 48)
+        self._header_badge_lbl.setFixedSize(56, 56)
         self._header_badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._header_badge_lbl.setStyleSheet(
-            "border-radius: 24px;"
-            " background: rgba(255,255,255,0.12);"
-            " border: 1.5px solid rgba(255,255,255,0.2);"
+            "border-radius: 28px;"
+            " background: rgba(255,255,255,0.08);"
+            " border: 2px solid rgba(255,255,255,0.18);"
             " color: #E8EDF3;"
-            " font-size: 18px;"
+            " font-size: 22px;"
             " font-weight: bold;"
             " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
         )
@@ -2024,13 +2029,16 @@ class MainWindow(QMainWindow):
 
         self._header_title_lbl = QLabel('')
         self._header_title_lbl.setStyleSheet(
-            "color: #E8EDF3; font-size: 22px; font-weight: bold;"
+            "color: #E8EDF3; font-size: 28px; font-weight: bold;"
             " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
+            " letter-spacing: 0.04em;"
             " background: transparent;"
         )
         self._header_subtitle_lbl = QLabel('')
         self._header_subtitle_lbl.setStyleSheet(
-            "color: #8892A0; font-size: 11px; background: transparent;"
+            "color: rgba(255,255,255,0.6); font-size: 11px;"
+            " letter-spacing: 0.08em; text-transform: uppercase;"
+            " margin-top: 4px; background: transparent;"
         )
         tb_layout.addWidget(self._header_title_lbl)
         tb_layout.addWidget(self._header_subtitle_lbl)
