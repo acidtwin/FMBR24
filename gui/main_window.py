@@ -1,5 +1,6 @@
 """FM24 Save Editor - main window."""
 import os
+import shutil
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
@@ -4214,22 +4215,32 @@ class MainWindow(QMainWindow):
     def _do_save(self):
         if not self._save_data or 'b' not in self._save_data:
             return
-        import datetime
-        stem = os.path.splitext(os.path.basename(self._save_path))[0]
-        date = datetime.date.today().strftime('%Y-%m-%d')
-        default_name = os.path.join(
-            os.path.dirname(self._save_path), f'{stem}-Edited-{date}.fm')
-        out_path, _ = QFileDialog.getSaveFileName(
-            self, 'Save Changes', default_name, 'FM Save Files (*.fm)')
-        if not out_path:
-            return
+        orig = self._save_path
+        folder = os.path.dirname(orig)
+        fname = os.path.basename(orig)
+        bk1 = os.path.join(folder, f'bk1-{fname}')
+        bk2 = os.path.join(folder, f'bk2-{fname}')
+        # Rotate: bk1 → bk2, then orig → bk1
+        if os.path.exists(bk1):
+            shutil.copy2(bk1, bk2)
+        shutil.copy2(orig, bk1)
         self._set_busy(True, 'Writing save file')
-        self._worker = PatchWorker(self._save_data, out_path, [], mode='save_only')
+        self._worker = PatchWorker(self._save_data, orig, [], mode='save_only')
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
-        self._worker.done.connect(self._on_patch_done)
+        self._worker.done.connect(self._on_save_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
+
+    def _on_save_done(self):
+        self._set_busy(False)
+        orig = os.path.basename(self._save_path)
+        folder = os.path.dirname(self._save_path)
+        bk2 = os.path.join(folder, f'bk2-{orig}')
+        msg = f'Saved · bk1 created'
+        if os.path.exists(bk2):
+            msg += ' · bk2 rotated'
+        self._status.showMessage(msg)
 
     # -- Progress / error -----------------------------------------------------
 
