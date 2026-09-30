@@ -398,7 +398,7 @@ _SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 
 # Brand shown in the sidebar header (mockups/sidebar-header-options.html, option A).
 # The app is due a rename: change these two lines (plus the hard-coded titles listed in main.py / MainWindow).
 _BRAND_MARK_PX = 34
-_APP_WORDMARK = 'Backroom'
+_APP_WORDMARK = 'FMBR24'
 
 _SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
               'August', 'September', 'October', 'November', 'December')
@@ -2068,6 +2068,7 @@ class _HeaderHeroWidget(QWidget):
         'squad':      'squad.webp',
         'staff':      'staff.webp',
         'shortlist':  'shortlist.webp',
+        'staff_shortlist': 'shortlist.webp',
         'reports':    'reports.webp',
         'players':    'players.webp',
         'club_staff': 'club_staff.webp',
@@ -2175,7 +2176,8 @@ class MainWindow(QMainWindow):
         self._club_entity_id = None
         self._worker = None
         self._current_club = None
-        self._shortlist = []
+        self._shortlist = []        # players only
+        self._staff_shortlist = []  # staff only
         self._status_base = ''
         self._dot_phase = -1
         self._table_mode = 'squad'
@@ -2291,6 +2293,7 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_club_staff())  # 6
         self._main_stack.addWidget(self._make_view_welcome())     # 7
         self._main_stack.addWidget(self._make_view_save_info())   # 8
+        self._main_stack.addWidget(self._make_view_staff_shortlist())  # 9
         right_vbox.addWidget(self._main_stack)
 
         self._status = QStatusBar()
@@ -2641,7 +2644,10 @@ class MainWindow(QMainWindow):
             self._set_header('All Players', f"{n} players")
         elif key == 'shortlist':
             n = len(self._shortlist)
-            self._set_header('My Shortlist', f"{n} players")
+            self._set_header('Player Shortlist', f"{n} players")
+        elif key == 'staff_shortlist':
+            n = len(self._staff_shortlist)
+            self._set_header('Staff Shortlist', f"{n} staff")
         elif key == 'club_staff':
             n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
@@ -2723,7 +2729,8 @@ class MainWindow(QMainWindow):
             ('club',       _SVG_CLUB,      'Club'),
             ('squad',      _SVG_SQUAD,     'Squads'),
             ('club_staff', _SVG_STAFF,     'Club Staff'),
-            ('shortlist',  _SVG_SHORTLIST, 'My Shortlist'),
+            ('shortlist',  _SVG_SHORTLIST, 'Player Shortlist'),
+            ('staff_shortlist', _SVG_SHORTLIST, 'Staff Shortlist'),
         ]:
             if key == 'squad':
                 btn = self._make_nav_btn(svg, label, self._nav_to_squad_view)
@@ -3587,14 +3594,21 @@ class MainWindow(QMainWindow):
         self._staff_count_lbl = QLabel('')
         vbox.addWidget(hdr)
 
-        self._staff_table = _HoverTable()
-        self._staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._staff_table.setAlternatingRowColors(True)
-        self._staff_table.verticalHeader().setVisible(False)
-        self._staff_table.setShowGrid(False)
-        self._staff_table.setSortingEnabled(True)
-        shdr = self._staff_table.horizontalHeader()
+        self._staff_table = self._make_staff_table()
+        self._staff_table.cellDoubleClicked.connect(self._on_staff_double_click)
+        vbox.addWidget(self._staff_table, 1)
+        return w
+
+    def _make_staff_table(self):
+        """Staff table (name/club/nation/age + coaching + personality); shared by Staff and Staff Shortlist."""
+        tbl = _HoverTable()
+        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setAlternatingRowColors(True)
+        tbl.verticalHeader().setVisible(False)
+        tbl.setShowGrid(False)
+        tbl.setSortingEnabled(True)
+        shdr = tbl.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         _COACHING_COLS = [
@@ -3614,29 +3628,24 @@ class MainWindow(QMainWindow):
         }
         cols = ['Name', 'Club', 'Nation', 'Age'] + _COACHING_COLS + [
             'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
-        self._staff_table.setColumnCount(len(cols))
-        self._staff_table.setHorizontalHeaderLabels(cols)
+        tbl.setColumnCount(len(cols))
+        tbl.setHorizontalHeaderLabels(cols)
         for i, col in enumerate(cols):
             if col in _STAFF_COL_TOOLTIPS:
-                self._staff_table.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
+                tbl.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         widths = {0: 200, 1: 160, 2: 50, 3: 40}
         for i in range(4, len(cols)):
             widths[i] = 35
         for i, cw in widths.items():
-            self._staff_table.setColumnWidth(i, cw)
+            tbl.setColumnWidth(i, cw)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(False)
-        self._staff_table.cellDoubleClicked.connect(self._on_staff_double_click)
-        vbox.addWidget(self._staff_table, 1)
-        return w
+        return tbl
 
-    def _populate_staff_table(self):
-        if not self._save_data:
-            return
-        people = self._save_data.get('people', [])
+    def _fill_staff_rows(self, tbl, staff):
         employment = self._save_data.get('employment', {})
         club_staff = self._save_data.get('club_staff', {})
         clubs = self._save_data.get('clubs', [])
@@ -3648,14 +3657,10 @@ class MainWindow(QMainWindow):
             for pid in pids:
                 if pid not in staff_club:
                     staff_club[pid] = cid
-        staff = [p for p in people if 'ca' not in p]
-        if hasattr(self, '_staff_age_min'):
-            mn, mx = self._staff_age_min.value(), self._staff_age_max.value()
-            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
         coaching_cols = getattr(self, '_staff_coaching_cols', [])
         coaching_col_map = getattr(self, '_coaching_col_map', {})
-        self._staff_table.setSortingEnabled(False)
-        self._staff_table.setRowCount(len(staff))
+        tbl.setSortingEnabled(False)
+        tbl.setRowCount(len(staff))
         for row, p in enumerate(staff):
             pid = p.get('id', -1)
             name = p.get('name', '')
@@ -3685,10 +3690,20 @@ class MainWindow(QMainWindow):
             items = [name_item, _SortItem(club_name), _SortItem(flag), _SortItem(str(age), age)] + coaching_items + pers_items
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                self._staff_table.setItem(row, col, item)
-        self._staff_table.setSortingEnabled(True)
-        for i in range(self._staff_table.columnCount()):
-            self._staff_table.resizeColumnToContents(i)
+                tbl.setItem(row, col, item)
+        tbl.setSortingEnabled(True)
+        for i in range(tbl.columnCount()):
+            tbl.resizeColumnToContents(i)
+
+    def _populate_staff_table(self):
+        if not self._save_data:
+            return
+        people = self._save_data.get('people', [])
+        staff = [p for p in people if 'ca' not in p]
+        if hasattr(self, '_staff_age_min'):
+            mn, mx = self._staff_age_min.value(), self._staff_age_max.value()
+            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
+        self._fill_staff_rows(self._staff_table, staff)
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
         self._status_info_lbl.setText(f'{total:,} staff')
@@ -4049,8 +4064,13 @@ class MainWindow(QMainWindow):
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(True)
 
+        self._shortlist_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._shortlist_table.customContextMenuRequested.connect(
+            lambda pos: self._shortlist_context_menu(
+                self._shortlist_table, self._shortlist, self._apply_shortlist_filter, pos))
+
         self._shortlist_empty_lbl = QLabel(
-            'Your shortlist is empty.\nDouble-click a player or staff member to add them.')
+            'No players shortlisted.\nDouble-click a player and choose Add to Shortlist.')
         self._shortlist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._shortlist_empty_lbl.setStyleSheet(
             f"color:{COLORS['text_dim']}; font-size:13px; padding:40px;")
@@ -4063,12 +4083,32 @@ class MainWindow(QMainWindow):
         return w
 
     def _add_to_shortlist(self, person):
+        """Players ('ca' key) go to the Player Shortlist, staff to the Staff Shortlist."""
+        is_player = 'ca' in person
+        lst = self._shortlist if is_player else self._staff_shortlist
         pid = person.get('id', -1)
-        if any(p.get('id') == pid for p in self._shortlist):
+        if any(p.get('id') == pid for p in lst):
             return
-        self._shortlist.append(person)
-        self._populate_shortlist()
-        self._status.showMessage(f'Added {person.get("name", "")} to shortlist', 2000)
+        lst.append(person)
+        if is_player:
+            self._populate_shortlist()
+        else:
+            self._apply_staff_shortlist_filter()
+        kind = 'player' if is_player else 'staff'
+        self._status.showMessage(f'Added {person.get("name", "")} to {kind} shortlist', 2000)
+
+    def _shortlist_context_menu(self, table, lst, refresh, pos):
+        """Right-click a shortlist row -> Remove from Shortlist."""
+        item = table.item(table.rowAt(pos.y()), 0)
+        if not item:
+            return
+        pid = item.data(Qt.ItemDataRole.UserRole)
+        menu = QMenu(self)
+        remove = menu.addAction(f'Remove from Shortlist: {item.text()}')
+        if menu.exec(table.viewport().mapToGlobal(pos)) == remove:
+            lst[:] = [p for p in lst if p.get('id') != pid]
+            refresh()
+            self._update_header_for_view('shortlist' if lst is self._shortlist else 'staff_shortlist')
 
     def _populate_shortlist(self, people=None):
         people = people if people is not None else self._shortlist
@@ -4182,6 +4222,78 @@ class MainWindow(QMainWindow):
             filtered = [p for p in filtered if 'ca' not in p or (_progress_rate(p) or 0) >= min_dev]
 
         self._populate_shortlist(filtered)
+
+    def _make_view_staff_shortlist(self):
+        w = QWidget()
+        vbox = QVBoxLayout(w)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        hdr, hdr_row = self._make_quick_filters_frame()
+        age_lbl = QLabel('Age:')
+        age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        hdr_row.addWidget(age_lbl)
+        self._staff_sl_age_min = QSpinBox()
+        self._staff_sl_age_min.setRange(15, 60)
+        self._staff_sl_age_min.setValue(15)
+        self._staff_sl_age_min.setFixedSize(52, 26)
+        self._staff_sl_age_min.valueChanged.connect(lambda _v: self._apply_staff_shortlist_filter())
+        hdr_row.addWidget(self._staff_sl_age_min)
+        dash = QLabel('-')
+        dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        hdr_row.addWidget(dash)
+        self._staff_sl_age_max = QSpinBox()
+        self._staff_sl_age_max.setRange(15, 60)
+        self._staff_sl_age_max.setValue(60)
+        self._staff_sl_age_max.setFixedSize(52, 26)
+        self._staff_sl_age_max.valueChanged.connect(lambda _v: self._apply_staff_shortlist_filter())
+        hdr_row.addWidget(self._staff_sl_age_max)
+        hdr_row.addStretch()
+        clear_btn = QPushButton('Clear')
+        clear_btn.setFixedHeight(26)
+        clear_btn.setStyleSheet(
+            f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
+            f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
+        clear_btn.clicked.connect(self._clear_staff_shortlist_filter)
+        hdr_row.addWidget(clear_btn)
+        vbox.addWidget(hdr)
+
+        self._staff_shortlist_table = self._make_staff_table()
+        self._staff_shortlist_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._staff_shortlist_table.customContextMenuRequested.connect(
+            lambda pos: self._shortlist_context_menu(
+                self._staff_shortlist_table, self._staff_shortlist,
+                self._apply_staff_shortlist_filter, pos))
+
+        self._staff_shortlist_empty_lbl = QLabel(
+            'No staff shortlisted.\nDouble-click a staff member and choose Add to Shortlist.')
+        self._staff_shortlist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._staff_shortlist_empty_lbl.setStyleSheet(
+            f"color:{COLORS['text_dim']}; font-size:13px; padding:40px;")
+        self._staff_shortlist_empty_lbl.setWordWrap(True)
+
+        self._staff_shortlist_stack = QStackedWidget()
+        self._staff_shortlist_stack.addWidget(self._staff_shortlist_empty_lbl)
+        self._staff_shortlist_stack.addWidget(self._staff_shortlist_table)
+        vbox.addWidget(self._staff_shortlist_stack, 1)
+        return w
+
+    def _clear_staff_shortlist_filter(self):
+        self._staff_sl_age_min.blockSignals(True)
+        self._staff_sl_age_max.blockSignals(True)
+        self._staff_sl_age_min.setValue(15)
+        self._staff_sl_age_max.setValue(60)
+        self._staff_sl_age_min.blockSignals(False)
+        self._staff_sl_age_max.blockSignals(False)
+        self._apply_staff_shortlist_filter()
+
+    def _apply_staff_shortlist_filter(self):
+        mn, mx = self._staff_sl_age_min.value(), self._staff_sl_age_max.value()
+        staff = [p for p in self._staff_shortlist
+                 if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
+        if self._save_data:
+            self._fill_staff_rows(self._staff_shortlist_table, staff)
+        self._staff_shortlist_stack.setCurrentIndex(1 if staff else 0)
 
     def _make_view_reports(self):
         from PyQt6.QtWidgets import QComboBox
@@ -4879,7 +4991,7 @@ class MainWindow(QMainWindow):
     # -- Navigation -----------------------------------------------------------
 
     _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7,
-                   'save_info': 8}
+                   'save_info': 8, 'staff_shortlist': 9}
 
     def _nav_to(self, key: str):
         if key == 'club' and not self._current_club:
@@ -4893,7 +5005,9 @@ class MainWindow(QMainWindow):
             self._populate_club_staff_table()
         if key == 'save_info':
             self._update_save_info_view()
-        if key in ('club', 'squad', 'shortlist', 'save_info'):
+        if key == 'staff_shortlist':
+            self._apply_staff_shortlist_filter()
+        if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
         # Push to history for non-club views (club is pushed by _show_squad)
@@ -5085,6 +5199,7 @@ class MainWindow(QMainWindow):
         self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['club_staff'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['shortlist'].setEnabled(True)
+        self._nav_btns['staff_shortlist'].setEnabled(True)
         self._scouting_staff_nav_btn.setEnabled(has_data)
         self._table.setEnabled(has_data)
         has_squad = bool(self._squad) and self._table_mode == 'squad'

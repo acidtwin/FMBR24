@@ -18,7 +18,7 @@
 - **Search routing**: club -> Club page (`_show_squad` tail, `_nav_restore` keyed on 'club'), player -> Players, staff -> Staff (`_show_staff_results`; staff no longer leak into Players).
 - **Loading states**: `_set_busy` disables all nav buttons, `_update_ui_state` restores; topbar Load shows static "Loading", welcome button "Loading Save"; dot animation only in the status bar. `_BTN_SS` disabled style fixed (QSS opacity is ignored). Spinbox arrow gap fixed by deleting per-widget `_spin_ss` and setting `QSpinBox::up-button/down-button` height 13px in `gui/theme.py`.
 - **Save Info page** (design B: identity rail `#141c27` + ledger; table-driven `_SI_LAYOUT`, one tuple per field; rows hide when data absent, no PENDING; view key `save_info` = stack index 8; first sidebar item in MAIN; app lands here after load/reload) built on `fm_editor/saveinfo.py::parse_save_info`. Fields: game name, times saved, dates (created/in-game/start), game time, game version/build, db version/changes, manager + club, nations/leagues, players+staff. Not decodable yet: database size, start nation, future transfer mode, editor allowed/used, manageable teams, dedication (details + what would settle them: memory `fm24-binary-format.md` section 4).
-- **Sidebar/brand**: header = floppy logo `gui/assets/brand_mark.png` (`_BRAND_MARK_PX`=34) + wordmark `_APP_WORDMARK` ('Backroom') + status line (No save loaded / Save loaded · date / Unsaved changes with gold dot via `self._dirty`, `_update_sidebar_status`). App icon = save-disk-over-pitch, ladder `resources/icons/icon-{16..512}.png`, master `resources/icon-source.png`, loaded by `gui/icon.py::make_app_icon()`. Sidebar texture: `gui/assets/sidebar.webp` (dark diagonal grain) drawn by `_SidebarFrame.paintEvent` at 0.22 opacity.
+- **Sidebar/brand**: header = floppy logo `gui/assets/brand_mark.png` (`_BRAND_MARK_PX`=34) + wordmark `_APP_WORDMARK` ('FMBR24') + status line (No save loaded / Save loaded · date / Unsaved changes with gold dot via `self._dirty`, `_update_sidebar_status`). App icon = save-disk-over-pitch, ladder `resources/icons/icon-{16..512}.png`, master `resources/icon-source.png`, loaded by `gui/icon.py::make_app_icon()`. Sidebar texture: `gui/assets/sidebar.webp` (dark diagonal grain) drawn by `_SidebarFrame.paintEvent` at 0.22 opacity.
 - **Mockups** (`mockups/`): club-page-design-a, save-info-page-design-a/b (B built), sidebar-header-options (A built).
 
 ## Earlier work digest (sessions 5-11)
@@ -39,14 +39,15 @@
 | 0 | `club` | Club overview |
 | 1 | `squad` | Squads table (`_table`) |
 | 2 | `staff` | Staff table (`_staff_table`) |
-| 3 | `shortlist` | My Shortlist |
+| 3 | `shortlist` | Player Shortlist (`self._shortlist`, players only) |
 | 4 | `reports` | Scouting Reports |
 | 5 | `players` | All Players (display capped at 3000 rows) |
 | 6 | `club_staff` | Club Staff |
 | 7 | `welcome` | Welcome / Load |
 | 8 | `save_info` | Save Info |
+| 9 | `staff_shortlist` | Staff Shortlist (`self._staff_shortlist`, staff only; table via shared `_make_staff_table()` / `_fill_staff_rows()`, age-only Quick Filters) |
 
-Sidebar: MAIN (Save Info, Club, Squads, Club Staff, My Shortlist), SCOUTING (Players, Staff), PLAYER REPORTS (Best Prospects / Wonderkids / Best in Position / Best by Role), STAFF REPORTS (stub). Back/Forward use `_nav_history`.
+Sidebar: MAIN (Save Info, Club, Squads, Club Staff, Player Shortlist, Staff Shortlist), SCOUTING (Players, Staff), PLAYER REPORTS (Best Prospects / Wonderkids / Best in Position / Best by Role), STAFF REPORTS (stub). Back/Forward use `_nav_history`.
 
 **Squad table columns**: `Name(0) INJ(1) Pos(2) CA(3) PA(4) Dev(5) Age(6) Nation(7) HGP(8) HGC(9) CtrE(10) Cro(11)..Cnc(64)` (54 attrs). Reports table: `Name INJ Pos CA PA Dev Age Nation HGP Club CtrE + 54 attrs` (65). INJ = dark red `#8B1A1A` badge, sorts injured first; Pos numeric key `_POS_SORT_ORDER`: GK0 DR1 WBR2 DL3 WBL4 DC5 SW6 DM7 MC8 MR9 AMR10 ML11 AML12 AMC13 ST14, default sort Pos. Staff tables: 17 coaching cols `Atk Def Fit Mnt SPc Tac Tch WwY Det Mot PMg JPA JSA TKn Neg GKH GKS` + 8 personality `Adp Amb Loy Prs Pro Spt Tmp Ctr`, header tooltips `_STAFF_COL_TOOLTIPS`, `_coaching_col_map` set in `_make_view_staff`. Sub-squads: English clubs kind-based, German/Spanish B teams prefix-based. Squad populate uses fixed widths (`_configure_table_for_mode`); no `resizeColumnToContents` (O(n^2)).
 

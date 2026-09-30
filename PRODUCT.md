@@ -35,7 +35,7 @@ The free, open, Linux-native FM24 save browser: look first, then decide. Read-mo
 - Parse game_db.dat: names, clubs, squads, people, ability blocks, personality, contracts, injuries, coaching attributes, staff CA/PA, club staff arrays
 - Save Info: game name, dates, game time/version, database version/changes, manager and club, nations/leagues, start date. Rows with no data are hidden; database size, start nation, future transfer mode, editor and manageable-teams are not decodable yet
 - Club page: squad KPIs, top players, injuries, contracts, homegrown counts; unparsed data (reputation, facilities, finances, manager rating) is marked PENDING
-- Scouting reports: Best Prospects, Wonderkids, Best in Position, Best by Role (weight presets); All Players view; Staff and Club Staff tables; My Shortlist; shared Quick Filters bars
+- Scouting reports: Best Prospects, Wonderkids, Best in Position, Best by Role (weight presets); All Players view; Staff and Club Staff tables; Player and Staff Shortlists; shared Quick Filters bars
 - HGP: secondary nation qualification record `b10=0x08, b11=0x46`. HGC: training record `b10=0x01, b11=0x48` (bytes 0-3 = club entity id). `mode='save_only'` writes without patching
 - Search routes club -> Club page, player -> Players, staff -> Staff
 - Transfer values, player photos and staff reputation are not stored in the save
