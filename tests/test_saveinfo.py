@@ -30,6 +30,7 @@ def test_save_info():
     assert round(r['game_time_seconds'] / 60) == 32 * 60 + 16, r  # 1 day, 8 h, 16 min
     assert r['game_version'] == '24.4.2' and r['game_build'] == 2081827, r
     assert r['database_version'] == '24.3.0' and r['database_changes'] == 8809924, r
+    assert r['start_date'] == '2026-07-13', r  # in-game "Game Start Date" (Italy - 13/7/2026)
     assert r['manager_name'] == 'Elliot Nathan', r
     assert r['manager_club_id'] == 492 and r['manager_club_name'] == 'Tottenham Hotspur', r
     assert r['nations_count'] == 46 and len(r['leagues']) == 46, r

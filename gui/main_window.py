@@ -395,6 +395,11 @@ def _club_kv_value(text='', color='#e8edf2'):
 # -- Save Info page helpers (mockups/save-info-page-design-b.html) --------------
 
 _SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+# Brand shown in the sidebar header (mockups/sidebar-header-options.html, option A).
+# The app is due a rename: change these two lines (plus the hard-coded titles listed in main.py / MainWindow).
+_APP_MARK = 'FM'
+_APP_WORDMARK = 'Save Editor'
+
 _SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
               'August', 'September', 'October', 'November', 'December')
 
@@ -407,6 +412,15 @@ def _fmt_game_date(iso):
         return None
     suffix = 'th' if 10 <= d.day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(d.day % 10, 'th')
     return f"{_SI_DAYS[d.weekday()]} {d.day}{suffix} {_SI_MONTHS[d.month - 1]} {d.year}"
+
+
+def _fmt_short_date(iso):
+    """'2028-01-02' -> '2 Jan 2028'; None if unparseable."""
+    try:
+        d = date.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    return f"{d.day} {_SI_MONTHS[d.month - 1][:3]} {d.year}"
 
 
 def _fmt_game_time(seconds):
@@ -475,6 +489,7 @@ _SI_LAYOUT = (
         ('full',  'game_name',    'Game name',    _si_of('game_name')),
         ('full',  'in_game_date', 'In-game date', _si_of('in_game_date', _fmt_game_date)),
         ('full',  'date_created', 'Date created', _si_of('date_created', _fmt_game_date)),
+        ('full',  'start_date',   'Game started', _si_of('start_date', _fmt_game_date)),
         ('full',  'game_time',    'Game time',    _si_of('game_time_seconds', _fmt_game_time)),
         ('left',  'times_saved',  'Times saved',  _si_of('times_saved', '{:,}'.format)),
         ('right', 'game_version', 'Game version', _si_version),
@@ -2155,6 +2170,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 780)
 
         self._save_data = None
+        self._dirty = False  # in-memory patches not yet written back with Save Changes
         self._squad = []
         self._club_entity_id = None
         self._worker = None
@@ -2651,18 +2667,50 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        # Club/save header
-        self._sb_club_name = QLabel('FM Save Editor')
-        self._sb_club_name.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;"
-            "padding: 13px 15px 2px; background:transparent;")
-        self._sb_season = QLabel('No save loaded')
-        self._sb_season.setTextFormat(Qt.TextFormat.RichText)
-        self._sb_season.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:11px;"
-            "padding:0 15px 10px; background:transparent;")
-        vbox.addWidget(self._sb_club_name)
-        vbox.addWidget(self._sb_season)
+        # Brand anchor (mockup option A): fixed mark + wordmark, one status line below.
+        brand_block = QWidget()
+        brand_block.setObjectName('sbBrand')
+        brand_block.setStyleSheet("QWidget#sbBrand { background: transparent; }")
+        bb = QVBoxLayout(brand_block)
+        bb.setContentsMargins(15, 14, 15, 12)
+        bb.setSpacing(8)
+
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(9)
+        mark = QLabel(_APP_MARK)
+        mark.setObjectName('sbMark')
+        mark.setFixedSize(26, 26)
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark.setStyleSheet(
+            f"QLabel#sbMark {{ background:{COLORS['accent']}; color:#FFFFFF; border-radius:4px;"
+            " font-family:'Barlow Condensed','Arial Narrow',sans-serif;"
+            " font-size:14px; font-weight:700; letter-spacing:0.04em; }")
+        wordmark = QLabel(_APP_WORDMARK.upper())
+        wordmark.setObjectName('sbWordmark')
+        wordmark.setFixedHeight(26)
+        wordmark.setStyleSheet(
+            f"QLabel#sbWordmark {{ background:transparent; color:{COLORS['text_primary']};"
+            " font-family:'Barlow Condensed','Arial Narrow',sans-serif;"
+            " font-size:19px; font-weight:700; letter-spacing:0.07em; }")
+        brand_row.addWidget(mark)
+        brand_row.addWidget(wordmark, 1)
+        bb.addLayout(brand_row)
+
+        status_row = QHBoxLayout()
+        status_row.setSpacing(7)
+        self._sb_dot = QLabel()
+        self._sb_dot.setObjectName('sbDot')
+        self._sb_dot.setFixedSize(7, 7)
+        self._sb_status = QLabel()
+        self._sb_status.setObjectName('sbStatus')
+        self._sb_status.setTextFormat(Qt.TextFormat.RichText)
+        self._sb_status.setStyleSheet(
+            f"QLabel#sbStatus {{ background:transparent; color:{COLORS['text_secondary']}; font-size:11px; }}")
+        status_row.addWidget(self._sb_dot, 0, Qt.AlignmentFlag.AlignVCenter)
+        status_row.addWidget(self._sb_status, 1)
+        bb.addLayout(status_row)
+        vbox.addWidget(brand_block)
+        self._update_sidebar_status()
         vbox.addWidget(self._make_hline())
 
         # Main nav
@@ -5000,7 +5048,25 @@ class MainWindow(QMainWindow):
 
     # -- State helpers --------------------------------------------------------
 
+    def _update_sidebar_status(self):
+        """Sidebar status line: No save loaded / Save loaded - <in-game date> / Unsaved changes."""
+        if self._save_data is None:
+            dot = f"background:transparent; border:1px solid {COLORS['text_secondary']};"
+            text = 'No save loaded'
+        elif self._dirty:
+            dot = "background:#e6b840; border:none;"
+            text = 'Unsaved changes'
+        else:
+            dot = "background:#4caf82; border:none;"
+            text = 'Save loaded'
+            d = _fmt_short_date(((self._save_data.get('save_info') or {}).get('in_game_date')))
+            if d:
+                text += f" &middot; <span style='color:{COLORS['text_primary']}'>{d}</span>"
+        self._sb_dot.setStyleSheet(f"QLabel#sbDot {{ {dot} border-radius:3px; }}")  # Qt: radius must stay < size/2
+        self._sb_status.setText(text)
+
     def _update_ui_state(self):
+        self._update_sidebar_status()
         has_file = bool(self._save_path)
         has_data = self._save_data is not None
         has_b = has_data and 'b' in self._save_data
@@ -5040,7 +5106,7 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
-        self._sb_season.setText(os.path.basename(path))
+        self._dirty = False
         self._status_ready_lbl.setText(
             f'<span style="color:{COLORS["text_dim"]};">&#9679;</span> Loading...')
         self._update_ui_state()
@@ -5059,6 +5125,7 @@ class MainWindow(QMainWindow):
 
     def _on_parse_done(self, result):
         self._save_data = result
+        self._dirty = False
         self._save_data['save_path'] = self._save_path
         self._all_players_cache = []  # invalidate on new load
         self._set_busy(False)
@@ -5067,8 +5134,6 @@ class MainWindow(QMainWindow):
         n_people = len([p for p in people_all if p.get('ca') is not None])
         n_staff = len([p for p in people_all if p.get('ca') is None])
         fname = os.path.basename(self._save_path) if self._save_path else ''
-        if fname:
-            self._sb_season.setText(fname)
         self._status_ready_lbl.setText(
             f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}'
             f' &nbsp;&middot;&nbsp; {n_clubs:,} clubs, {n_people:,} players, {n_staff:,} staff')
@@ -5181,7 +5246,6 @@ class MainWindow(QMainWindow):
             self._club_entity_id = None
 
         # Update sidebar + header
-        self._sb_club_name.setText(club['name'])
         dim = COLORS['text_dim']
         self._breadcrumb.setText(
             f"FM Save Editor <span style='color:{dim}'> &rsaquo; </span>"
@@ -5685,6 +5749,7 @@ class MainWindow(QMainWindow):
         return out_path if msg.exec() == QMessageBox.StandardButton.Ok else ''
 
     def _on_patch_done(self):
+        self._dirty = True  # patch mutated the in-memory buffer; original save not yet overwritten
         self._set_busy(False)
         QMessageBox.information(
             self, 'Done',
@@ -5714,6 +5779,7 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _on_save_done(self):
+        self._dirty = False
         self._set_busy(False)
         orig = os.path.basename(self._save_path)
         folder = os.path.dirname(self._save_path)

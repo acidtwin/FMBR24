@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidebar Header Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<!--
+  SIDEBAR HEADER — 3 OPTIONS (mockup only). Everything inside .sb translates to QLabel / QFrame / QHBoxLayout / QVBoxLayout + QSS.
+  Presentation chrome (.page, .opt, .cap) is NOT part of the app.
+
+  Slice = real sidebar: 192px wide (1px right border #343740), surface #1A2226, sidebar.webp at 22% opacity.
+  Usable text width = 192 - 1 - 2*15 = 161px. Nothing truncates: multi-line names use QLabel.setWordWrap(True).
+
+  Colours are the app's COLORS: text_primary #FFF, text_secondary #8B96A8, text_dim #525B68 (DISABLED ONLY, 2.4:1),
+  border #343740, border_bright #454A58, elevated #292B32, accent #6933BD, green #4caf82, gold #e6b840.
+
+  Data used (all real): save loaded?, save_info.in_game_date, save_info.manager_name, save_info.manager_club_name
+  (empty = unemployed), the browsed club (self._current_club), managed-club id, unsaved-changes flag. Nothing invented.
+  Not shown here on purpose: file name, game name, counts — they live in the masthead / Save Info page / status bar.
+-->
+<style>
+:root {
+  --window: #14151A; --surface: #1A2226; --elev: #292B32;
+  --border: #343740; --border-b: #454A58;
+  --text: #FFFFFF; --text-2: #8B96A8; --text-dim: #525B68;
+  --accent: #6933BD; --accent-h: #735CE4;
+  --green: #4caf82; --gold: #e6b840; --red: #c0392b;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--window); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; line-height: 1.4; }
+::selection { background: rgba(105,51,189,0.55); color: #fff; }
+
+/* ───────────── Presentation chrome ───────────── */
+.page { max-width: 1420px; margin: 0 auto; padding: 40px 32px 72px; }
+.page > h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.page > p.lede { margin-top: 6px; max-width: 64ch; color: var(--text-2); }
+.opt { display: grid; grid-template-columns: 240px 1fr; column-gap: 40px; padding: 36px 0; border-top: 1px solid var(--border); margin-top: 32px; }
+.opt h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.opt .why { margin-top: 10px; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.opt .why b { color: var(--text); font-weight: 600; }
+.opt .impl { margin-top: 14px; color: var(--text-2); font-size: 12px; line-height: 1.5; padding-top: 12px; border-top: 1px solid var(--border); }
+.slices { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+figure { width: 192px; }
+figcaption { margin-top: 10px; font-size: 12px; color: var(--text-2); line-height: 1.45; }
+figcaption b { color: var(--text); font-weight: 600; display: block; }
+
+/* ───────────── SIDEBAR (in-app) ───────────── */
+.sb { position: relative; width: 192px; background: var(--surface); border-right: 1px solid var(--border); overflow: hidden; }
+.sb::before { content: ''; position: absolute; inset: 0; background: url('../gui/assets/sidebar.webp') center / 100% 100% no-repeat; opacity: 0.22; pointer-events: none; }
+.sb-in { position: relative; }
+.hl { height: 1px; background: var(--border); }
+.sec { font-size: 10px; font-weight: 600; letter-spacing: 1.2px; color: var(--text-2); padding: 10px 15px 3px; }
+.nav { height: 29px; display: flex; align-items: center; gap: 10px; padding: 0 15px; font-size: 13px; color: var(--text); position: relative; }
+.nav svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.nav.on { background: rgba(105,51,189,0.30); font-weight: 600; }
+.nav.on::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+.nav.off { color: var(--text-dim); }
+
+/* shared atoms */
+.mk { display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--accent); color: #fff; border-radius: 4px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
+.dot { width: 7px; height: 7px; border-radius: 4px; flex: none; }
+.dot.ok { background: var(--green); } .dot.warn { background: var(--gold); }
+.dot.none { background: transparent; border: 1.5px solid var(--text-2); }
+
+/* ── A · Brand anchor ── */
+.a { padding: 14px 15px 12px; }
+.a .brand { display: flex; align-items: center; gap: 9px; }
+.a .mk { width: 26px; height: 26px; font-size: 14px; }
+.a .wm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 19px; letter-spacing: 0.07em; text-transform: uppercase; line-height: 26px; }
+.a .st { margin-top: 8px; display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-2); }
+.a .st .dot { margin-top: 1px; }
+.a .st em { font-style: normal; color: var(--text); }
+
+/* ── B · Browsed-club context ── */
+.b .brand { display: flex; align-items: center; gap: 7px; padding: 12px 15px 10px; }
+.b .brand .mk { width: 18px; height: 18px; font-size: 10px; border-radius: 3px; }
+.b .brand .wm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
+.b .club { display: flex; align-items: flex-start; gap: 10px; padding: 11px 15px 12px; }
+.b .badge { width: 32px; height: 32px; flex: none; border-radius: 4px; background: var(--elev); border: 1px solid var(--border-b); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.02em; color: #fff; }
+.b .badge.empty { background: transparent; border-style: dashed; color: var(--text-2); font-weight: 500; }
+.b .nm { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; line-height: 18px; letter-spacing: 0.02em; color: #fff; padding-top: 0; }
+.b .nm.hint { font-size: 14px; color: var(--text); font-weight: 600; letter-spacing: 0.03em; }
+.b .sub { margin-top: 4px; font-size: 11px; line-height: 1.35; color: var(--text-2); }
+.b .sub .dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.b .txt { min-width: 0; flex: 1; }
+
+/* ── C · Manager identity ── */
+.c { padding: 12px 15px 12px; }
+.c .wm { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-2); }
+.c .who { display: flex; align-items: flex-start; gap: 10px; margin-top: 9px; }
+.c .av { width: 32px; height: 32px; flex: none; border-radius: 4px; background: rgba(105,51,189,0.38); border: 1px solid rgba(115,92,228,0.65); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; color: #fff; }
+.c .av.empty { background: transparent; border-color: var(--border-b); }
+.c .av.empty svg { width: 16px; height: 16px; fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.c .txt { min-width: 0; flex: 1; }
+.c .nm { font-size: 13px; font-weight: 600; line-height: 16px; color: #fff; padding-top: 0; }
+.c .nm.hint { color: var(--text); }
+.c .sub { margin-top: 2px; font-size: 11px; line-height: 1.35; color: var(--text-2); }
+</style>
+</head>
+<body>
+<template id="nav-loaded">
+  <div class="hl"></div>
+  <div class="sec">MAIN</div>
+  <div class="nav on"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v3.6M8 5v.1"/></svg>Save Info</div>
+  <div class="nav"><svg viewBox="0 0 16 16"><path d="M2 12.5h12M3 12.5V7.5h10v5M4.5 7.5V5h7v2.5"/></svg>Club</div>
+  <div class="nav"><svg viewBox="0 0 16 16"><circle cx="5.5" cy="5.5" r="2"/><circle cx="11" cy="6.2" r="1.6"/><path d="M1.8 12.5c.3-2.2 1.8-3.4 3.7-3.4s3.4 1.2 3.7 3.4M10 9.4c2 0 3.6.9 4.1 3.1"/></svg>Squads</div>
+  <div class="nav"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.4-2.6 2.4-4 5-4s4.6 1.4 5 4"/></svg>Club Staff</div>
+</template>
+<template id="nav-partial">
+  <div class="hl"></div>
+  <div class="sec">MAIN</div>
+  <div class="nav on"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v3.6M8 5v.1"/></svg>Save Info</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><path d="M2 12.5h12M3 12.5V7.5h10v5M4.5 7.5V5h7v2.5"/></svg>Club</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><circle cx="5.5" cy="5.5" r="2"/><circle cx="11" cy="6.2" r="1.6"/><path d="M1.8 12.5c.3-2.2 1.8-3.4 3.7-3.4s3.4 1.2 3.7 3.4M10 9.4c2 0 3.6.9 4.1 3.1"/></svg>Squads</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.4-2.6 2.4-4 5-4s4.6 1.4 5 4"/></svg>Club Staff</div>
+</template>
+<template id="nav-none">
+  <div class="hl"></div>
+  <div class="sec">MAIN</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v3.6M8 5v.1"/></svg>Save Info</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><path d="M2 12.5h12M3 12.5V7.5h10v5M4.5 7.5V5h7v2.5"/></svg>Club</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><circle cx="5.5" cy="5.5" r="2"/><circle cx="11" cy="6.2" r="1.6"/><path d="M1.8 12.5c.3-2.2 1.8-3.4 3.7-3.4s3.4 1.2 3.7 3.4M10 9.4c2 0 3.6.9 4.1 3.1"/></svg>Squads</div>
+  <div class="nav off"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.4-2.6 2.4-4 5-4s4.6 1.4 5 4"/></svg>Club Staff</div>
+</template>
+
+<div class="page">
+  <h1>Sidebar header &mdash; three options</h1>
+  <p class="lede">Replaces the two-line &ldquo;club name / file name&rdquo; block above MAIN. Each slice is the real 192px sidebar with the carbon texture at 22%. None of them shows the save file name; the club name and dates already live in the masthead and on Save Info.</p>
+
+  <!-- ───────── A ───────── -->
+  <section class="opt">
+    <div>
+      <h2>A &middot; Brand anchor</h2>
+      <p class="why"><b>The header never changes.</b> Wordmark on top, then one status line: is a save open, is there anything unsaved, and what in-game date is it. Answers &ldquo;what state is the app in?&rdquo; without repeating any name.</p>
+      <p class="impl">Two QLabels (mark 26&times;26 with radius 4 + wordmark) in an HBox, one rich-text QLabel for the status line. Nothing wraps, so height is fixed at 76px.</p>
+    </div>
+    <div class="slices">
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="a"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div>
+            <div class="st"><i class="dot none"></i>No save loaded</div></div>
+          <div data-nav="none"></div>
+        </div></div>
+        <figcaption><b>No save</b>Status is text, not colour alone; nav is disabled.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="a"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div>
+            <div class="st"><i class="dot ok"></i>Save loaded &middot; <em>2 Jan 2028</em></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Save loaded</b>Green dot + in-game date.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="a"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div>
+            <div class="st"><i class="dot warn"></i>Unsaved changes</div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Unsaved changes</b>Gold dot; pairs with the Save Changes button.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────── B ───────── -->
+  <section class="opt">
+    <div>
+      <h2>B &middot; Browsed-club context</h2>
+      <p class="why"><b>Shows what Club, Squads and Club Staff are about to act on.</b> The browsed club changes when you search, so this is the one piece of sidebar context that is not already on screen elsewhere. &ldquo;Your club&rdquo; vs &ldquo;Another club&rdquo; tells you at a glance if you are editing your own squad.</p>
+      <p class="impl">Brand row (18px mark + QLabel), 1px divider, then HBox: 32&times;32 badge QLabel + VBox of two QLabels. Name and sub use setWordWrap(True); the badge holds up to two initials. Grows to a second name line, never truncates.</p>
+    </div>
+    <div class="slices">
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="b"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div><div class="hl"></div>
+            <div class="club"><div class="badge empty">&ndash;</div><div class="txt"><div class="nm hint">No save loaded</div><div class="sub">Open a save file to begin</div></div></div></div>
+          <div data-nav="none"></div>
+        </div></div>
+        <figcaption><b>No save</b>Neutral hint in the club slot.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="b"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div><div class="hl"></div>
+            <div class="club"><div class="badge">TH</div><div class="txt"><div class="nm">Tottenham Hotspur</div><div class="sub"><i class="dot ok"></i>Your club</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Save loaded &middot; managed club</b>Browsing the club you manage.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="b"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div><div class="hl"></div>
+            <div class="club"><div class="badge">BH</div><div class="txt"><div class="nm">Brighton &amp; Hove Albion</div><div class="sub">Another club</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Different club &middot; long name</b>Wraps to two lines, no dot when it is not yours.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="b"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div><div class="hl"></div>
+            <div class="club"><div class="badge">CA</div><div class="txt"><div class="nm">Club Atl&eacute;tico de Madrid</div><div class="sub">Another club</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Stress test</b>Accented, three-word name.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="b"><div class="brand"><span class="mk">FM</span><span class="wm">Save Editor</span></div><div class="hl"></div>
+            <div class="club"><div class="badge empty">&ndash;</div><div class="txt"><div class="nm hint">No club selected</div><div class="sub">Search a club to browse</div></div></div></div>
+          <div data-nav="partial"></div>
+        </div></div>
+        <figcaption><b>Loaded, nothing browsed yet</b>Club, Squads and Club Staff stay disabled until a club is picked.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────── C ───────── -->
+  <section class="opt">
+    <div>
+      <h2>C &middot; Manager identity</h2>
+      <p class="why"><b>The save's human, always in view.</b> Initials chip, manager name, managed club, under a quiet wordmark. Reads like a signed-in account; the browsed club stays in the masthead. Least new information of the three, because Save Info already lists the manager.</p>
+      <p class="impl">Wordmark QLabel, then HBox: 32&times;32 initials QLabel + VBox of name and club QLabels (word-wrapped). Initials come from manager_name; unemployed shows &ldquo;No club&rdquo;.</p>
+    </div>
+    <div class="slices">
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="c"><div class="wm">FM Save Editor</div>
+            <div class="who"><div class="av empty"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.4-2.6 2.4-4 5-4s4.6 1.4 5 4"/></svg></div><div class="txt"><div class="nm hint">No save loaded</div><div class="sub">Open a save file to begin</div></div></div></div>
+          <div data-nav="none"></div>
+        </div></div>
+        <figcaption><b>No save</b>Empty avatar outline, same hint.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="c"><div class="wm">FM Save Editor</div>
+            <div class="who"><div class="av">EN</div><div class="txt"><div class="nm">Elliot Nathan</div><div class="sub">Tottenham Hotspur</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Save loaded</b>Manager and managed club.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="c"><div class="wm">FM Save Editor</div>
+            <div class="who"><div class="av">SP</div><div class="txt"><div class="nm">Sebasti&aacute;n P&eacute;rez-Rodr&iacute;guez</div><div class="sub">Brighton &amp; Hove Albion</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Stress test</b>Long manager name and club wrap.</figcaption>
+      </figure>
+      <figure>
+        <div class="sb"><div class="sb-in">
+          <div class="c"><div class="wm">FM Save Editor</div>
+            <div class="who"><div class="av">EN</div><div class="txt"><div class="nm">Elliot Nathan</div><div class="sub">No club</div></div></div></div>
+          <div data-nav="loaded"></div>
+        </div></div>
+        <figcaption><b>Unemployed manager</b>Club field is empty in the save.</figcaption>
+      </figure>
+    </div>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('[data-nav]').forEach(function (el) {
+  el.replaceWith(document.getElementById('nav-' + el.dataset.nav).content.cloneNode(true));
+});
+</script>
+</body>
+</html>

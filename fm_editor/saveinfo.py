@@ -5,6 +5,8 @@ Sources (all verified against a real FM24 save, see memory fm24-binary-format.md
   game_info.dat  (small member) -> times_saved @0x42, date_created @0x46, game_build @0x4a
   save_game_summary.dat (small) -> nations/leagues, game_version, manager, club, in_game_date, game_time
   game_db.dat header (optional) -> database_version @0x14, database_changes @0x28
+  rgman/rgman.dat header        -> start_date (ISO): the in-game "Game Start Date" (the nation part,
+                                   e.g. "Italy", is NOT stored anywhere found yet)
 
 Returns a plain JSON-serialisable dict; a key is present ONLY if it was found and passed
 sanity checks. Never raises for a missing/odd member - just returns a smaller dict.
@@ -122,6 +124,17 @@ def _gamedb_header(b, out):
             out['in_game_date'] = d
 
 
+def _rgman(b, out):
+    """rgman/rgman.dat header: game start date sits right before a null date (1900-01-00 = 01 00 6c 07)."""
+    if len(b) < 0x40 or bytes(b[:6]) != _MAGIC:
+        return
+    i = bytes(b[:0x40]).find(b'\x01\x00\x6c\x07', 10)
+    if i >= 4:
+        d = _date(b, i - 4)
+        if d:
+            out['start_date'] = d
+
+
 def _resolve_club(out, gdb, clubs, people):
     short = out.get('manager_club_short')
     if not short or not clubs:
@@ -174,6 +187,12 @@ def parse_save_info(save_path, members, archive_name=None, gdb=None, clubs=None,
         m = by_name.get(fname)
         if m:
             fn(get_member_fn(save_path, m), out)
+    m = next((x for x in members if x.get('name') == 'rgman/rgman.dat'), None)
+    if m:
+        try:
+            _rgman(get_member_fn(save_path, m), out)
+        except Exception:  # never raise for a bad member
+            pass
     if gdb is not None:
         _gamedb_header(gdb, out)
     _resolve_club(out, gdb, clubs, people)
