@@ -29,6 +29,7 @@ python3 tests/test_saveinfo.py    # also test_saveinfo_format.py, test_club_cont
 - A per-widget `setStyleSheet` shadows app QSS for overlapping selectors/subcontrols (caused the spinbox arrow gap); QSpinBox needs explicit up/down-button heights (theme.py)
 - QSS `opacity`, `letter-spacing`, `text-transform`, keyframes are not honoured — use `QFont` letter spacing, `.upper()`, QTimer + stylesheet (`_tick_shimmer`), `setOpacity` when painting
 - `border-radius` ≥ half the size renders square
+- Dialog-scoped QSS: app QSS `QWidget{background}` paints every plain QWidget opaque; add `QDialog#x QWidget{background:transparent}` FIRST and prefix later rules with the same `QDialog#x` (equal specificity, later wins). Wrapped QLabels/Flow layouts and `replaceWidget` need `processEvents()` before `grab()` in offscreen checks.
 - Barlow Condensed / Inter are not installed (fallback Noto Sans)
 
 ## Verify UI headlessly

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Player window - three options</title>
+<!--
+PLAYER DETAIL WINDOW (PlayerDetailDialog) - DESIGN OPTIONS A / B / C
+Deep links: #a  #b  #c  #c-attributes  #c-positions  #c-contract   plus flags joined with + :
+  pot (potential on)  short (shortlisted)  inj (injured)  gk (goalkeeper sample)  pend (unparsed fields as PENDING)
+  min (minimum size)  hgp / hgc / both (homegrown status)       e.g.  #b+pot+short
+
+TOKENS (gui/theme.py COLORS, literal)
+  window_bg #14151A  surface #1A2226  elevated #292B32  border #343740  border_bright #454A58
+  text #FFFFFF  text_secondary #8B96A8  text_dim #525B68 (disabled only, fails AA)
+  accent #6933BD  accent_hover #735CE4  accent_press #641EAA  selection_bg #2A1B4A
+  hgp_green(actually blue) #5AA0D1  non_hgp_red #D14343  warning #FF501E
+  NEW LITERALS proposed for COLORS:  pot #9A8AF5 (accent_hover lightened, 5.4:1 on surface; the potential half of "14 / 17")
+    alt_row #1E292E (zebra)  hairline #252C30  red_text #E8696A (AA red text)  amber #E0973C  white2 #E6EAF0
+  POSITION BADGES: existing _POS_BADGE_COLORS (GK #C07B2A, D* #3A6BA8, DM #5A3A8A, M/AM #3A8A5A, ST #A83A3A, INJ #8B1A1A), white text, radius 2
+
+ATTRIBUTE VALUE SCALE (replaces _attr_val_color; monotonic, purple reserved for interaction/potential)
+  1-4 #E8696A | 5-8 #E0973C | 9-11 #8B96A8 | 12-13 #E6EAF0 | 14-16 #52C287 | 17-20 #FFD700 (bold on all)
+  Injury Prone, Dirtiness, Eccentricity are "lower is better": coloured on the inverted value (21-v).
+  Tile fills (option B) = same hue at rgba(...,0.14).
+
+METRICS (px, 4px grid)
+  Window client default 1100x760 (today 920x640, min 860x560). Proposed minimum 1040x640. Drop the custom 40px topbar + x: the OS
+  title bar already shows the name (it is duplicated today).
+  Panel: QFrame#panel  bg #1A2226, 1px #343740, radius 3. Gap between panels 12, window padding 12. Panel header 36 tall, pad 0 12,
+  11/700 UPPERCASE #8B96A8 (QFont letter-spacing 1px, .upper()). Row 24 tall, pad 0 8 (attribute rows), value cell fixed 50 wide, right aligned.
+  Fonts: Noto Sans fallback only. Sizes 10 / 11 / 12 / 13, headings 16-24 bold, big numerals 32 bold. No condensed face assumed.
+  Bars: 6px tall, SQUARE ended, track #343740 (QProgressBar + ::chunk, or fixed-width QFrames).  Pills h20 r10. Buttons h32 r3. Switch 30x16 (SVG indicator file).
+  Action strip: QFrame#actionStrip h52 bg #1A2226, border-top 1px #343740 only (objectName-scoped).
+  Only borders in the window: panel outline, action strip top edge, tab strip bottom edge (C). No divider lines inside panels (zebra rows instead).
+
+QSS NOTES: no blur/shadows/grid/opacity/transition. Hover states are cosmetic here (not QSS pseudo-states shown). Letter-spacing via QFont.
+-->
+<style>
+:root{
+  --bg:#14151A; --surface:#1A2226; --elev:#292B32; --border:#343740; --border2:#454A58;
+  --tx:#FFFFFF; --tx2:#8B96A8; --tx3:#525B68;
+  --acc:#6933BD; --acc2:#735CE4; --accp:#641EAA; --sel:#2A1B4A;
+  --hg:#5AA0D1; --red:#D14343; --warn:#FF501E;
+  --pot:#9A8AF5; --alt:#1E292E; --hair:#252C30;
+  --c1:#E8696A; --c2:#E0973C; --c3:#8B96A8; --c4:#E6EAF0; --c5:#52C287; --c6:#FFD700;
+  --k1:rgba(232,105,106,0.14); --k2:rgba(224,151,60,0.14); --k3:rgba(139,150,168,0.14);
+  --k4:rgba(230,234,240,0.14); --k5:rgba(82,194,135,0.14); --k6:rgba(255,215,0,0.14);
+  --w:1100px; --h:760px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0E0F13;color:var(--tx);font:12px/1.3 "Noto Sans","Liberation Sans",Arial,sans-serif;padding:16px 24px 48px}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+/* ---- review bar (not part of the window) ---- */
+.rv{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:0 auto 12px;max-width:1120px}
+.rv h1{font-size:13px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-right:6px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:3px;overflow:hidden}
+.seg button{height:28px;padding:0 14px;font-weight:700;color:var(--tx2);background:var(--surface)}
+.seg button.on{background:var(--acc);color:#fff}
+.seg.xl button{height:34px;padding:0 22px;font-size:13px}
+.tg{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--tx2);font-weight:600}
+.tg.on{border-color:var(--acc2);color:#fff;background:var(--sel)}
+.rv .lab{color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-right:-10px}
+.note{max-width:1120px;margin:0 auto 14px;color:var(--tx2);font-size:12px;line-height:1.5}
+.note b{color:#fff}
+.viewport{max-width:1120px;margin:0 auto;overflow:auto}
+
+/* ---- OS window frame ---- */
+.frame{width:var(--w);border:1px solid var(--border);background:var(--bg);margin:0 auto}
+.os{height:30px;background:#101116;display:flex;align-items:center;padding:0 12px;color:var(--tx2);font-size:12px;border-bottom:1px solid var(--border)}
+.os span:first-child{flex:1;text-align:center;padding-left:54px}
+.os i{display:inline-block;width:10px;height:10px;border:1px solid var(--tx3);margin-left:8px}
+.win{height:var(--h);display:flex;flex-direction:column;background:var(--bg)}
+.scroll{overflow-y:auto;min-height:0}
+.scroll::-webkit-scrollbar{width:6px}
+.scroll::-webkit-scrollbar-track{background:var(--surface)}
+.scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ---- shared atoms ---- */
+.pn{background:var(--surface);border:1px solid var(--border);border-radius:3px;min-width:0}
+.ph{height:36px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2)}
+.pb{padding:0 0 10px}
+.kv{height:24px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kv .l{color:var(--tx2)} .kv .r{color:#fff;font-weight:600;text-align:right;white-space:nowrap}
+.kv:nth-child(even){background:var(--alt)}
+.pend{display:inline-block;height:16px;line-height:16px;padding:0 6px;border-radius:2px;background:var(--elev);color:var(--tx2);font-size:10px;font-weight:700;letter-spacing:.06em}
+.c1{color:var(--c1)}.c2{color:var(--c2)}.c3{color:var(--c3)}.c4{color:var(--c4)}.c5{color:var(--c5)}.c6{color:var(--c6)}
+.f1{background:var(--c1)}.f2{background:var(--c2)}.f3{background:var(--c3)}.f4{background:var(--c4)}.f5{background:var(--c5)}.f6{background:var(--c6)}
+.k1{background:var(--k1)}.k2{background:var(--k2)}.k3{background:var(--k3)}.k4{background:var(--k4)}.k5{background:var(--k5)}.k6{background:var(--k6)}
+.av b,.tile b{font-weight:700}
+.sl{font-style:normal;color:var(--tx3);margin:0 3px;font-weight:400}
+.pt{color:var(--pot)}
+.badge{display:inline-flex;align-items:center;justify-content:center;height:16px;min-width:28px;padding:0 5px;border-radius:2px;font-size:10px;font-weight:700;color:#fff}
+.bGK{background:#C07B2A}.bD{background:#3A6BA8}.bDM{background:#5A3A8A}.bM{background:#3A8A5A}.bST{background:#A83A3A}.bINJ{background:#8B1A1A}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid var(--border2);color:var(--tx2)}
+.pill.on{color:var(--hg);border-color:var(--hg);background:rgba(90,160,209,0.14)}
+.pill.unk{border-color:transparent;padding:0 2px}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:3px;font-size:11px;font-weight:600;background:var(--elev);color:#fff}
+.chip.inj{background:#8B1A1A}
+.chip.pers{background:var(--sel);color:var(--pot)}
+.chip.ok{color:var(--c5)}
+.avatar{width:40px;height:40px;background:var(--elev);border-radius:3px;display:flex;align-items:center;justify-content:center;flex:none}
+.avatar svg{width:26px;height:26px}
+.bar{height:6px;background:var(--border);flex:1;position:relative;min-width:0}
+.bar i{position:absolute;left:0;top:0;bottom:0;display:block}
+.btn{height:32px;padding:0 16px;border-radius:3px;font-weight:700;font-size:12px;border:1px solid transparent;white-space:nowrap}
+.b1{background:var(--acc);color:#fff}.b1:hover{background:var(--acc2)}
+.b2{background:var(--surface);border-color:var(--border2);color:#fff}.b2:hover{background:var(--elev)}
+.b2.q{border-color:var(--hg);color:var(--hg);background:rgba(90,160,209,0.14)}
+.b2.on{border-color:var(--acc2);color:var(--pot);background:var(--sel)}
+.b2[disabled]{color:var(--tx3);border-color:var(--border);cursor:default;background:var(--elev)}
+.strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;flex:none}
+.strip .hint{flex:1;color:var(--tx2);font-size:11px}
+/* potential switch */
+.sw{display:inline-flex;align-items:center;gap:8px;color:var(--tx2);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.sw .tr{width:30px;height:16px;border-radius:8px;background:var(--border);position:relative;flex:none}
+.sw .tr::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:6px;background:var(--tx2)}
+.sw.on{color:#fff}.sw.on .tr{background:var(--acc2)}.sw.on .tr::after{left:16px;background:#fff}
+.pnote{font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx2);margin-right:4px}
+.sw small{font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx3)}
+/* segmented current|potential (B) */
+.sg{display:inline-flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden}
+.sg button{white-space:nowrap;height:24px;padding:0 12px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
+.sg button.on{background:var(--acc);color:#fff}
+.sg button.on.p{background:var(--acc)}
+/* legend */
+.lg{white-space:nowrap;display:flex;align-items:center;gap:12px;color:var(--tx2);font-size:11px}
+.lg span{display:inline-flex;align-items:center;gap:5px}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:2px}
+
+/* ---- attribute rows ---- */
+.ar{height:24px;padding:0 6px;display:flex;align-items:center;gap:4px}
+.ar:nth-child(even){background:var(--alt)}
+.ar .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar .av{width:46px;text-align:right;flex:none;font-size:12px}
+.ch{height:24px;padding:0 8px;display:flex;align-items:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2)}
+.cols{display:flex;gap:12px;padding:0 6px 10px}
+.cols>.col{flex:1;min-width:0}
+
+/* =============== OPTION A =============== */
+.a-body{flex:1;min-height:0;display:flex;gap:12px;padding:12px}
+.a-left{width:224px;flex:none;display:flex;flex-direction:column;gap:12px}
+.a-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.a-right{width:240px;flex:none;display:flex;flex-direction:column;gap:12px}
+.a-id{display:flex;align-items:center;gap:12px;padding:12px}
+.a-id .nm{font-size:16px;font-weight:700;line-height:1.2}
+.a-id .sb{color:var(--tx2);font-size:11px;margin-top:2px}
+.ab{display:flex;align-items:center;gap:8px;height:28px;padding:0 12px}
+.ab .l{width:24px;color:var(--tx2)} .ab .v{width:32px;text-align:right;font-weight:700;font-size:13px}
+.prow{display:flex;gap:6px;align-items:center}
+.pgrid{display:flex;flex-direction:column;gap:2px;padding:0 12px 4px}
+.pgrid .row{display:flex;gap:8px}
+.pgrid .cell{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:28px}
+.pgrid .cell b{font-size:12px}
+
+/* =============== OPTION B =============== */
+.b-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:12px}
+.hero{display:flex;gap:24px;padding:16px;height:200px;align-items:stretch;flex:none}
+.hero .id{flex:1;min-width:0;display:flex;gap:14px}
+.hero .id .avatar{width:64px;height:64px}
+.hero .id .avatar svg{width:40px;height:40px}
+.hero .nm{font-size:24px;font-weight:700;line-height:1.15}
+.hero .sb{color:var(--tx2);font-size:12px;margin-top:4px}
+.hero .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.big{display:flex;gap:20px;flex:none;width:208px}
+.big .n{flex:1}
+.big .lab{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx2);text-transform:uppercase}
+.big .num{font-size:36px;font-weight:700;line-height:1.1;margin:2px 0 6px}
+.pitchwrap{display:flex;gap:12px;flex:none}
+.pitch{width:112px;height:168px;position:relative;border:1px solid var(--border2);background:var(--bg);border-radius:3px}
+.pitch .ln{position:absolute;border:1px solid var(--border)}
+.pitch .dot{position:absolute;width:20px;height:20px;border-radius:10px;margin:-10px 0 0 -10px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1px solid}
+.toppos{width:120px;display:flex;flex-direction:column;gap:4px;justify-content:center}
+.toppos .r{display:flex;align-items:center;gap:8px;height:24px}
+.toppos .r b{font-size:13px;margin-left:auto}
+.acts{width:196px;flex:none;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.acts .two{display:flex;gap:8px}.acts .two .btn{flex:1;padding:0}
+.acts .btn.w{width:100%}
+.b-main{flex:none;display:flex;gap:12px;align-items:stretch}
+.b-attr{flex:1;min-width:0;display:flex;flex-direction:column}
+.b-rail{width:252px;flex:none;display:flex;flex-direction:column;gap:12px}
+.tr2{height:26px;padding:0 6px;display:flex;align-items:center;gap:8px}
+.tr2 .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile{height:20px;min-width:30px;padding:0 6px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.prs{display:flex;align-items:center;gap:8px;height:26px;padding:0 12px}
+.prs .an{width:96px;color:var(--tx2)} .prs b{width:22px;text-align:right}
+
+/* =============== OPTION C =============== */
+.c-sum{display:flex;align-items:center;gap:14px;padding:0 16px;height:72px;background:var(--surface);border-bottom:1px solid var(--border);flex:none}
+.c-sum .nm{font-size:18px;font-weight:700;line-height:1.2}
+.c-sum .sb{color:var(--tx2);font-size:12px;margin-top:2px}
+.c-sum .r{margin-left:auto;display:flex;align-items:center;gap:10px}
+.cab{display:flex;flex-direction:column;align-items:flex-start;padding:0 10px;height:44px;justify-content:center;background:var(--bg);border:1px solid var(--border);border-radius:3px}
+.cab small{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx2);text-transform:uppercase}
+.cab b{font-size:18px;line-height:1.1}
+.tabs{display:flex;align-items:flex-end;height:40px;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--border);flex:none}
+.tabs .t{height:40px;padding:0 16px;font-size:12px;font-weight:600;color:var(--tx2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs .t.on{color:#fff;border-bottom-color:var(--acc2)}
+.tabs .sp{flex:1}
+.tabs .sw{align-self:center}.tabs .pnote{align-self:center;margin-right:12px}
+.c-body{flex:1;min-height:0;padding:12px;display:flex;gap:12px;align-items:flex-start}
+.c-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.cr{height:26px;padding:0 12px;display:flex;align-items:center;gap:10px}
+.cr:nth-child(even){background:var(--alt)}
+.cr .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cr .bars{width:80px;height:6px;background:var(--border);display:flex;flex:none}
+.cr .bars i{display:block;height:6px}
+.cr .av{width:50px;text-align:right;flex:none}
+.cr .gr{width:96px;color:var(--tx2);font-size:11px;flex:none}
+.empty{padding:14px 12px 16px;color:var(--tx2);font-size:12px;line-height:1.5}
+.empty .pend{margin-bottom:8px;display:block;width:max-content}
+.hgt{padding:8px 12px 14px;color:var(--tx2);font-size:11px;line-height:1.5}
+
+.cap{max-width:1120px;margin:10px auto 0;color:var(--tx3);font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="rv">
+  <h1>Player window</h1>
+  <div class="seg xl" id="optSeg"></div>
+  <span class="lab">state</span>
+  <div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  <span class="lab">homegrown</span>
+  <div class="seg" id="hgSeg"></div>
+  <span class="lab">size</span>
+  <div class="seg" id="szSeg"></div>
+</div>
+<p class="note" id="note"></p>
+<div class="viewport" id="vp"><div class="frame" id="frame"></div></div>
+<p class="cap">Sample data (Micky van de Ven, Tottenham). Height, weight, wage and value are not in the save today: "PENDING" flips them to their real-app rendering. Potential values are an estimate from PA, not stored per attribute.</p>
+
+<script>
+/* ---------------- sample data ---------------- */
+const POS_ORDER=['GK','SW','DL','DC','DR','DM','ML','MC','MR','AML','AMC','AMR','ST','WBL','WBR'];
+const BADGE={GK:'bGK',SW:'bD',DL:'bD',DC:'bD',DR:'bD',WBL:'bD',WBR:'bD',DM:'bDM',ML:'bM',MC:'bM',MR:'bM',AML:'bM',AMC:'bM',AMR:'bM',ST:'bST'};
+const FULL={GK:'Goalkeeper',SW:'Sweeper',DL:'Defender (L)',DC:'Defender (C)',DR:'Defender (R)',DM:'Def. Midfielder',ML:'Midfielder (L)',MC:'Midfielder (C)',MR:'Midfielder (R)',AML:'Att. Mid (L)',AMC:'Att. Mid (C)',AMR:'Att. Mid (R)',ST:'Striker',WBL:'Wing-back (L)',WBR:'Wing-back (R)'};
+// attr tuple: [name, current, potential, inverse(lower is better)]
+const OUT={
+ name:'Micky van de Ven',pos:'DC',posName:'Centre Back',age:26,born:2000,nat:'Dutch',club:'Tottenham',ca:149,pa:160,dev:15,
+ inj:14,until:'Jun 2031',wage:'£100K p/w',value:'£88M – £97M',height:'193 cm',weight:'81 kg',
+ pers:[['Adaptability',13],['Ambition',17],['Loyalty',9],['Pressure',14],['Professionalism',15],['Sportsmanship',12],['Temperament',14]],persLabel:'Ambitious',
+ posr:{GK:1,SW:14,DL:18,DC:20,DR:9,DM:12,ML:5,MC:8,MR:3,AML:3,AMC:4,AMR:2,ST:4,WBL:15,WBR:6},
+ g:{
+  tech:[['Corners',4,4],['Crossing',8,8],['Dribbling',10,11],['Finishing',5,5],['First Touch',12,14],['Free Kick',4,4],['Heading',14,16],['Long Shots',6,6],['Long Throws',5,5],['Marking',15,17],['Passing',12,14],['Penalties',5,5],['Tackling',16,17],['Technique',11,12]],
+  ment:[['Aggression',11,11],['Anticipation',15,17],['Bravery',14,14],['Composure',14,16],['Concentration',14,16],['Decisions',14,16],['Determination',15,15],['Flair',7,7],['Leadership',10,11],['Off the Ball',7,7],['Positioning',15,17],['Teamwork',14,14],['Vision',10,11],['Work Rate',14,14]],
+  phys:[['Acceleration',18,18],['Agility',13,13],['Balance',13,13],['Jumping Reach',16,16],['Natural Fitness',14,14],['Pace',19,19],['Stamina',14,14],['Strength',14,15]],
+  gk:[['Aerial Reach',2,2],['Command of Area',2,2],['Communication',9,10],['Eccentricity',3,3,1],['Handling',2,2],['Kicking',3,3],['One on Ones',2,2],['Punching',2,2],['Reflexes',2,2],['Rushing Out',2,2],['Throwing',3,3]],
+  hid:[['Consistency',13,14],['Dirtiness',8,8,1],['Important Matches',14,15],['Injury Prone',7,7,1],['Versatility',12,12]],
+  foot:[['Left Foot',20,20],['Right Foot',12,13]]}};
+const GKP={
+ name:'Guglielmo Vicario',pos:'GK',posName:'Goalkeeper',age:28,born:1998,nat:'Italian',club:'Tottenham',ca:138,pa:142,dev:13,
+ inj:0,until:'Jun 2029',wage:'£85K p/w',value:'£30M – £38M',height:'194 cm',weight:'89 kg',
+ pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],persLabel:'Professional',
+ posr:{GK:20,SW:2,DL:1,DC:1,DR:1,DM:1,ML:1,MC:1,MR:1,AML:1,AMC:1,AMR:1,ST:1,WBL:1,WBR:1},
+ g:{
+  tech:[['Corners',2,2],['Crossing',2,2],['Dribbling',3,3],['Finishing',2,2],['First Touch',9,10],['Free Kick',3,3],['Heading',4,4],['Long Shots',2,2],['Long Throws',6,6],['Marking',2,2],['Passing',11,12],['Penalties',3,3],['Tackling',2,2],['Technique',8,9]],
+  ment:[['Aggression',6,6],['Anticipation',14,15],['Bravery',15,15],['Composure',14,15],['Concentration',15,16],['Decisions',14,15],['Determination',13,13],['Flair',5,5],['Leadership',12,12],['Off the Ball',2,2],['Positioning',15,16],['Teamwork',12,12],['Vision',10,10],['Work Rate',8,8]],
+  phys:[['Acceleration',10,10],['Agility',15,15],['Balance',12,12],['Jumping Reach',13,13],['Natural Fitness',13,13],['Pace',8,8],['Stamina',10,10],['Strength',12,12]],
+  gk:[['Aerial Reach',15,16],['Command of Area',14,15],['Communication',15,16],['Eccentricity',7,7,1],['Handling',15,16],['Kicking',13,14],['One on Ones',14,15],['Punching',11,12],['Reflexes',16,16],['Rushing Out',12,13],['Throwing',12,12]],
+  hid:[['Consistency',14,14],['Dirtiness',5,5,1],['Important Matches',13,14],['Injury Prone',9,9,1],['Versatility',4,4]],
+  foot:[['Left Foot',10,10],['Right Foot',18,18]]}};
+
+[OUT,GKP].forEach(d=>{['hid','foot'].forEach(k=>d.g[k].forEach(a=>a[2]=a[1]));if(d.age>24)d.g.phys.forEach(a=>a[2]=a[1])});
+/* ---------------- state ---------------- */
+const S={opt:'a',tab:'overview',pot:false,short:false,inj:false,gk:false,pend:false,hg:'none',min:false,qhgp:false,qhgc:false};
+const P=()=>S.gk?GKP:OUT;
+const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
+const aT=a=>tier(a[3]?21-a[1]:a[1]);
+const showP=a=>S.pot&&a[2]>a[1];
+const vh=a=>`<b class="c${aT(a)}">${a[1]}</b>`+(showP(a)?`<i class="sl">/</i><b class="pt">${a[2]}</b>`:'');
+const pv=t=>S.pend?'<span class="pend">PENDING</span>':t;
+const badge=p=>`<span class="badge ${BADGE[p]}">${p}</span>`;
+const person='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+const hgp=()=>S.hg==='hgp'||S.hg==='both', hgc=()=>S.hg==='hgc'||S.hg==='both';
+const injured=()=>S.inj;
+
+function pills(){
+  const p=(l,on)=>`<span class="pill ${on?'on':''}">${l}</span>`;
+  return p('HGP',hgp())+p('HGC',hgc());
+}
+function injChip(){return injured()?`<span class="chip inj">Injured · ${P().inj||14} days</span>`:`<span class="chip ok">Fit</span>`}
+function potNote(){return S.pot?`<span class="pnote">Estimate at PA ${P().pa} · physical frozen after 24</span>`:''}
+function potSwitch(){return potNote()+`<button class="sw ${S.pot?'on':''}" data-act="pot"><span>Potential</span><span class="tr"></span></button>`}
+function potSeg(){return potNote()+`<span class="sg"><button data-act="potoff" class="${S.pot?'':'on'}">Current</button><button data-act="poton" class="${S.pot?'on':''}">+ Potential</button></span>`}
+function actions(){
+  const d=P();
+  const a=(k,l,set)=>set?`<button class="btn b2" disabled>${l} set</button>`:`<button class="btn b2 ${S['q'+k]?'q':''}" data-act="q${k}">${S['q'+k]?l+' queued':'Make '+l}</button>`;
+  return {hgp:a('hgp','HGP',hgp()),hgc:a('hgc','HGC',hgc()),
+    sl:`<button class="btn ${S.short?'b2 on':'b1'}" data-act="short">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button>`};
+}
+const HINT='Patches apply in memory. Save Changes backs up the save (2 backups) then overwrites it.';
+function strip(){const a=actions();return `<div class="strip"><span class="hint">${HINT}</span><button class="btn b2" data-act="close">Close</button>${a.hgp}${a.hgc}${a.sl}</div>`}
+function unknownHGC(){return false}
+
+const colA=(t,list)=>`<div class="col"><div class="ch">${t}</div>${list.map(a=>`<div class="ar"><span class="an">${a[0]}</span><span class="av">${vh(a)}</span></div>`).join('')}</div>`;
+const ph=(t,r='')=>`<div class="ph"><span>${t}</span>${r}</div>`;
+const kv=(l,r)=>`<div class="kv"><span class="l">${l}</span><span class="r">${r}</span></div>`;
+function pendPanel(t,msg){return `<div class="pn">${ph(t,'<span class="pend">PENDING</span>')}<div class="hgt" style="padding-top:0">${msg}</div></div>`}
+function persRows(bars){
+  return P().pers.map(([n,v])=>bars?
+    `<div class="prs"><span class="an">${n}</span><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span><b class="c${tier(v)}">${v}</b></div>`:
+    `<div class="ar"><span class="an">${n}</span><span class="av"><b class="c${tier(v)}">${v}</b></span></div>`).join('');
+}
+function posGrid(){
+  const d=P();const s=POS_ORDER.slice().sort((a,b)=>d.posr[b]-d.posr[a]||POS_ORDER.indexOf(a)-POS_ORDER.indexOf(b));
+  let h='';for(let r=0;r<5;r++){h+='<div class="row">'+[s[r],s[r+5],s[r+10]].map(p=>`<span class="cell">${badge(p)}<b class="c${tier(d.posr[p])}">${d.posr[p]}</b></span>`).join('')+'</div>'}
+  return `<div class="pgrid">${h}</div>`;
+}
+function primaryCols(){ // column plan shared by A row1 (3 cols)
+  const g=P().g;
+  return S.gk?[['Goalkeeping',g.gk],['Mental',g.ment],['Physical',g.phys]]:[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys]];
+}
+
+/* =============== A =============== */
+function optA(){
+  const d=P(),g=d.g,a=actions();
+  const left=`
+   <div class="a-left">
+    <div class="pn"><div class="a-id"><div class="avatar">${person}</div><div><div class="nm">${d.name}</div><div class="sb">${d.posName}</div></div></div>
+      <div style="padding-bottom:10px">${kv('Position',d.pos)}${kv('Age',`${d.age} <span style="color:var(--tx2);font-weight:400">(${d.born})</span>`)}${kv('Nationality',d.nat)}${kv('Club',d.club)}${kv('Height',pv(d.height))}${kv('Weight',pv(d.weight))}</div></div>
+    <div class="pn">${ph('Ability')}<div class="pb">
+      <div class="ab"><span class="l">CA</span><span class="bar"><i style="width:${d.ca/2}%;background:var(--acc2)"></i></span><span class="v" style="color:var(--acc2)">${d.ca}</span></div>
+      <div class="ab"><span class="l">PA</span><span class="bar"><i style="width:${d.pa/2}%;background:var(--pot)"></i></span><span class="v pt">${d.pa}</span></div>
+      ${kv('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`)}</div></div>
+    <div class="pn">${ph('Status')}<div class="pb">
+      <div class="kv"><span class="l">Homegrown</span><span class="prow">${pills()}</span></div>
+      <div class="kv"><span class="l">Fitness</span><span>${injChip()}</span></div></div></div>
+   </div>`;
+  const cols=primaryCols();
+  const mid=`
+   <div class="a-mid">
+    <div class="pn">${ph('Attributes',potSwitch())}<div class="cols">${cols.map(c=>colA(c[0],c[1])).join('')}</div></div>
+    <div style="display:flex;gap:12px">
+      <div class="pn" style="flex:none;width:218px"><div class="cols" style="padding-top:6px">${colA('Hidden &amp; footedness',[...g.hid,...g.foot])}</div></div>
+      <div class="pn" style="flex:1">${ph('Positions','<span style="font-weight:400;text-transform:none;letter-spacing:0">20 = natural</span>')}${posGrid()}</div>
+    </div>
+    ${S.gk?`<div class="pn"><div class="cols" style="padding-top:6px">${colA('Technical',g.tech.slice(0,7))}${colA('&nbsp;',g.tech.slice(7))}<div class="col"></div></div></div>`:''}
+   </div>`;
+  const right=`
+   <div class="a-right">
+    <div class="pn">${ph('Contract')}<div class="pb">${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}</div></div>
+    <div class="pn">${ph('Personality',`<span class="chip pers">${d.persLabel}</span>`)}<div style="padding:0 4px 10px">${persRows(false)}</div></div>
+    ${pendPanel('Player traits','Preferred moves are not stored in the save yet.')}
+   </div>`;
+  return `<div class="a-body scroll">${left}${mid}${right}</div>${strip()}`;
+}
+
+/* =============== B =============== */
+const PITCH={ST:[50,9],AML:[16,22],AMC:[50,22],AMR:[84,22],ML:[14,38],MC:[50,38],MR:[86,38],DM:[50,52],WBL:[11,55],WBR:[89,55],DL:[22,68],DC:[50,68],DR:[78,68],SW:[50,80],GK:[50,92]};
+function pitch(){
+  const d=P();
+  const L=`<i class="ln" style="left:-1px;right:-1px;top:50%"></i><i class="ln" style="left:50%;top:44%;width:28px;height:28px;margin-left:-14px;border-radius:14px"></i>
+   <i class="ln" style="left:25%;right:25%;top:-1px;height:20px"></i><i class="ln" style="left:25%;right:25%;bottom:-1px;height:20px"></i>`;
+  const D=POS_ORDER.map(p=>{const v=d.posr[p],t=tier(v),[x,y]=PITCH[p];
+    return `<span class="dot c${t} k${t}" style="left:${x}%;top:${y}%;border-color:var(--c${t})">${v}</span>`}).join('');
+  return `<div class="pitch">${L}${D}</div>`;
+}
+function optB(){
+  const d=P(),g=d.g,a=actions();
+  const top=POS_ORDER.slice().sort((x,y)=>d.posr[y]-d.posr[x]||POS_ORDER.indexOf(x)-POS_ORDER.indexOf(y)).slice(0,5);
+  const hero=`<div class="pn hero">
+    <div class="id"><div class="avatar">${person}</div><div style="min-width:0"><div class="nm">${d.name}</div>
+      <div class="sb">${d.posName} · ${d.nat} · ${d.age} years (born ${d.born}) · ${d.club}</div><div class="sb" style="margin-top:2px">${S.pend?'Height / weight <span class="pend">PENDING</span>':d.height+' · '+d.weight}</div>
+      <div class="chips">${pills()}${injChip()}<span class="chip" style="background:var(--bg);border:1px solid var(--border)">Dev Rate <b class="c${tier(d.dev)}" style="margin-left:6px">${d.dev}</b></span></div></div></div>
+    <div class="big"><div class="n"><div class="lab">CA · Current</div><div class="num" style="color:var(--acc2)">${d.ca}</div><div class="bar"><i style="width:${d.ca/2}%;background:var(--acc2)"></i></div></div>
+      <div class="n"><div class="lab">PA · Potential</div><div class="num pt">${d.pa}</div><div class="bar"><i style="width:${d.pa/2}%;background:var(--pot)"></i></div></div></div>
+    <div class="pitchwrap">${pitch()}<div class="toppos"><div class="lab" style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx2);text-transform:uppercase;margin-bottom:2px">Best positions</div>
+      ${top.map(p=>`<div class="r">${badge(p)}<b class="c${tier(d.posr[p])}">${d.posr[p]}</b></div>`).join('')}</div></div>
+    <div class="acts">${a.sl.replace('class="btn','class="btn w')}<div class="two">${a.hgp}${a.hgc}</div></div>
+  </div>`;
+  const cols=S.gk?[['Goalkeeping',g.gk],['Mental',g.ment],['Physical',g.phys],['Technical',g.tech]]:[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys],['Hidden',g.hid]];
+  const extra=S.gk?[['Footedness',g.foot],null,['Hidden',g.hid],null]:[null,null,['Footedness',g.foot],null];
+  const tileIn=(t,list)=>`<div class="ch">${t}</div>`+list.map(a=>`<div class="tr2"><span class="an">${a[0]}</span><span class="tile k${aT(a)}" style="min-width:${S.pot?58:30}px">${vh(a)}</span></div>`).join('');
+  const grid=cols.map((c,i)=>`<div class="col">${tileIn(c[0],c[1])}${extra[i]?'<div style="height:10px"></div>'+tileIn(extra[i][0],extra[i][1]):''}</div>`).join('');
+  const attrs=`<div class="pn b-attr">${ph('Attributes',`<span style="display:flex;align-items:center;gap:8px">${potSeg()}</span>`)}<div class="cols" style="padding-top:2px">${grid}</div></div>`;
+  const rail=`<div class="b-rail">
+    <div class="pn">${ph('Contract')}<div class="pb">${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}</div></div>
+    <div class="pn">${ph('Personality',`<span class="chip pers">${d.persLabel}</span>`)}<div style="padding-bottom:8px">${persRows(true)}</div></div>
+    ${pendPanel('Player traits','Preferred moves are not stored in the save yet.')}
+  </div>`;
+  return `<div class="b-body scroll">${hero}<div class="b-main">${attrs}${rail}</div></div>`;
+}
+function tierLegend(){return [['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16',5],['17–20',6]].map(([l,t])=>`<span><i class="f${t}"></i>${l}</span>`).join('')}
+
+/* =============== C =============== */
+const TABS=[['overview','Overview'],['attributes','Attributes'],['positions','Positions'],['contract','Contract &amp; history']];
+function barSeg(a,w){ // w px track; 4px per point
+  const c=a[1],p=a[2],u=4,cw=c*u,pw=showP(a)?(p-c)*u:0;
+  return `<span class="bars"><i class="f${aT(a)}" style="width:${cw}px"></i><i style="width:${pw}px;background:var(--pot)"></i></span>`;
+}
+const crow=a=>`<div class="cr"><span class="an">${a[0]}</span>${barSeg(a)}<span class="av">${vh(a)}</span></div>`;
+const cpan=(t,list)=>`<div class="pn">${ph(t)}<div class="pb">${list.map(crow).join('')}</div></div>`;
+function grade(v){return v>=20?'Natural':v>=15?'Accomplished':v>=10?'Competent':v>=5?'Unconvincing':'Ineffective'}
+function posRow(p){const v=P().posr[p];return `<div class="cr">${badge(p)}<span class="an" style="color:#fff">${FULL[p]}</span><span class="bars" style="width:120px"><i class="f${tier(v)}" style="width:${v*6}px"></i></span><b class="av c${tier(v)}">${v}</b><span class="gr">${grade(v)}</span></div>`}
+function optC(){
+  const d=P(),g=d.g,a=actions();
+  const sum=`<div class="c-sum"><div class="avatar">${person}</div>
+    <div><div class="nm">${d.name}</div><div class="sb">${badge(d.pos)} <span style="margin-left:4px">${d.posName} · ${d.nat} · ${d.age} · ${d.club}</span></div></div>
+    <div class="r"><span class="cab"><small>CA</small><b style="color:var(--acc2)">${d.ca}</b></span><span class="cab"><small>PA</small><b class="pt">${d.pa}</b></span>
+      <span style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><span class="prow">${pills()}</span>${injChip()}</span></div></div>`;
+  const tabs=`<div class="tabs">${TABS.map(([k,l])=>`<button class="t ${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}<span class="sp"></span>${S.tab==='attributes'||S.tab==='overview'?potSwitch():''}</div>`;
+  let body='';
+  if(S.tab==='overview'){
+    const pool=[...(S.gk?g.gk:g.tech),...g.ment,...g.phys].filter(x=>!x[3]).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).slice(0,8);
+    const tp=POS_ORDER.slice().sort((x,y)=>d.posr[y]-d.posr[x]||POS_ORDER.indexOf(x)-POS_ORDER.indexOf(y)).slice(0,6);
+    body=`<div class="c-col">
+      <div class="pn">${ph('Ability')}<div class="pb">
+        <div class="ab"><span class="l">CA</span><span class="bar"><i style="width:${d.ca/2}%;background:var(--acc2)"></i></span><span class="v" style="color:var(--acc2)">${d.ca}</span></div>
+        <div class="ab"><span class="l">PA</span><span class="bar"><i style="width:${d.pa/2}%;background:var(--pot)"></i></span><span class="v pt">${d.pa}</span></div>
+        ${kv('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`)}</div></div>
+      ${cpan('Top attributes',pool)}</div>
+     <div class="c-col"><div class="pn">${ph('Personality',`<span class="chip pers">${d.persLabel}</span>`)}<div style="padding-bottom:8px">${persRows(true)}</div></div>
+      ${pendPanel('Player traits','Preferred moves are not stored in the save yet.')}</div>
+     <div class="c-col"><div class="pn">${ph('Best positions')}<div class="pb">${tp.map(posRow).join('')}</div></div>
+      <div class="pn">${ph('Contract')}<div class="pb">${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}</div></div></div>`;
+  } else if(S.tab==='attributes'){
+    const c=S.gk?[['Goalkeeping',g.gk],['Mental',g.ment],['Physical',g.phys],['Technical',g.tech]]:[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys]];
+    const c4=S.gk?`<div class="c-col">${cpan('Mental',g.ment)}</div><div class="c-col">${cpan('Physical',g.phys)}${cpan('Hidden',g.hid)}</div><div class="c-col">${cpan('Technical',g.tech)}${cpan('Footedness',g.foot)}</div>`
+      :`<div class="c-col">${cpan('Mental',g.ment)}</div><div class="c-col">${cpan('Physical',g.phys)}${cpan('Footedness',g.foot)}${cpan('Hidden',g.hid)}</div>`;
+    body=`<div class="c-col">${S.gk?cpan('Goalkeeping',g.gk):cpan('Technical',g.tech)}</div>${c4}`;
+  } else if(S.tab==='positions'){
+    const grp=(t,l)=>`<div class="pn">${ph(t)}<div class="pb">${l.map(posRow).join('')}</div></div>`;
+    body=`<div class="c-col">${grp('Defence',['SW','DL','DC','DR','WBL','WBR'])}${grp('Goalkeeper',['GK'])}</div>
+          <div class="c-col">${grp('Midfield',['DM','ML','MC','MR'])}${grp('Attack',['AML','AMC','AMR','ST'])}</div>`;
+  } else {
+    body=`<div class="c-col"><div class="pn">${ph('Contract')}<div class="pb">${kv('Club',d.club)}${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}${kv('Height',pv(d.height))}${kv('Weight',pv(d.weight))}</div></div></div>
+     <div class="c-col"><div class="pn">${ph('Homegrown')}<div class="pb"><div class="kv"><span class="l">Homegrown player (HGP)</span><span class="prow"><span class="pill ${hgp()?'on':''}">HGP</span></span></div>
+        <div class="kv"><span class="l">Homegrown at club (HGC)</span><span class="prow"><span class="pill ${hgc()?'on':''}">HGC</span></span></div>
+        <div class="hgt">Use Make HGP / Make HGC below.</div></div></div>
+      <div class="pn">${ph('Career history','<span class="pend">PENDING</span>')}<div class="empty" style="padding-top:0">Appearances, goals and previous clubs are not stored in the save yet.</div></div></div>`;
+  }
+  return `${sum}${tabs}<div class="c-body scroll">${body}</div>${strip()}`;
+}
+
+/* ---------------- shell ---------------- */
+const OPTS={
+ a:['A · Refined profile','The current left / centre / right structure, cleaned: flat panels, one border treatment, zebra rows instead of hairlines, six-tier value colours, position grid and GK column added. Suits: people who like FM Scout / the in-game profile and want zero relearning.'],
+ b:['B · Hero + dense grid','Identity and the numbers that matter (CA / PA, position pitch, actions) live in a hero strip; every attribute sits in one dense tiled grid below, with a rail for contract and personality. Suits: fast scouting, "is he good and where does he play" in one glance.'],
+ c:['C · Summary + tabs','A persistent summary header with Overview / Attributes / Positions / Contract & history tabs. Suits: progressive disclosure and room for history later; costs a click to see the full attribute set.']};
+function render(){
+  const st={};document.querySelectorAll('.scroll').forEach((e,i)=>st[i]=e.scrollTop);
+  const d=P();
+  document.getElementById('frame').innerHTML=`<div class="os"><span>${d.name}</span><i></i><i></i><i></i></div><div class="win">${({a:optA,b:optB,c:optC})[S.opt]()}</div>`;
+  document.documentElement.style.setProperty('--w',S.min?'1040px':'1100px');
+  document.documentElement.style.setProperty('--h',S.min?'640px':'760px');
+  document.querySelectorAll('.scroll').forEach((e,i)=>e.scrollTop=st[i]||0);
+  seg('optSeg',[['a','A'],['b','B'],['c','C']],S.opt,v=>{S.opt=v;render()});
+  seg('hgSeg',[['none','None'],['hgp','HGP'],['hgc','HGC'],['both','Both']],S.hg,v=>{S.hg=v;render()});
+  seg('szSeg',[['def','1100 × 760'],['min','1040 × 640 min']],S.min?'min':'def',v=>{S.min=v==='min';render()});
+  const tg=document.getElementById('tgs');tg.innerHTML='';
+  [['pot','Potential'],['short','Shortlisted'],['inj','Injured'],['gk','Goalkeeper'],['pend','Unparsed = PENDING']].forEach(([k,l])=>{
+    const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
+  document.getElementById('note').innerHTML=`<b>${OPTS[S.opt][0]}.</b> ${OPTS[S.opt][1]}`;
+  location.hash=S.opt+(S.opt==='c'&&S.tab!=='overview'?'-'+S.tab:'');
+  document.title='Player window - option '+S.opt.toUpperCase();
+}
+function seg(id,items,cur,fn){const e=document.getElementById(id);e.innerHTML='';items.forEach(([v,l])=>{const b=document.createElement('button');b.textContent=l;if(v===cur)b.className='on';b.onclick=()=>fn(v);e.appendChild(b)})}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act],[data-tab]');if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;return render()}
+  const a=t.dataset.act;
+  if(a==='pot')S.pot=!S.pot;else if(a==='poton')S.pot=true;else if(a==='potoff')S.pot=false;
+  else if(a==='short')S.short=!S.short;else if(a==='qhgp')S.qhgp=!S.qhgp;else if(a==='qhgc')S.qhgc=!S.qhgc;else return;
+  render();
+});
+(function init(){
+  const h=location.hash.replace('#','').split('+');const m=(h[0]||'a').match(/^(a|b|c)(?:-(overview|attributes|positions|contract))?$/);
+  if(m){S.opt=m[1];if(m[2])S.tab=m[2]}
+  h.slice(1).forEach(f=>{if(['pot','short','inj','gk','pend','min'].includes(f))S[f]=true;if(['hgp','hgc'].includes(f))S.hg=f;if(f==='both')S.hg='both'});
+  render();
+})();
+</script>
+</body>
+</html>

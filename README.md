@@ -7,7 +7,7 @@ PyQt6 desktop tool for viewing and editing Football Manager 2024 save files on L
 - Club overview and Save Info (game, database and manager details read from the save)
 - Squads with full attributes, injuries and contract dates; club and global staff tables
 - Scouting reports (prospects, wonderkids, best in position/role), quick filters and separate player and staff shortlists
-- Homegrown patching: mark players HGP (nation) or HGC (club) and write a new save file
+- Homegrown patching: mark players HGP (nation) or HGC (club); Save Changes makes two rolling backups (`.bk1`/`.bk2`) and overwrites the save in place
 
 ## Run
 
