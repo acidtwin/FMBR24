@@ -2522,7 +2522,7 @@ class MainWindow(QMainWindow):
         tab_bar = QFrame()
         tab_bar.setFixedHeight(40)
         tab_bar.setStyleSheet(
-            f"background:{COLORS['surface']}; border-bottom:1px solid {COLORS['border']};")
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
         tab_row = QHBoxLayout(tab_bar)
         tab_row.setContentsMargins(12, 3, 12, 0)
         tab_row.setSpacing(0)
@@ -2566,7 +2566,8 @@ class MainWindow(QMainWindow):
             f" border-radius:2px; padding:4px 14px; font-size:12px; font-weight:bold; }}"
             f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
             f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}"
-            f"QPushButton:disabled {{ background:{COLORS['elevated']}; color:{COLORS['text_dim']}; }}"
+            f"QPushButton:disabled {{ background:{COLORS['surface']}; color:{COLORS['text_dim']};"
+            f" border:1px solid {COLORS['border']}; }}"
         )
         _clear_ss = (
             f"QPushButton {{ background:transparent; color:{COLORS['text_secondary']};"
@@ -2631,9 +2632,9 @@ class MainWindow(QMainWindow):
             f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
         hdr_row = QHBoxLayout(hdr)
         hdr_row.setContentsMargins(16, 0, 16, 0)
-        hdr_lbl = QLabel('Staff')
+        hdr_lbl = QLabel('Quick Filters')
         hdr_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+            f"color:{COLORS['text_secondary']}; font-size:11px;")
         hdr_row.addWidget(hdr_lbl)
         hdr_row.addStretch()
         self._staff_count_lbl = QLabel('')
@@ -2822,6 +2823,18 @@ class MainWindow(QMainWindow):
         hdr_row.addWidget(self._club_staff_title_lbl)
         hdr_row.addStretch()
         vbox.addWidget(hdr)
+
+        qf_bar = QFrame()
+        qf_bar.setFixedHeight(38)
+        qf_bar.setStyleSheet(
+            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+        qf_row = QHBoxLayout(qf_bar)
+        qf_row.setContentsMargins(16, 0, 16, 0)
+        qf_lbl = QLabel('Quick Filters')
+        qf_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        qf_row.addWidget(qf_lbl)
+        qf_row.addStretch()
+        vbox.addWidget(qf_bar)
 
         self._club_staff_table = _HoverTable()
         self._club_staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -3083,6 +3096,11 @@ class MainWindow(QMainWindow):
         filter_row2.setContentsMargins(16, 0, 16, 0)
         filter_row2.setSpacing(12)
         vbox.addWidget(filter_frame)
+
+        _qf_lbl = QLabel('Quick Filters')
+        _qf_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        filter_row2.addWidget(_qf_lbl)
+        filter_row2.addSpacing(8)
 
         self._report_pos_bar = QWidget()
         pos_row = QHBoxLayout(self._report_pos_bar)
@@ -3384,9 +3402,9 @@ class MainWindow(QMainWindow):
         # Title row
         title_row = QHBoxLayout()
         title_row.setContentsMargins(16, 10, 16, 6)
-        title_lbl = QLabel('Players')
+        title_lbl = QLabel('Quick Filters')
         title_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;")
+            f"color:{COLORS['text_secondary']}; font-size:11px;")
         title_row.addWidget(title_lbl)
         title_row.addStretch()
         self._players_count_lbl = QLabel('')
