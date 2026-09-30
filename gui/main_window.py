@@ -208,7 +208,7 @@ class _SidebarFrame(QFrame):
         self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
         # Texture overlay
         if self._bg_px and not self._bg_px.isNull():
-            p.setOpacity(0.40)
+            p.setOpacity(0.22)
             scaled = self._bg_px.scaled(
                 self.width(), self.height(),
                 Qt.AspectRatioMode.IgnoreAspectRatio,
