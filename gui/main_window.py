@@ -1654,18 +1654,15 @@ class _HeaderHeroWidget(QWidget):
         p = QPainter(self)
         w, h = self.width(), self.height()
 
-        # 1. Base
-        p.fillRect(0, 0, w, h, QColor('#080C12'))
+        # 1. Base: diagonal gradient matching mockup .a-hero background
+        # linear-gradient(135deg, #0d1f35 0%, #0f2a1a 50%, #1a1208 100%)
+        base_grad = QLinearGradient(0, 0, w, h)
+        base_grad.setColorAt(0.00, QColor(0x0d, 0x1f, 0x35))
+        base_grad.setColorAt(0.50, QColor(0x0f, 0x2a, 0x1a))
+        base_grad.setColorAt(1.00, QColor(0x1a, 0x12, 0x08))
+        p.fillRect(0, 0, w, h, QBrush(base_grad))
 
-        # 2. Gradient overlay — behind image, same as mockup z-order
-        # rgba(8,12,18,0.30) 0%, rgba(8,12,18,0.55) 55%, rgba(8,12,18,0.90) 100%
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.00, QColor(8, 12, 18, 77))
-        grad.setColorAt(0.55, QColor(8, 12, 18, 140))
-        grad.setColorAt(1.00, QColor(8, 12, 18, 230))
-        p.fillRect(0, 0, w, h, QBrush(grad))
-
-        # 3. Stadium image on top of gradient at 0.38 opacity (mockup z-order)
+        # 2. Stadium image at 38% opacity (mockup .a-hero-bg, z-index auto — lowest)
         if self._bg_pixmap and not self._bg_pixmap.isNull():
             p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
@@ -1677,6 +1674,14 @@ class _HeaderHeroWidget(QWidget):
             y_off = int((h - scaled.height()) * 0.40)
             p.drawPixmap(x_off, y_off, scaled)
             p.setOpacity(1.0)
+
+        # 3. Dark vignette ON TOP of image (mockup .a-hero-overlay, z-index 1)
+        # rgba(8,12,18,0.30) 0%, rgba(8,12,18,0.55) 55%, rgba(8,12,18,0.90) 100%
+        overlay = QLinearGradient(0, 0, 0, h)
+        overlay.setColorAt(0.00, QColor(8, 12, 18, 77))
+        overlay.setColorAt(0.55, QColor(8, 12, 18, 140))
+        overlay.setColorAt(1.00, QColor(8, 12, 18, 230))
+        p.fillRect(0, 0, w, h, QBrush(overlay))
 
         # 4. Pitch texture — from mockup ::before:
         # Vertical lines: repeating every 40px, 2px wide, alpha ~4 (0.016*255)
