@@ -1971,20 +1971,20 @@ class MainWindow(QMainWindow):
             " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
         )
         _tbtn_save_ss = (
-            "QPushButton { background: #276749; color: #fff;"
-            " border: none; border-radius: 2px;"
+            "QPushButton { background: #1a3d28; color: rgba(255,255,255,0.85);"
+            " border: 1px solid rgba(80,160,100,0.30); border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
-            "QPushButton:hover { background: #2f855a; }"
-            "QPushButton:pressed { background: #1e5035; }"
+            "QPushButton:hover { background: #1f4d32; border-color: rgba(80,160,100,0.50); color: #fff; }"
+            "QPushButton:pressed { background: #142e1e; }"
             "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
             " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
         )
         _tbtn_reload_ss = (
-            "QPushButton { background: #92601e; color: #fff;"
-            " border: none; border-radius: 2px;"
+            "QPushButton { background: #3a2608; color: rgba(255,255,255,0.85);"
+            " border: 1px solid rgba(160,110,40,0.30); border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
-            "QPushButton:hover { background: #b07226; }"
-            "QPushButton:pressed { background: #744d17; }"
+            "QPushButton:hover { background: #4a3010; border-color: rgba(160,110,40,0.50); color: #fff; }"
+            "QPushButton:pressed { background: #2a1c06; }"
             "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
             " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
         )
