@@ -2176,17 +2176,8 @@ class MainWindow(QMainWindow):
         if key == 'club':
             self._set_header(club_name or 'Club', '', self._make_header_rep_widget(3))
         elif key == 'squad':
-            squad = getattr(self, '_squad', [])
-            n = len(squad)
-            n_hgp = sum(1 for p in squad if p.get('hgp'))
-            b = self._save_data.get('b') if self._save_data else None
-            if b and self._club_entity_id:
-                from fm_editor.patch import is_hgc as _is_hgc_fn
-                n_hgc = sum(1 for p in squad if _is_hgc_fn(b, p, self._club_entity_id))
-            else:
-                n_hgc = 0
-            self._set_header('Squads', f"{club_name} · {n} players",
-                             self._make_header_pill_widget([('HGP', n_hgp), ('HGC', n_hgc)]))
+            n = len(getattr(self, '_squad', []))
+            self._set_header('Squads', f"{club_name} · {n} players")
         elif key == 'staff':
             n = self._staff_table.rowCount() if hasattr(self, '_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
