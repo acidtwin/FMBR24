@@ -641,6 +641,15 @@ def _club_muted_row(text):
     return lbl
 
 
+def _age_in_range(p, mn, mx, year=None):
+    """Age filter: a bound of 0 means disabled (no lower / no upper limit)."""
+    if not mn and not mx:
+        return True
+    y = year or FM_SEASON_YEAR
+    age = y - p.get('birth_year', y)
+    return age >= mn and (not mx or age <= mx)
+
+
 def _progress_rate(person):
     personality = person.get('personality', [])
     raw_attrs = person.get('raw_attrs', [])
@@ -3566,8 +3575,8 @@ class MainWindow(QMainWindow):
         staff_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         hdr_row.addWidget(staff_age_lbl)
         self._staff_age_min = QSpinBox()
-        self._staff_age_min.setRange(15, 60)
-        self._staff_age_min.setValue(15)
+        self._staff_age_min.setRange(0, 99)
+        self._staff_age_min.setValue(0)
         self._staff_age_min.setFixedSize(52, 26)
         self._staff_age_min.valueChanged.connect(lambda _v: self._populate_staff_table())
         hdr_row.addWidget(self._staff_age_min)
@@ -3575,8 +3584,8 @@ class MainWindow(QMainWindow):
         staff_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         hdr_row.addWidget(staff_dash)
         self._staff_age_max = QSpinBox()
-        self._staff_age_max.setRange(15, 60)
-        self._staff_age_max.setValue(60)
+        self._staff_age_max.setRange(0, 99)
+        self._staff_age_max.setValue(0)
         self._staff_age_max.setFixedSize(52, 26)
         self._staff_age_max.valueChanged.connect(lambda _v: self._populate_staff_table())
         hdr_row.addWidget(self._staff_age_max)
@@ -3702,7 +3711,7 @@ class MainWindow(QMainWindow):
         staff = [p for p in people if 'ca' not in p]
         if hasattr(self, '_staff_age_min'):
             mn, mx = self._staff_age_min.value(), self._staff_age_max.value()
-            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
+            staff = [p for p in staff if _age_in_range(p, mn, mx)]
         self._fill_staff_rows(self._staff_table, staff)
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
@@ -3711,8 +3720,8 @@ class MainWindow(QMainWindow):
     def _clear_staff_filter(self):
         self._staff_age_min.blockSignals(True)
         self._staff_age_max.blockSignals(True)
-        self._staff_age_min.setValue(15)
-        self._staff_age_max.setValue(60)
+        self._staff_age_min.setValue(0)
+        self._staff_age_max.setValue(0)
         self._staff_age_min.blockSignals(False)
         self._staff_age_max.blockSignals(False)
         self._populate_staff_table()
@@ -3791,8 +3800,8 @@ class MainWindow(QMainWindow):
         cstaff_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         qf_row.addWidget(cstaff_age_lbl)
         self._club_staff_age_min = QSpinBox()
-        self._club_staff_age_min.setRange(15, 60)
-        self._club_staff_age_min.setValue(15)
+        self._club_staff_age_min.setRange(0, 99)
+        self._club_staff_age_min.setValue(0)
         self._club_staff_age_min.setFixedSize(52, 26)
         self._club_staff_age_min.valueChanged.connect(lambda _v: self._populate_club_staff_table())
         qf_row.addWidget(self._club_staff_age_min)
@@ -3800,8 +3809,8 @@ class MainWindow(QMainWindow):
         cstaff_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         qf_row.addWidget(cstaff_dash)
         self._club_staff_age_max = QSpinBox()
-        self._club_staff_age_max.setRange(15, 60)
-        self._club_staff_age_max.setValue(60)
+        self._club_staff_age_max.setRange(0, 99)
+        self._club_staff_age_max.setValue(0)
         self._club_staff_age_max.setFixedSize(52, 26)
         self._club_staff_age_max.valueChanged.connect(lambda _v: self._populate_club_staff_table())
         qf_row.addWidget(self._club_staff_age_max)
@@ -3890,7 +3899,7 @@ class MainWindow(QMainWindow):
                  if pid in people_by_id and 'ca' not in people_by_id[pid]]
         if hasattr(self, '_club_staff_age_min'):
             mn, mx = self._club_staff_age_min.value(), self._club_staff_age_max.value()
-            staff = [p for p in staff if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
+            staff = [p for p in staff if _age_in_range(p, mn, mx)]
         staff.sort(key=lambda p: p.get('name', ''))
 
         self._club_staff_table.setSortingEnabled(False)
@@ -3928,8 +3937,8 @@ class MainWindow(QMainWindow):
     def _clear_club_staff_filter(self):
         self._club_staff_age_min.blockSignals(True)
         self._club_staff_age_max.blockSignals(True)
-        self._club_staff_age_min.setValue(15)
-        self._club_staff_age_max.setValue(60)
+        self._club_staff_age_min.setValue(0)
+        self._club_staff_age_max.setValue(0)
         self._club_staff_age_min.blockSignals(False)
         self._club_staff_age_max.blockSignals(False)
         self._populate_club_staff_table()
@@ -4005,8 +4014,8 @@ class MainWindow(QMainWindow):
         sl_age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         sl_filter_row.addWidget(sl_age_lbl)
         self._shortlist_age_min = QSpinBox()
-        self._shortlist_age_min.setRange(15, 60)
-        self._shortlist_age_min.setValue(15)
+        self._shortlist_age_min.setRange(0, 99)
+        self._shortlist_age_min.setValue(0)
         self._shortlist_age_min.setFixedSize(52, 26)
         self._shortlist_age_min.valueChanged.connect(self._apply_shortlist_filter)
         sl_filter_row.addWidget(self._shortlist_age_min)
@@ -4014,8 +4023,8 @@ class MainWindow(QMainWindow):
         sl_dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         sl_filter_row.addWidget(sl_dash)
         self._shortlist_age_max = QSpinBox()
-        self._shortlist_age_max.setRange(15, 60)
-        self._shortlist_age_max.setValue(60)
+        self._shortlist_age_max.setRange(0, 99)
+        self._shortlist_age_max.setValue(0)
         self._shortlist_age_max.setFixedSize(52, 26)
         self._shortlist_age_max.valueChanged.connect(self._apply_shortlist_filter)
         sl_filter_row.addWidget(self._shortlist_age_max)
@@ -4179,8 +4188,8 @@ class MainWindow(QMainWindow):
         self._shortlist_pos_filter.setCurrentIndex(0)
         self._shortlist_ca_filter.setValue(0)
         self._shortlist_pa_filter.setValue(0)
-        self._shortlist_age_min.setValue(15)
-        self._shortlist_age_max.setValue(60)
+        self._shortlist_age_min.setValue(0)
+        self._shortlist_age_max.setValue(0)
         self._shortlist_dev_filter.setValue(0)
         self._shortlist_name_filter.blockSignals(False)
         self._shortlist_pos_filter.blockSignals(False)
@@ -4214,10 +4223,7 @@ class MainWindow(QMainWindow):
             filtered = [p for p in filtered if 'ca' not in p or (p.get('ca') or 0) >= min_ca]
         if min_pa:
             filtered = [p for p in filtered if 'ca' not in p or (p.get('pa') or 0) >= min_pa]
-        age_min_eff = age_min if age_min > 15 else 0
-        age_max_eff = age_max if age_max < 60 else 999
-        if age_min_eff or age_max_eff < 999:
-            filtered = [p for p in filtered if age_min_eff <= (FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)) <= age_max_eff]
+        filtered = [p for p in filtered if _age_in_range(p, age_min, age_max)]
         if min_dev:
             filtered = [p for p in filtered if 'ca' not in p or (_progress_rate(p) or 0) >= min_dev]
 
@@ -4234,8 +4240,8 @@ class MainWindow(QMainWindow):
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         hdr_row.addWidget(age_lbl)
         self._staff_sl_age_min = QSpinBox()
-        self._staff_sl_age_min.setRange(15, 60)
-        self._staff_sl_age_min.setValue(15)
+        self._staff_sl_age_min.setRange(0, 99)
+        self._staff_sl_age_min.setValue(0)
         self._staff_sl_age_min.setFixedSize(52, 26)
         self._staff_sl_age_min.valueChanged.connect(lambda _v: self._apply_staff_shortlist_filter())
         hdr_row.addWidget(self._staff_sl_age_min)
@@ -4243,8 +4249,8 @@ class MainWindow(QMainWindow):
         dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         hdr_row.addWidget(dash)
         self._staff_sl_age_max = QSpinBox()
-        self._staff_sl_age_max.setRange(15, 60)
-        self._staff_sl_age_max.setValue(60)
+        self._staff_sl_age_max.setRange(0, 99)
+        self._staff_sl_age_max.setValue(0)
         self._staff_sl_age_max.setFixedSize(52, 26)
         self._staff_sl_age_max.valueChanged.connect(lambda _v: self._apply_staff_shortlist_filter())
         hdr_row.addWidget(self._staff_sl_age_max)
@@ -4281,16 +4287,15 @@ class MainWindow(QMainWindow):
     def _clear_staff_shortlist_filter(self):
         self._staff_sl_age_min.blockSignals(True)
         self._staff_sl_age_max.blockSignals(True)
-        self._staff_sl_age_min.setValue(15)
-        self._staff_sl_age_max.setValue(60)
+        self._staff_sl_age_min.setValue(0)
+        self._staff_sl_age_max.setValue(0)
         self._staff_sl_age_min.blockSignals(False)
         self._staff_sl_age_max.blockSignals(False)
         self._apply_staff_shortlist_filter()
 
     def _apply_staff_shortlist_filter(self):
         mn, mx = self._staff_sl_age_min.value(), self._staff_sl_age_max.value()
-        staff = [p for p in self._staff_shortlist
-                 if mn <= FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR) <= mx]
+        staff = [p for p in self._staff_shortlist if _age_in_range(p, mn, mx)]
         if self._save_data:
             self._fill_staff_rows(self._staff_shortlist_table, staff)
         self._staff_shortlist_stack.setCurrentIndex(1 if staff else 0)
@@ -4389,16 +4394,16 @@ class MainWindow(QMainWindow):
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row2.addWidget(age_lbl)
         self._report_age_min = QSpinBox()
-        self._report_age_min.setRange(15, 60)
-        self._report_age_min.setValue(15)
+        self._report_age_min.setRange(0, 99)
+        self._report_age_min.setValue(0)
         self._report_age_min.setFixedSize(52, 26)
         filter_row2.addWidget(self._report_age_min)
         dash_lbl = QLabel('-')
         dash_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row2.addWidget(dash_lbl)
         self._report_age_max = QSpinBox()
-        self._report_age_max.setRange(15, 60)
-        self._report_age_max.setValue(45)
+        self._report_age_max.setRange(0, 99)
+        self._report_age_max.setValue(0)
         self._report_age_max.setFixedSize(52, 26)
         filter_row2.addWidget(self._report_age_max)
         self._report_age_min.valueChanged.connect(self._on_report_age_changed)
@@ -4492,8 +4497,7 @@ class MainWindow(QMainWindow):
             mx_age = self._report_age_max.value()
             rated = []
             for p in people:
-                age = season_year - p.get('birth_year', season_year)
-                if not (mn_age <= age <= mx_age):
+                if not _age_in_range(p, mn_age, mx_age, season_year):
                     continue
                 r = role_rating(p, rname, role_weights)
                 if r is not None:
@@ -4506,7 +4510,7 @@ class MainWindow(QMainWindow):
         # Quick-filter fields (name/CA/PA/age/dev) — shared by every report mode.
         mn_age = self._report_age_min.value()
         mx_age = self._report_age_max.value()
-        c = [p for p in c if mn_age <= (season_year - p.get('birth_year', season_year)) <= mx_age]
+        c = [p for p in c if _age_in_range(p, mn_age, mx_age, season_year)]
         name_q = self._report_name_filter.text().strip().lower()
         if name_q:
             c = [p for p in c if name_q in p.get('name', '').lower()]
@@ -4625,7 +4629,7 @@ class MainWindow(QMainWindow):
         if not self._current_report_key or not self._save_data:
             return
         mn, mx = self._report_age_min.value(), self._report_age_max.value()
-        if mn > mx:
+        if mx and mn > mx:
             return
         key = self._current_report_key
         pos = self._report_pos_combo.currentText() if key == 'best_pos' else None
@@ -4645,8 +4649,8 @@ class MainWindow(QMainWindow):
         self._report_name_filter.clear()
         self._report_ca_filter.setValue(0)
         self._report_pa_filter.setValue(0)
-        self._report_age_min.setValue(15)
-        self._report_age_max.setValue(45)
+        self._report_age_min.setValue(0)
+        self._report_age_max.setValue(0)
         self._report_dev_filter.setValue(0)
         self._report_name_filter.blockSignals(False)
         self._report_ca_filter.blockSignals(False)
@@ -4736,8 +4740,8 @@ class MainWindow(QMainWindow):
         age_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row.addWidget(age_lbl)
         self._players_age_min = QSpinBox()
-        self._players_age_min.setRange(15, 60)
-        self._players_age_min.setValue(15)
+        self._players_age_min.setRange(0, 99)
+        self._players_age_min.setValue(0)
         self._players_age_min.setFixedSize(52, 26)
         self._players_age_min.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_age_min)
@@ -4745,8 +4749,8 @@ class MainWindow(QMainWindow):
         dash.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
         filter_row.addWidget(dash)
         self._players_age_max = QSpinBox()
-        self._players_age_max.setRange(15, 60)
-        self._players_age_max.setValue(60)
+        self._players_age_max.setRange(0, 99)
+        self._players_age_max.setValue(0)
         self._players_age_max.setFixedSize(52, 26)
         self._players_age_max.valueChanged.connect(self._apply_players_filter)
         filter_row.addWidget(self._players_age_max)
@@ -4858,8 +4862,8 @@ class MainWindow(QMainWindow):
         self._players_pos_filter.setCurrentIndex(0)
         self._players_ca_filter.setValue(0)
         self._players_pa_filter.setValue(0)
-        self._players_age_min.setValue(15)
-        self._players_age_max.setValue(60)
+        self._players_age_min.setValue(0)
+        self._players_age_max.setValue(0)
         self._players_dev_filter.setValue(0)
         self._players_name_filter.blockSignals(False)
         self._players_pos_filter.blockSignals(False)
@@ -4894,10 +4898,7 @@ class MainWindow(QMainWindow):
             filtered = [p for p in filtered if (p.get('ca') or 0) >= min_ca]
         if min_pa:
             filtered = [p for p in filtered if (p.get('pa') or 0) >= min_pa]
-        age_min_eff = age_min if age_min > 15 else 0
-        age_max_eff = age_max if age_max < 60 else 999
-        if age_min_eff or age_max_eff < 999:
-            filtered = [p for p in filtered if age_min_eff <= (FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)) <= age_max_eff]
+        filtered = [p for p in filtered if _age_in_range(p, age_min, age_max)]
         if min_dev:
             filtered = [p for p in filtered if (_progress_rate(p) or 0) >= min_dev]
 
