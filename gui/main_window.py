@@ -17,6 +17,8 @@ from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
 from fm_editor.cache import load_cache, save_cache, clear_cache
 from fm_editor import weights as _weights_mod
+from fm_editor import settings as _settings_mod
+from gui.settings_page import SettingsPage
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c'
@@ -343,20 +345,46 @@ def _club_badge(text, bg, fg, font_size=11, padding='2px 6px'):
     return lbl
 
 
+_SHOW_PENDING = True  # Settings > Show PENDING markers (set by MainWindow._apply_ui_prefs)
+
+
+def _club_pending_vis(lbl, pending):
+    """Hide PENDING chips (and their Club-page key/value row) when the setting is off."""
+    show = _SHOW_PENDING or not pending
+    lbl.setVisible(show)
+    row = lbl.parentWidget()
+    if row is not None and row.objectName() == 'clubKvRow':
+        row.setVisible(show)
+
+
 def _club_pending_chip(text='PENDING'):
     lbl = QLabel(text)
     lbl.setStyleSheet(_CLUB_PENDING_QSS)
+    if not _SHOW_PENDING:
+        lbl.setVisible(False)
     return lbl
 
 
 def _club_set_pending(lbl):
     lbl.setText('PENDING')
     lbl.setStyleSheet(_CLUB_PENDING_QSS)
+    _club_pending_vis(lbl, True)
 
 
 def _club_set_value(lbl, text, color='#e8edf2'):
+    _club_pending_vis(lbl, False)
     lbl.setText(text)
     lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:500; background:transparent;")
+
+
+def _club_money(v, per_week=False):
+    """GBP int -> '£62.3M' / '£3.66M p/w' / '£540K'; negatives keep the sign."""
+    sign, a = ('-' if v < 0 else ''), abs(v)
+    if a >= 1_000_000:
+        txt = f'{a / 1e6:.2f}M' if per_week else f'{a / 1e6:.1f}M'
+    else:
+        txt = f'{a / 1e3:.0f}K'
+    return f'{sign}£{txt}' + (' p/w' if per_week else '')
 
 
 def _club_sec_hdr(text, sub=False):
@@ -681,7 +709,7 @@ class ParseWorker(QThread):
     def run(self):
         try:
             from fm_editor.archive import parse_archive, get_member
-            from fm_editor.gamedb import (find_names, find_clubs, find_squads,
+            from fm_editor.gamedb import (find_names, find_clubs, add_club_finance, find_squads,
                                           find_people, match_identities, find_abilities,
                                           find_employment, find_contracts, find_club_staff,
                                           find_coaching_attrs, find_injuries,
@@ -705,6 +733,7 @@ class ParseWorker(QThread):
 
             self._emit("Finding clubs...", 55)
             clubs = find_clubs(b, names_start)
+            add_club_finance(b, clubs, names_start)
 
             self._emit("Finding squad memberships...", 65)
             squads, sub_squads = find_squads(b, clubs, names_start)
@@ -1900,172 +1929,6 @@ class WeightEditorDialog(QDialog):
             return None
 
 
-# -- Settings dialog ------------------------------------------------------------
-
-class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle('Settings')
-        self.setMinimumSize(460, 320)
-        self.setStyleSheet(_DIALOG_SS())
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 16)
-        layout.setSpacing(14)
-
-        # Section title
-        sec_lbl = QLabel('Role Weights')
-        sec_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:13px; font-weight:bold;"
-            f" padding-bottom:2px; border-bottom:1px solid {COLORS['border']};")
-        layout.addWidget(sec_lbl)
-
-        # Preset row
-        preset_row = QHBoxLayout()
-        preset_row.setSpacing(8)
-        preset_row.addWidget(QLabel('Preset:'))
-        self._preset_combo = QComboBox()
-        self._preset_combo.setMinimumWidth(200)
-        self._presets = _weights_mod.list_presets()
-        active = _weights_mod.get_active_preset_name()
-        active_idx = 0
-        for i, p in enumerate(self._presets):
-            self._preset_combo.addItem(p['name'])
-            if p['name'] == active:
-                active_idx = i
-        self._preset_combo.setCurrentIndex(active_idx)
-        self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
-        preset_row.addWidget(self._preset_combo)
-        self._edit_btn = QPushButton('Edit Weights…')
-        self._edit_btn.setStyleSheet(_BTN_SS())
-        self._edit_btn.clicked.connect(self._edit_weights)
-        preset_row.addWidget(self._edit_btn)
-        layout.addLayout(preset_row)
-
-        # Import / delete row
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-        import_btn = QPushButton('Import Preset…')
-        import_btn.setStyleSheet(_BTN_SS())
-        import_btn.clicked.connect(self._import_preset)
-        action_row.addWidget(import_btn)
-        self._delete_btn = QPushButton('Delete Preset')
-        self._delete_btn.setStyleSheet(_BTN_SS())
-        self._delete_btn.clicked.connect(self._delete_preset)
-        action_row.addWidget(self._delete_btn)
-        action_row.addStretch()
-        layout.addLayout(action_row)
-
-        # Description
-        self._desc_lbl = QLabel()
-        self._desc_lbl.setWordWrap(True)
-        self._desc_lbl.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:11px;"
-            f" background:{COLORS['surface']}; border-radius:3px; padding:8px;")
-        layout.addWidget(self._desc_lbl)
-
-        layout.addStretch()
-
-        # OK / Cancel
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        btn_row.addStretch()
-        cancel_btn = QPushButton('Cancel')
-        cancel_btn.setStyleSheet(_BTN_SS())
-        cancel_btn.clicked.connect(self.reject)
-        btn_row.addWidget(cancel_btn)
-        ok_btn = QPushButton('Apply')
-        ok_btn.setStyleSheet(_BTN_SS(accent=True))
-        ok_btn.clicked.connect(self._apply)
-        btn_row.addWidget(ok_btn)
-        layout.addLayout(btn_row)
-
-        self._on_preset_changed(active_idx)
-
-    def _on_preset_changed(self, idx: int):
-        if 0 <= idx < len(self._presets):
-            p = self._presets[idx]
-            parts = []
-            if p['tactical_style']:
-                parts.append(f"Style: {p['tactical_style']}")
-            if p['description']:
-                parts.append(p['description'])
-            self._desc_lbl.setText('\n'.join(parts) if parts else 'No description.')
-            self._delete_btn.setEnabled(not p['bundled'])
-            self._edit_btn.setEnabled(True)
-
-    def _edit_weights(self):
-        idx = self._preset_combo.currentIndex()
-        if not (0 <= idx < len(self._presets)):
-            return
-        p = self._presets[idx]
-        try:
-            base_preset = _weights_mod.load_preset(p['path'])
-        except Exception as e:
-            QMessageBox.warning(self, 'Error', f'Could not load preset:\n{e}')
-            return
-        dlg = WeightEditorDialog(base_preset, self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            new_name = dlg.saved_preset_name()
-            if new_name:
-                self._refresh_presets(select_name=new_name)
-
-    def _import_preset(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, 'Import Weight Preset', '', 'JSON Files (*.json)')
-        if not path:
-            return
-        try:
-            name = _weights_mod.import_preset(path)
-            self._refresh_presets(select_name=name)
-        except Exception as e:
-            QMessageBox.warning(self, 'Import Error', f'Could not import preset:\n{e}')
-
-    def _delete_preset(self):
-        idx = self._preset_combo.currentIndex()
-        if not (0 <= idx < len(self._presets)):
-            return
-        p = self._presets[idx]
-        if p['bundled']:
-            return
-        if QMessageBox.question(
-                self, 'Delete Preset',
-                f"Delete '{p['name']}'?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        ) != QMessageBox.StandardButton.Yes:
-            return
-        _weights_mod.delete_user_preset(p['name'])
-        self._refresh_presets()
-
-    def _refresh_presets(self, select_name: str | None = None):
-        self._presets = _weights_mod.list_presets()
-        current = self._preset_combo.currentText()
-        self._preset_combo.blockSignals(True)
-        self._preset_combo.clear()
-        select_idx = 0
-        for i, p in enumerate(self._presets):
-            self._preset_combo.addItem(p['name'])
-            if select_name and p['name'] == select_name:
-                select_idx = i
-            elif not select_name and p['name'] == current:
-                select_idx = i
-        self._preset_combo.blockSignals(False)
-        self._preset_combo.setCurrentIndex(select_idx)
-        self._on_preset_changed(select_idx)
-
-    def _apply(self):
-        idx = self._preset_combo.currentIndex()
-        if 0 <= idx < len(self._presets):
-            _weights_mod.set_active_preset_name(self._presets[idx]['name'])
-        self.accept()
-
-    def selected_preset_name(self) -> str:
-        idx = self._preset_combo.currentIndex()
-        if 0 <= idx < len(self._presets):
-            return self._presets[idx]['name']
-        return ''
-
-
 # -- Hero header widget --------------------------------------------------------
 
 class _HeaderHeroWidget(QWidget):
@@ -2081,6 +1944,7 @@ class _HeaderHeroWidget(QWidget):
         'reports':    'reports.webp',
         'players':    'players.webp',
         'club_staff': 'club_staff.webp',
+        'settings':   'stadium.webp',
     }
     _FALLBACK = 'stadium.webp'
 
@@ -2170,6 +2034,167 @@ class _HeaderHeroWidget(QWidget):
         p.end()
 
 
+# -- Search autocomplete -------------------------------------------------------
+
+from PyQt6.QtWidgets import QApplication, QStyle, QListWidget, QListWidgetItem  # noqa: E402
+
+_SUGGEST_KINDS = ('Club', 'Staff', 'Player')  # kind index -> tag text
+_SG_MAX = 12  # max suggestion rows
+
+
+class _SuggestDelegate(QStyledItemDelegate):
+    """Row = name (left), muted club (after name), muted type tag (right-aligned)."""
+
+    def sizeHint(self, option, index):
+        return QSize(option.rect.width(), _SearchSuggest.ROW_H)
+
+    def paint(self, p, option, index):
+        r = option.rect
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        sel = bool(option.state & QStyle.StateFlag.State_Selected)
+        if sel:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(COLORS['selection_bg']))
+            p.drawRoundedRect(QRectF(r).adjusted(1, 0, -1, 0), 3, 3)
+        name = index.data(Qt.ItemDataRole.UserRole + 1) or ''
+        sub = index.data(Qt.ItemDataRole.UserRole + 2) or ''
+        kind = index.data(Qt.ItemDataRole.UserRole)[0]
+        pad = 10
+        f = QFont(option.font)
+        f.setPixelSize(12)
+        p.setFont(f)
+        tag_f = QFont(f)
+        tag_f.setPixelSize(11)
+        tag = _SUGGEST_KINDS[kind]
+        tag_w = QFontMetrics(tag_f).horizontalAdvance(tag)
+        # type tag, right-aligned in a fixed column
+        p.setFont(tag_f)
+        p.setPen(QColor(COLORS['text_secondary']))
+        p.drawText(r.adjusted(0, 0, -pad, 0),
+                   int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), tag)
+        # name, then optional club
+        p.setFont(f)
+        fm = QFontMetrics(f)
+        avail = r.width() - 2 * pad - tag_w - 12
+        nm = fm.elidedText(name, Qt.TextElideMode.ElideRight, avail)
+        p.setPen(QColor(COLORS['text_primary']))
+        p.drawText(r.adjusted(pad, 0, 0, 0),
+                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), nm)
+        rest = avail - fm.horizontalAdvance(nm) - 10
+        if sub and rest > 40:
+            p.setPen(QColor(COLORS['text_dim']))
+            x = pad + fm.horizontalAdvance(nm) + 10
+            p.drawText(r.adjusted(x, 0, 0, 0),
+                       int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                       fm.elidedText(sub, Qt.TextElideMode.ElideRight, rest))
+        p.restore()
+
+
+class _SearchSuggest(QFrame):
+    """Autocomplete dropdown under the top search box.
+
+    A plain child widget of the main window (not a Popup window), so it never steals
+    keyboard focus and positions reliably on X11 and Wayland. Key handling is done by
+    filtering the search box; clicks outside close it via an application event filter.
+    """
+    ROW_H = 28
+
+    def __init__(self, window, box, on_pick, flush=None):
+        super().__init__(window)
+        self._win, self._box, self._on_pick, self._flush = window, box, on_pick, flush
+        self.setObjectName('searchDropdown')
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setStyleSheet(
+            f"QFrame#searchDropdown {{ background:{COLORS['elevated']};"
+            f" border:1px solid {COLORS['border_bright']}; border-radius:4px; }}"
+            "QListWidget#searchList { background:transparent; border:none; outline:none; }")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(3, 3, 3, 3)
+        self._list = QListWidget()
+        self._list.setObjectName('searchList')
+        self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._list.setItemDelegate(_SuggestDelegate(self._list))
+        self._list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setMouseTracking(True)
+        self._list.itemEntered.connect(lambda it: self._list.setCurrentItem(it))
+        self._list.itemClicked.connect(self._clicked)
+        lay.addWidget(self._list)
+        box.installEventFilter(self)
+        self.hide()
+
+    def set_rows(self, rows):
+        """rows: [(kind, obj, name, sub)]. Shows below the box, or hides if empty."""
+        self._list.clear()
+        if not rows:
+            self._close()
+            return
+        for kind, obj, name, sub in rows:
+            it = QListWidgetItem()
+            it.setData(Qt.ItemDataRole.UserRole, (kind, obj))
+            it.setData(Qt.ItemDataRole.UserRole + 1, name)
+            it.setData(Qt.ItemDataRole.UserRole + 2, sub)
+            self._list.addItem(it)
+        self._list.setCurrentRow(0)
+        b = self._box
+        pos = b.mapTo(self._win, QPoint(0, b.height() + 2))
+        self.setGeometry(pos.x(), pos.y(), max(280, b.width()),
+                         len(rows) * self.ROW_H + 8)
+        self.raise_()
+        if not self.isVisible():
+            self.show()
+            QApplication.instance().installEventFilter(self)
+
+    def _close(self):
+        if self.isVisible():
+            QApplication.instance().removeEventFilter(self)
+            self.hide()
+
+    def close_popup(self):
+        self._close()
+
+    def _clicked(self, item):
+        kind, obj = item.data(Qt.ItemDataRole.UserRole)
+        self._close()
+        self._on_pick(kind, obj, item.data(Qt.ItemDataRole.UserRole + 1))
+
+    def _move(self, step):
+        n = self._list.count()
+        if n:
+            self._list.setCurrentRow((self._list.currentRow() + step) % n)
+
+    def eventFilter(self, obj, ev):
+        t = ev.type()
+        if obj is self._box:
+            if t == ev.Type.FocusOut:
+                self._close()
+            elif t == ev.Type.KeyPress:
+                k = ev.key()
+                if k == Qt.Key.Key_Escape and self.isVisible():
+                    self._close()
+                    return True
+                if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    if self._flush:
+                        self._flush()  # apply a pending debounced query first
+                    if self.isVisible() and self._list.currentItem():
+                        self._clicked(self._list.currentItem())
+                        return True
+                elif k in (Qt.Key.Key_Down, Qt.Key.Key_Up) and self.isVisible():
+                    self._move(1 if k == Qt.Key.Key_Down else -1)
+                    return True
+            return False
+        # application-level: click outside / window change closes
+        if t == ev.Type.MouseButtonPress:
+            gp = ev.globalPosition().toPoint()
+            if not self.rect().contains(self.mapFromGlobal(gp)) \
+                    and not self._box.rect().contains(self._box.mapFromGlobal(gp)):
+                self._close()
+        elif t in (ev.Type.WindowDeactivate, ev.Type.Resize) and obj is self._win:
+            self._close()
+        return False
+
+
 # -- Main window ---------------------------------------------------------------
 
 class MainWindow(QMainWindow):
@@ -2193,6 +2218,7 @@ class MainWindow(QMainWindow):
         self._current_report_key = ''
         self._report_ratings = {}
         self._active_preset = _weights_mod.load_active_preset()
+        self._apply_ui_prefs()  # Settings > Show PENDING markers, before any chip is created
 
         self._dot_timer = QTimer(self)
         self._dot_timer.setInterval(420)
@@ -2303,6 +2329,10 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_welcome())     # 7
         self._main_stack.addWidget(self._make_view_save_info())   # 8
         self._main_stack.addWidget(self._make_view_staff_shortlist())  # 9
+        self._settings_page = SettingsPage()
+        self._settings_page.saved.connect(self._on_settings_saved)
+        self._settings_page.message.connect(lambda m: self._status.showMessage(m, 4000))
+        self._main_stack.addWidget(self._settings_page)           # 10
         right_vbox.addWidget(self._main_stack)
 
         self._status = QStatusBar()
@@ -2396,6 +2426,14 @@ class MainWindow(QMainWindow):
         search_action = QAction(_nav_icon(_SVG_SEARCH, 14), '', self._search_box)
         self._search_box.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
         nav_row.addWidget(self._search_box, 1)
+        # autocomplete: >=3 chars, debounced; index built lazily per loaded save
+        self._sg_idx = None
+        self._sg_timer = QTimer(self)
+        self._sg_timer.setSingleShot(True)
+        self._sg_timer.setInterval(130)
+        self._sg_timer.timeout.connect(self._sg_refresh)
+        self._sg_popup = _SearchSuggest(self, self._search_box, self._sg_pick, self._sg_flush)
+        self._search_box.textChanged.connect(self._sg_text_changed)
 
         _tbtn_ss = (
             "QPushButton { background: rgba(8,14,24,0.70); color: rgba(255,255,255,0.78);"
@@ -2483,7 +2521,9 @@ class MainWindow(QMainWindow):
                 padding: 0;
             }
             QPushButton:hover { background: rgba(20,32,50,0.85); border-color: rgba(255,255,255,0.32); }
+            QPushButton:checked { background: rgba(42,27,74,230); border-color: #735CE4; }
         """)
+        self._settings_btn.setCheckable(True)  # checked = Settings page open (set in _update_header_for_view)
         self._settings_btn.clicked.connect(self._open_settings)
 
         nav_row.addWidget(self._save_btn)
@@ -2503,7 +2543,7 @@ class MainWindow(QMainWindow):
         self._header_badge_lbl = QLabel('')
         self._header_badge_lbl.setFixedSize(56, 56)
         self._header_badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._header_badge_lbl.setStyleSheet(
+        self._header_badge_ss = (
             "border-radius: 28px;"
             " background: rgba(255,255,255,0.08);"
             " border: 2px solid rgba(255,255,255,0.18);"
@@ -2512,6 +2552,10 @@ class MainWindow(QMainWindow):
             " font-weight: bold;"
             " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
         )
+        self._header_badge_lbl.setStyleSheet(self._header_badge_ss)
+        self._app_logo_px = QPixmap(os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon.png')).scaled(
+            56, 56, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
         # Title + subtitle block
         text_block = QWidget()
@@ -2558,7 +2602,15 @@ class MainWindow(QMainWindow):
         self._header_title_lbl.setText(title)
         self._header_subtitle_lbl.setText(subtitle)
         self._header_subtitle_lbl.setVisible(bool(subtitle))
-        self._header_badge_lbl.setText(title[0].upper() if title else '')
+        if title == 'FM Backroom 24' and not self._app_logo_px.isNull():
+            # welcome screen: app logo instead of an initial
+            self._header_badge_lbl.setText('')
+            self._header_badge_lbl.setPixmap(self._app_logo_px)
+            self._header_badge_lbl.setStyleSheet("background: transparent; border: none;")
+        else:
+            self._header_badge_lbl.setPixmap(QPixmap())
+            self._header_badge_lbl.setStyleSheet(self._header_badge_ss)
+            self._header_badge_lbl.setText(title[0].upper() if title else '')
 
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
@@ -2630,11 +2682,17 @@ class MainWindow(QMainWindow):
 
     def _update_header_for_view(self, key: str):
         self._hero.set_page(key)
+        self._settings_btn.setChecked(key == 'settings')
         club = self._current_club
         club_name = club['name'] if club else ''
 
         if key == 'club':
-            club_sub = "Division pending · Country pending · Position pending"
+            from fm_editor.nations import nation_name
+            country = nation_name(club.get('nation')) if club else None
+            if _SHOW_PENDING:
+                club_sub = f"Division pending · {country or 'Country pending'} · Position pending"
+            else:
+                club_sub = country or ''
             self._set_header(club_name or 'Club', club_sub, self._make_header_rep_widget(3))
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
@@ -2667,6 +2725,10 @@ class MainWindow(QMainWindow):
                              or (os.path.basename(self._save_path) if self._save_path else ''))
         elif key == 'welcome':
             self._set_header('FM Backroom 24', 'Load a save to begin')
+        elif key == 'settings':
+            self._set_header('Settings', 'Preferences & paths')
+            self._header_badge_lbl.setText('')  # cog instead of the initial (26px, #E8EDF3)
+            self._header_badge_lbl.setPixmap(_svg_icon(_SVG_COG, '#E8EDF3', 26).pixmap(26, 26))
 
     def _make_sidebar(self):
         sidebar = _SidebarFrame()
@@ -2786,6 +2848,13 @@ class MainWindow(QMainWindow):
         vbox.addWidget(staff_rpt_btn)
 
         vbox.addStretch()
+        # Settings pinned to the bottom (mockups/settings-page-design-a.html: hl, 6px, nav, 10px)
+        vbox.addWidget(self._make_hline())
+        vbox.addSpacing(6)
+        self._nav_btns['settings'] = self._make_nav_btn(
+            _SVG_COG, 'Settings', lambda checked: self._nav_to('settings'))
+        vbox.addWidget(self._nav_btns['settings'])
+        vbox.addSpacing(10)
         import os as _os
         _sb_img_path = _os.path.join(_os.path.dirname(__file__), 'assets', 'sidebar.webp')
         if _os.path.exists(_sb_img_path):
@@ -2956,14 +3025,18 @@ class MainWindow(QMainWindow):
         # value is PENDING, the parser has no club-metadata fields yet) -----
         col2, col2_l = _col()
         col2_l.addWidget(_club_sec_hdr('Club Info'))
+        self._club_status_val = _club_pending_chip()
         for label in ('Region', 'Founded', 'Status', 'Reputation'):
-            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+            col2_l.addWidget(_club_kv_row(
+                label, self._club_status_val if label == 'Status' else _club_pending_chip()))
         col2_l.addWidget(_club_sec_hdr('Facilities', sub=True))
         for label in ('Training', 'Youth', 'Junior coaching', 'Youth recruitment'):
             col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
         col2_l.addWidget(_club_sec_hdr('Finances', sub=True))
+        self._club_fin_vals = {}
         for label in ('Transfer budget', 'Wage budget', 'Scouting budget', 'Balance'):
-            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+            self._club_fin_vals[label] = _club_pending_chip()
+            col2_l.addWidget(_club_kv_row(label, self._club_fin_vals[label]))
         col2_l.addStretch(1)
         body_row.addWidget(col2, 1)
 
@@ -2990,7 +3063,8 @@ class MainWindow(QMainWindow):
         col3_l.addWidget(_club_kv_row('Avg coaching attr', self._club_avg_coaching_val))
         self._club_best_staff_ca_val = _club_pending_chip()
         col3_l.addWidget(_club_kv_row('Best staff CA', self._club_best_staff_ca_val))
-        col3_l.addWidget(_club_kv_row('Manager', _club_pending_chip()))
+        self._club_manager_val = _club_pending_chip()
+        col3_l.addWidget(_club_kv_row('Manager', self._club_manager_val))
 
         col3_l.addWidget(_club_sec_hdr('Contracts', sub=True))
         self._club_exp6_val = _club_kv_value('0', color='#c0392b')
@@ -3373,6 +3447,29 @@ class MainWindow(QMainWindow):
                     pos_counts[pos] += 1
         for code, val_lbl in self._club_pos_vals.items():
             val_lbl.setText(str(pos_counts.get(code, 0)))
+
+        # -- Col 2: status (club record hdr byte, verified); Col 3: human manager only --
+        from fm_editor.nations import STATUS_NAMES
+        st = STATUS_NAMES.get(club.get('status'))
+        if st:
+            _club_set_value(self._club_status_val, st)
+        else:
+            _club_set_pending(self._club_status_val)
+        fin = club.get('fin') or {}
+        for label, key, pw in (('Transfer budget', 'transfer_budget', False),
+                               ('Wage budget', 'wage_budget', True),
+                               ('Balance', 'balance', False)):
+            lbl = self._club_fin_vals[label]
+            if key in fin:
+                _club_set_value(lbl, _club_money(fin[key], pw),
+                                color='#c0392b' if fin[key] < 0 else '#e8edf2')
+            else:
+                _club_set_pending(lbl)
+        si = (self._save_data or {}).get('save_info') or {}
+        if si.get('manager_name') and si.get('manager_club_id') == club['id']:
+            _club_set_value(self._club_manager_val, si['manager_name'])
+        else:
+            _club_set_pending(self._club_manager_val)
 
         # -- Col 3 left: injuries + staff -------------------------------------
         self._club_inj_hdr.setText(f'Injuries ({n_injured})')
@@ -4992,7 +5089,7 @@ class MainWindow(QMainWindow):
     # -- Navigation -----------------------------------------------------------
 
     _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7,
-                   'save_info': 8, 'staff_shortlist': 9}
+                   'save_info': 8, 'staff_shortlist': 9, 'settings': 10}
 
     def _nav_to(self, key: str):
         if key == 'club' and not self._current_club:
@@ -5008,7 +5105,9 @@ class MainWindow(QMainWindow):
             self._update_save_info_view()
         if key == 'staff_shortlist':
             self._apply_staff_shortlist_filter()
-        if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info'):
+        if key == 'settings':
+            self._settings_page.on_shown()
+        if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info', 'settings'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
         # Push to history for non-club views (club is pushed by _show_squad)
@@ -5043,12 +5142,13 @@ class MainWindow(QMainWindow):
         if not hasattr(self, '_nav_history'):
             self._nav_history = []
             self._nav_pos = -1
+        # Don't push duplicate of current (checked first: Back/Forward re-enter _nav_to, which must
+        # not truncate the forward history)
+        if self._nav_history and self._nav_history[self._nav_pos] == (stack_idx, context):
+            return
         # Truncate forward history on new push
         if self._nav_pos < len(self._nav_history) - 1:
             self._nav_history = self._nav_history[:self._nav_pos + 1]
-        # Don't push duplicate of current
-        if self._nav_history and self._nav_history[self._nav_pos] == (stack_idx, context):
-            return
         self._nav_history.append((stack_idx, context))
         self._nav_pos = len(self._nav_history) - 1
         self._back_btn.setEnabled(self._nav_pos > 0)
@@ -5213,7 +5313,8 @@ class MainWindow(QMainWindow):
 
     def _load_file(self):
         """Open file picker then immediately start loading."""
-        start_dir = DEFAULT_SAVE_DIR if os.path.isdir(DEFAULT_SAVE_DIR) else os.path.expanduser('~')
+        start_dir = _settings_mod.save_dialog_dir(  # Settings > Default save game folder, else old behaviour
+            DEFAULT_SAVE_DIR if os.path.isdir(DEFAULT_SAVE_DIR) else os.path.expanduser('~'))
         path, _ = QFileDialog.getOpenFileName(
             self, 'Open FM24 Save File', start_dir, 'FM Save Files (*.fm);;All Files (*)')
         if not path:
@@ -5246,6 +5347,7 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._save_data['save_path'] = self._save_path
         self._all_players_cache = []  # invalidate on new load
+        self._sg_idx = None  # search index is rebuilt lazily
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
         people_all = result.get('people', [])
@@ -5262,7 +5364,7 @@ class MainWindow(QMainWindow):
         self._club_top_frame.setVisible(False)
         self._staff_loaded = False
         self._update_ui_state()
-        self._nav_to('save_info')  # land on Save Info after every load / reload
+        self._land_after_load()  # Settings > Landing page (default Save Info)
 
     # -- Search ---------------------------------------------------------------
 
@@ -5312,38 +5414,70 @@ class MainWindow(QMainWindow):
     # -- Squad / table views --------------------------------------------------
 
     def _show_search_dropdown(self, matches):
-        """Show floating panel below search box listing club matches."""
-        if hasattr(self, '_search_dropdown') and self._search_dropdown is not None:
-            try:
-                self._search_dropdown.close()
-            except RuntimeError:
-                pass
-        popup = QFrame(self, Qt.WindowType.Popup)
-        popup.setObjectName('searchDropdown')
-        popup.setStyleSheet(
-            f"QFrame#searchDropdown {{ background:{COLORS['elevated']};"
-            f" border:1px solid {COLORS['border_bright']}; border-radius:4px; }}"
-        )
-        vbox = QVBoxLayout(popup)
-        vbox.setContentsMargins(4, 4, 4, 4)
-        vbox.setSpacing(1)
-        _btn_ss = (
-            f"QPushButton {{ background:transparent; color:{COLORS['text_primary']};"
-            f" border:none; text-align:left; padding:6px 10px; font-size:12px; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:{COLORS['selection_bg']}; }}"
-        )
-        for club in matches[:15]:
-            btn = QPushButton(club['name'])
-            btn.setStyleSheet(_btn_ss)
-            btn.clicked.connect(
-                lambda checked, c=club: (popup.close(), self._show_squad(c)))
-            vbox.addWidget(btn)
-        sb = self._search_box
-        origin = sb.mapToGlobal(QPoint(0, sb.height() + 2))
-        popup.move(origin)
-        popup.setFixedWidth(max(260, sb.width()))
-        popup.show()
-        self._search_dropdown = popup
+        """Enter-key fallback: list club matches in the autocomplete popup."""
+        self._sg_popup.set_rows([(0, c, c['name'], '') for c in matches[:_SG_MAX]])
+
+    # -- Search autocomplete (popup view: _SearchSuggest) ----------------------
+
+    def _sg_index(self):
+        """Lowercase name index, built once per loaded save: (lname, name, kind, obj)
+        with kind 0 club / 1 staff / 2 player. ponytail: a few hundred k tuples in
+        memory and a linear scan per query (~tens of ms); trie/n-gram if it ever lags."""
+        if self._sg_idx is None:
+            sd = self._save_data or {}
+            idx = []
+            for c in sd.get('clubs', []):
+                n = c.get('name') or ''
+                if n:
+                    idx.append((n.lower(), n, 0, c))
+            for p in sd.get('people', []):
+                n = p.get('name') or ''
+                if n and p.get('id', -1) != -1:
+                    idx.append((n.lower(), n, 2 if p.get('ca') is not None else 1, p))
+            self._sg_idx = idx
+        return self._sg_idx
+
+    def _sg_text_changed(self, text):
+        if len(text.strip()) < 3 or not self._save_data:
+            self._sg_timer.stop()
+            self._sg_popup.close_popup()
+        else:
+            self._sg_timer.start()
+
+    def _sg_flush(self):
+        if self._sg_timer.isActive():
+            self._sg_timer.stop()
+            self._sg_refresh()
+
+    def _sg_refresh(self):
+        import heapq
+        q = self._search_box.text().strip().lower()
+        if len(q) < 3 or not self._save_data:
+            self._sg_popup.close_popup()
+            return
+        sp = ' ' + q
+        hits = [((0 if e[0].startswith(q) else 1 if sp in e[0] else 2), e[2], e[1], e[3])
+                for e in self._sg_index() if q in e[0]]
+        top = heapq.nsmallest(_SG_MAX, hits, key=lambda h: h[:3])  # rank, type, name
+        squads = self._save_data.get('squads', {})
+        club_name = {c['id']: c['name'] for c in self._save_data.get('clubs', [])} \
+            if any(h[1] for h in top) else {}
+        rows = [(k, o, n, '' if k == 0 else club_name.get(squads.get(o.get('id')), ''))
+                for _r, k, n, o in top]
+        self._sg_popup.set_rows(rows)
+
+    def _sg_pick(self, kind, obj, name):
+        """Route a chosen suggestion exactly like the old Enter search did."""
+        self._sg_timer.stop()
+        self._search_box.blockSignals(True)
+        self._search_box.setText(name)
+        self._search_box.blockSignals(False)
+        if kind == 0:
+            self._show_squad(obj)
+        elif kind == 2:
+            self._show_player_results([obj])
+        else:
+            self._show_staff_results([obj])
 
     def _show_squad(self, club):
         self._configure_table_for_mode('squad')
@@ -5670,19 +5804,46 @@ class MainWindow(QMainWindow):
             QApplication.clipboard().setText(name)
             self._status.showMessage(f'Copied: {name}')
 
-    def _open_settings(self):
-        dlg = SettingsDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._active_preset = _weights_mod.load_active_preset()
-            preset_name = _weights_mod.get_active_preset_name()
-            self._weights_lbl.setText(f'[{preset_name}]')
-            self._status.showMessage(f'Role weights: {preset_name}', 3000)
-            # Re-run Best by Role if it's currently shown
-            if self._current_report_key == 'best_role':
-                role = self._report_role_combo.currentText()
-                if role and not role.startswith('──'):
-                    players = self._get_report_players('best_role', role_name=role)
-                    self._populate_reports_table(players)
+    def _open_settings(self, checked=False):
+        self._nav_to('settings')
+
+    def _on_settings_saved(self, vals):
+        """Apply a saved Settings page: role weights, PENDING markers. (Landing page / Load
+        folder are read when needed.)"""
+        self._active_preset = _weights_mod.load_active_preset()
+        self._weights_lbl.setText(f"[{vals['role_weights_preset']}]")
+        # Re-run Best by Role if it's currently shown
+        if self._current_report_key == 'best_role':
+            role = self._report_role_combo.currentText()
+            if role and not role.startswith('──'):
+                players = self._get_report_players('best_role', role_name=role)
+                self._populate_reports_table(players)
+        self._apply_ui_prefs(vals)
+
+    def _apply_ui_prefs(self, vals=None):
+        global _SHOW_PENDING
+        vals = vals or _settings_mod.load()
+        show = bool(vals.get('show_pending', True))
+        if show != _SHOW_PENDING:
+            _SHOW_PENDING = show
+            if self._current_club:
+                self._update_club_view()
+
+    def _land_after_load(self):
+        """Page shown once a save finishes parsing (Settings > Landing page)."""
+        self._apply_ui_prefs()
+        if self._main_stack.currentIndex() == self._VIEW_INDEX['settings']:
+            return  # don't yank the user off the Settings page
+        page = _settings_mod.load()['landing_page']
+        sd = self._save_data or {}
+        club_id = (self._current_club or {}).get('id', (sd.get('save_info') or {}).get('manager_club_id'))
+        club = next((c for c in sd.get('clubs', []) if c.get('id') == club_id), None)
+        if page == 'club' and club:
+            self._show_squad(club)
+        elif page == 'players' and self._players_nav_btn.isEnabled():
+            self._open_players_view()
+        else:
+            self._nav_to('save_info')
 
     def _run_report(self, key: str):
         try:
@@ -5970,8 +6131,8 @@ class MainWindow(QMainWindow):
             self._status.showMessage(self._status_base)
             self._dot_timer.start()
             self._load_btn.setText('Loading')
-            for btn in self._nav_btns.values():
-                btn.setEnabled(False)
+            for k, btn in self._nav_btns.items():
+                btn.setEnabled(k == 'settings')  # Settings is safe to open while loading
             self._players_nav_btn.setEnabled(False)
             self._scouting_staff_nav_btn.setEnabled(False)
             self._welcome_load_btn.setEnabled(False)
