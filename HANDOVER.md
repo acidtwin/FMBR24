@@ -1,6 +1,6 @@
 # FM24 Homegrown Editor — Handover
 
-**Last updated:** 2026-09-29 (session 8)
+**Last updated:** 2026-09-30 (session 9)
 **Project:** `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor`
 
 ---
@@ -8,7 +8,70 @@
 ## Current state
 
 Working FM24 save editor with full FM24-skin UI. Tested against a real Tottenham 2026-27 save.
-All changes on `master`. Cache version: **14**.
+All changes on `master`. Cache version: **15**.
+
+---
+
+## Session 9 (2026-09-30) — Players filter, Reports overhaul, nav rename, club page design
+
+### Players filter bar (COMPLETE, committed)
+
+Replaced Min CA QLineEdit + Nation QComboBox with 5 QSpinBoxes:
+- `self._players_ca_filter` — Min CA, range 0–200
+- `self._players_pa_filter` — Min PA, range 0–200
+- `self._players_age_min_filter` — Min Age, range 15–60
+- `self._players_age_max_filter` — Max Age, range 15–60
+- `self._players_dev_filter` — Min Dev, range 0–20
+- `_apply_players_filter`: reads spinbox values, filters CA/PA/age/dev
+- `_clear_players_filter`: uses `.setValue()` + blockSignals for all 5
+
+### Reports view overhaul (COMPLETE, committed)
+
+Subagent B:
+- Columns now match squad: `Name | INJ | Pos | CA | PA | Dev | Age | Nation | HGP | Club | CtrE | 54 attrs` (65 total)
+- INJ + Pos delegates on cols 1 + 2
+- Filter controls moved to `filter_frame` row (38px) below 44px header; header row kept title + stretch only
+- Default sort: `sortByColumn(2)` (Pos)
+
+### Nav sidebar (COMPLETE, committed)
+
+- `gui/main_window.py:1973` — "REPORTS" section label renamed to "PLAYER REPORTS"
+- `gui/main_window.py:1987-1991` — "STAFF REPORTS" section added with disabled stub button (no view yet)
+
+### Club page redesign — DESIGN CHOSEN, NOT YET IMPLEMENTED
+
+Design A "Stadium Hero" selected. Mockup artifact: `https://claude.ai/artifact/ShmMMFy65UH5r4NZ4u4RqH`
+
+**Layout:**
+- Hero: 140px, stadium image (38% opacity) + dark gradient overlay + pitch line grid texture + club badge circle + club name + reputation stars
+- KPI bar: 6 cols (Squad · Avg CA · HGP · HGC · Injured · Staff)
+- 3-column body:
+  - Col 1: Top Players by Avg Match Rating (green pill ≥7.0, dim plain <7.0) + Position breakdown grid
+  - Col 2: Club Info + Facilities + Finances
+  - Col 3: Injuries (days remaining) + Staff summary + Contracts + Homegrown counts
+- Footer actions: "View Squad" + "Staff"
+
+**Data sections requiring new binary parsing (not yet implemented):**
+- Club Info: region, founded year, professional status
+- Reputation: star rating (1–5)
+- Facilities: training, youth, junior coaching, youth recruitment (text quality labels)
+- Finances: transfer budget, wage budget, scouting budget, overall balance
+- Manager: name (employment record type)
+- Player match ratings: Avg Rating per player (not in current parser)
+
+**Already parseable and ready to wire up:**
+- Squad size, Avg CA, HGP count, HGC count, injury count, staff count
+- Top players: sorted by CA (can swap to rating once parsed)
+- Position breakdown: count per position from squad
+- Injuries: name + days
+- Staff: count, avg coaching attr, best CA
+- Contracts: expiry dates (earliest, latest, count expiring)
+
+**Implementation plan when ready:**
+1. Reverse engineer club binary fields for reputation/facilities/finances
+2. Find manager via employment records already partially parsed
+3. Replace current `_make_view_club` with Design A layout
+4. Stadium hero image: use a generic embedded image (data URI) for all clubs; later allow club-specific if photos found
 
 ---
 
@@ -106,7 +169,7 @@ Uses RichText with `_stat(val, label, color)` helper inside `_populate_squad_tab
 
 Format: `● Ready · filename · 44,035 clubs, 77,966 players, X staff`
 
-### Cache (v14)
+### Cache (v15)
 
 `slim_people` now persists per entry:
 - Players (`'ca' in p`): ca, pa, positions, raw_attrs, injured, injury_days, contract_end
