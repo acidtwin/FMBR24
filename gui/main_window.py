@@ -1713,6 +1713,8 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._update_ui_state()
+        self._main_stack.setCurrentIndex(self._VIEW_INDEX['welcome'])
+        self._set_header('FM24 Editor', 'Load a save to begin')
 
     # -- UI construction -------------------------------------------------------
 
@@ -1805,6 +1807,7 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_reports())     # 4
         self._main_stack.addWidget(self._make_view_players())     # 5
         self._main_stack.addWidget(self._make_view_club_staff())  # 6
+        self._main_stack.addWidget(self._make_view_welcome())     # 7
         right_vbox.addWidget(self._main_stack)
 
         self._status = QStatusBar()
@@ -2125,6 +2128,8 @@ class MainWindow(QMainWindow):
             n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
             self._set_header('Club Staff', sub)
+        elif key == 'welcome':
+            self._set_header('FM24 Editor', 'Load a save to begin')
 
     def _make_sidebar(self):
         sidebar = QFrame()
@@ -2670,6 +2675,68 @@ class MainWindow(QMainWindow):
         total = len(staff)
         self._staff_count_lbl.setText(f'{total:,} staff')
         self._status_info_lbl.setText(f'{total:,} staff')
+
+    def _make_view_welcome(self):
+        w = QWidget()
+        w.setStyleSheet(f"background: {COLORS['window_bg']};")
+
+        outer = QVBoxLayout(w)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        inner = QWidget()
+        inner.setFixedWidth(340)
+        vbox = QVBoxLayout(inner)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Icon / logo
+        icon_lbl = QLabel('⚽')
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setStyleSheet("font-size: 48px; background: transparent;")
+        vbox.addWidget(icon_lbl)
+        vbox.addSpacing(16)
+
+        # Title
+        title_lbl = QLabel('FM24 Homegrown Editor')
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setStyleSheet(
+            "font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
+            f" font-size: 28px; font-weight: 700; color: {COLORS['text_primary']};"
+            " background: transparent;"
+        )
+        vbox.addWidget(title_lbl)
+        vbox.addSpacing(8)
+
+        # Subtitle
+        sub_lbl = QLabel('Load a save file to get started')
+        sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub_lbl.setStyleSheet(
+            f"font-size: 13px; color: {COLORS['text_secondary']}; background: transparent;"
+        )
+        vbox.addWidget(sub_lbl)
+        vbox.addSpacing(28)
+
+        # Load button
+        load_btn = QPushButton('Load Save')
+        load_btn.setFixedHeight(36)
+        load_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        load_btn.setStyleSheet(_BTN_SS(accent=True))
+        load_btn.clicked.connect(self._load_file)
+        vbox.addWidget(load_btn)
+        vbox.addSpacing(12)
+
+        # Hint
+        hint_lbl = QLabel('Supports FM24 .fm save files')
+        hint_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint_lbl.setStyleSheet(
+            f"font-size: 11px; color: {COLORS['text_dim']}; background: transparent;"
+        )
+        vbox.addWidget(hint_lbl)
+
+        outer.addWidget(inner)
+        return w
 
     def _make_view_club_staff(self):
         w = QWidget()
@@ -3583,9 +3650,11 @@ class MainWindow(QMainWindow):
 
     # -- Navigation -----------------------------------------------------------
 
-    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6}
+    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7}
 
     def _nav_to(self, key: str):
+        if key == 'club' and not self._current_club:
+            key = 'welcome'
         if key == 'staff' and not getattr(self, '_staff_loaded', False):
             self._populate_staff_table()
             self._staff_loaded = True
@@ -3820,7 +3889,6 @@ class MainWindow(QMainWindow):
         self._status_ready_lbl.setText(
             f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}'
             f' &nbsp;&middot;&nbsp; {n_clubs:,} clubs, {n_people:,} players, {n_staff:,} staff')
-        self._club_view_name.setText('Save loaded')
         self._club_view_info.setText(
             f"{n_clubs:,} clubs, {n_people:,} players with ability data.")
         self._club_stats_frame.setVisible(False)
@@ -3932,7 +4000,6 @@ class MainWindow(QMainWindow):
         self._breadcrumb.setTextFormat(Qt.TextFormat.RichText)
         self._squad_club_label.setText(club['name'])
         # Update club view
-        self._club_view_name.setText(club['name'])
         self._club_view_info.setText(f"{len(squad)} players in squad")
         self._update_club_view()
 
