@@ -1657,7 +1657,15 @@ class _HeaderHeroWidget(QWidget):
         # 1. Base
         p.fillRect(0, 0, w, h, QColor('#080C12'))
 
-        # 2. Stadium image at exactly 0.38 opacity
+        # 2. Gradient overlay — behind image, same as mockup z-order
+        # rgba(8,12,18,0.30) 0%, rgba(8,12,18,0.55) 55%, rgba(8,12,18,0.90) 100%
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.00, QColor(8, 12, 18, 77))
+        grad.setColorAt(0.55, QColor(8, 12, 18, 140))
+        grad.setColorAt(1.00, QColor(8, 12, 18, 230))
+        p.fillRect(0, 0, w, h, QBrush(grad))
+
+        # 3. Stadium image on top of gradient at 0.38 opacity (mockup z-order)
         if self._bg_pixmap and not self._bg_pixmap.isNull():
             p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
@@ -1669,14 +1677,6 @@ class _HeaderHeroWidget(QWidget):
             y_off = int((h - scaled.height()) * 0.40)
             p.drawPixmap(x_off, y_off, scaled)
             p.setOpacity(1.0)
-
-        # 3. Gradient overlay — 3-stop, exact from mockup:
-        # rgba(8,12,18,0.30) 0%, rgba(8,12,18,0.55) 55%, rgba(8,12,18,0.90) 100%
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.00, QColor(8, 12, 18, 77))   # 0.30 * 255 = 76.5
-        grad.setColorAt(0.55, QColor(8, 12, 18, 140))  # 0.55 * 255 = 140.25
-        grad.setColorAt(1.00, QColor(8, 12, 18, 230))  # 0.90 * 255 = 229.5
-        p.fillRect(0, 0, w, h, QBrush(grad))
 
         # 4. Pitch texture — from mockup ::before:
         # Vertical lines: repeating every 40px, 2px wide, alpha ~4 (0.016*255)
