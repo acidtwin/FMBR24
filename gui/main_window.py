@@ -1945,14 +1945,35 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
             " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
         )
+        _tbtn_save_ss = (
+            "QPushButton { background: #276749; color: #fff;"
+            " border: none; border-radius: 2px;"
+            " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
+            "QPushButton:hover { background: #2f855a; }"
+            "QPushButton:pressed { background: #1e5035; }"
+            "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
+            " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
+        )
+        _tbtn_reload_ss = (
+            "QPushButton { background: #92601e; color: #fff;"
+            " border: none; border-radius: 2px;"
+            " padding: 3px 10px; font-size: 11px; font-weight: 600; }"
+            "QPushButton:hover { background: #b07226; }"
+            "QPushButton:pressed { background: #744d17; }"
+            "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
+            " border: 1px solid rgba(255,255,255,0.08); font-weight: normal; }"
+        )
 
         self._save_btn = QPushButton('Save Changes')
         self._save_btn.setFixedHeight(26)
         self._save_btn.setEnabled(False)
         self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
-        self._save_btn.setIcon(_nav_icon(_SVG_SAVE))
+        _save_icon = QIcon()
+        _save_icon.addPixmap(_svg_icon(_SVG_SAVE, '#ffffff', 13).pixmap(13, 13), QIcon.Mode.Normal)
+        _save_icon.addPixmap(_svg_icon(_SVG_SAVE, '#3A4A58', 13).pixmap(13, 13), QIcon.Mode.Disabled)
+        self._save_btn.setIcon(_save_icon)
         self._save_btn.setIconSize(QSize(13, 13))
-        self._save_btn.setStyleSheet(_tbtn_ss)
+        self._save_btn.setStyleSheet(_tbtn_save_ss)
         self._save_btn.clicked.connect(self._do_save)
 
         self._load_btn = QPushButton('Load')
@@ -1971,9 +1992,12 @@ class MainWindow(QMainWindow):
         self._reload_btn.setFixedHeight(26)
         self._reload_btn.setEnabled(False)
         self._reload_btn.setToolTip('Re-parse the current save file')
-        self._reload_btn.setIcon(_nav_icon(_SVG_RELOAD))
+        _reload_icon = QIcon()
+        _reload_icon.addPixmap(_svg_icon(_SVG_RELOAD, '#ffffff', 13).pixmap(13, 13), QIcon.Mode.Normal)
+        _reload_icon.addPixmap(_svg_icon(_SVG_RELOAD, '#3A4A58', 13).pixmap(13, 13), QIcon.Mode.Disabled)
+        self._reload_btn.setIcon(_reload_icon)
         self._reload_btn.setIconSize(QSize(13, 13))
-        self._reload_btn.setStyleSheet(_tbtn_ss)
+        self._reload_btn.setStyleSheet(_tbtn_reload_ss)
         self._reload_btn.clicked.connect(self._reload_save)
 
         self._settings_btn = QPushButton()
