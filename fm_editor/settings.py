@@ -1,0 +1,99 @@
+"""App settings: one JSON file in the config dir. No Qt imports.
+
+File: <config_dir>/settings.json (shared with fm_editor/weights.py, which owns the
+'role_weights_preset' key). Unknown keys are preserved on save. Override the dir with
+the FMBR24_CONFIG_DIR env var (tests / verification must never touch the real one).
+"""
+import json
+import os
+
+APP_NAME = 'FM Backroom 24 (FMBR24)'
+APP_VERSION = '0.0.0-dev'
+APP_REPO_URL = 'https://github.com/acidtwin/FMBR24'
+LEGAL_LINE = ('Unofficial tool for Football Manager 24 — not affiliated with or '
+              'endorsed by Sports Interactive / SEGA')
+
+LANDING_PAGES = ('save_info', 'club', 'players')
+
+DEFAULTS = {
+    'default_save_dir': '',            # '' = not set -> old behaviour (Steam dir / home)
+    'role_weights_preset': 'FMScout Community',
+    'landing_page': 'save_info',       # page opened after a save finishes loading
+    'show_pending': True,              # show PENDING chips on the Club page
+}
+
+
+def config_dir():
+    env = os.environ.get('FMBR24_CONFIG_DIR')
+    if env:
+        return env
+    base = os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config')
+    return os.path.join(base, 'fm24_editor')  # same dir as the old settings dialog / weights
+
+
+def settings_path():
+    return os.path.join(config_dir(), 'settings.json')
+
+
+def _read_raw():
+    try:
+        with open(settings_path(), encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _clean(raw):
+    """Defaults overlaid with raw, dropping values of the wrong type / out of range."""
+    out = dict(DEFAULTS)
+    for k, default in DEFAULTS.items():
+        v = raw.get(k, default)
+        if isinstance(v, type(default)):
+            out[k] = v
+    if out['landing_page'] not in LANDING_PAGES:
+        out['landing_page'] = DEFAULTS['landing_page']
+    return out
+
+
+def load():
+    """Current settings dict (only known keys). Missing/corrupt file -> defaults. Never raises."""
+    return _clean(_read_raw())
+
+
+def save(values):
+    """Merge values into the file (unknown keys kept). Returns True on success."""
+    try:
+        data = _read_raw()
+        data.update(_clean(values))
+        os.makedirs(config_dir(), exist_ok=True)
+        tmp = settings_path() + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, settings_path())
+        return True
+    except Exception:
+        return False
+
+
+def folder_status(path):
+    """(state, n_saves): state 'unset' | 'ok' | 'missing' | 'notdir'. n_saves = *.fm files."""
+    path = (path or '').strip()
+    if not path:
+        return 'unset', 0
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        return 'missing', 0
+    if not os.path.isdir(path):
+        return 'notdir', 0
+    try:
+        n = sum(1 for e in os.scandir(path) if e.is_file() and e.name.lower().endswith('.fm'))
+    except OSError:
+        n = 0
+    return 'ok', n
+
+
+def save_dialog_dir(fallback):
+    """Start dir for the Load dialog: the configured folder if it is a valid dir, else fallback."""
+    p = os.path.expanduser(load()['default_save_dir'].strip())
+    return p if p and os.path.isdir(p) else fallback

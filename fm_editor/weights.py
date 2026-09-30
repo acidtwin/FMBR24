@@ -19,9 +19,11 @@ import json
 import shutil
 from pathlib import Path
 
+from fm_editor import settings as _app_settings
+
 _BUNDLED_DIR = Path(__file__).parent / 'weights'
-_USER_DIR = Path.home() / '.config' / 'fm24_editor' / 'weights'
-_SETTINGS_FILE = Path.home() / '.config' / 'fm24_editor' / 'settings.json'
+_USER_DIR = Path(_app_settings.config_dir()) / 'weights'
+_SETTINGS_FILE = Path(_app_settings.settings_path())
 _ACTIVE_KEY = 'role_weights_preset'
 _DEFAULT_PRESET = 'FMScout Community'
 
