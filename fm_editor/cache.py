@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 16  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 19  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -105,3 +105,42 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
             json.dump(data, f, separators=(',', ':'))
     except Exception:
         pass  # cache write failure is non-fatal
+
+
+def cache_dir():
+    return _CACHE_DIR
+
+
+def _cache_files():
+    """Cache files: *.json directly inside the cache dir (regular files, no symlinks)."""
+    try:
+        return [e.path for e in os.scandir(_CACHE_DIR)
+                if e.name.endswith('.json') and e.is_file(follow_symlinks=False)]
+    except OSError:
+        return []
+
+
+def cache_info():
+    """(n_files, total_bytes) of the parse cache."""
+    n = size = 0
+    for p in _cache_files():
+        try:
+            size += os.path.getsize(p)
+            n += 1
+        except OSError:
+            pass
+    return n, size
+
+
+def clear_all_caches():
+    """Delete every parse-cache file. Only touches *.json inside the cache dir. Returns count."""
+    n = 0
+    for p in _cache_files():
+        if os.path.dirname(os.path.realpath(p)) != os.path.realpath(_CACHE_DIR):
+            continue
+        try:
+            os.remove(p)
+            n += 1
+        except OSError:
+            pass
+    return n

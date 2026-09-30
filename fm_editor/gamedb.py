@@ -85,9 +85,61 @@ def find_clubs(b, names_start):
             continue
         name = b[at + 43:at + 43 + n].decode('utf-8', errors='replace')
         short = b[at + 47 + n:at + 47 + n + sn].decode('utf-8', errors='replace')
-        clubs.append({'id': cid, 'uid': uid, 'name': name, 'short': short, 'offset': at})
+        he = at + 47 + n + sn
+        status = b[he]  # 1 professional, 2 semi-pro, 3 amateur (see fm24-binary-format.md)
+        clubs.append({'id': cid, 'uid': uid, 'name': name, 'short': short, 'offset': at,
+                      'nation': nation, 'status': status if 1 <= status <= 3 else None})
         search = at + 47 + n + sn + 17  # skip past this record
     return clubs
+
+
+# -- Club finances -------------------------------------------------------------
+
+_NULL_DATES = bytes.fromhex('01006c0701006c0701006c07')  # three null dates (1900) after the money fields
+
+
+def add_club_finance(b, clubs, names_start):
+    """Add club['fin'] (dict, GBP ints) to every club whose record carries finance fields.
+
+    No club is hard-coded: the layout is detected structurally. le = hdr+9+4*b[hdr+8]
+    (hdr = end of the short-name string, b[hdr+8] = board-list count), b[le] selects the variant:
+      b[le] == 0x01 "full" block (230 clubs: PL + a few promoted/relegated, Serie A, La Liga 1-3,
+          Saudi, Brazil, MLS ...): le+1 original transfer budget, le+5 current transfer budget,
+          le+9 next-season minimum guaranteed budget, le+22 current wage spending p/w,
+          le+67 wage budget p/w (sanity b[le+54]==0, b[le+56:le+59]==0); balance = i32 8 bytes
+          before the first null-date triple after the 0x7fffffff marker (>= le+75).
+      b[le] == 0x00 and null-date triple at le+9 "small" (4,656 clubs incl. Championship and
+          below): ONLY the balance, i32 at le+1 (0 = not simulated -> omitted).
+    Budgets are not stored for "small" clubs (proved in memory fm24-binary-format.md section 6).
+    Spurs verified exactly against the in-game Finances screen.
+    """
+    srt = sorted(clubs, key=lambda c: c['offset'])
+    for i, c in enumerate(srt):
+        at = c['offset']
+        end = srt[i + 1]['offset'] if i + 1 < len(srt) else names_start
+        he = at + 47 + len(c['name'].encode()) + len(c['short'].encode())
+        le = he + 9 + 4 * b[he + 8]
+        if le + 25 > end:
+            continue
+
+        def i32(o): return struct.unpack_from('<i', b, o)[0]
+        if b[le] == 1:
+            if le + 75 > end or b[le + 54] != 0 or b[le + 56:le + 59] != b'\x00\x00\x00':
+                continue
+            wc, wb = i32(le + 22), i32(le + 67)
+            if wc < 0 or wb <= 0:  # no ratio check: tiny clubs have wage budget >> spending
+                continue
+            fin = {'transfer_budget_orig': i32(le + 1), 'transfer_budget': i32(le + 5),
+                   'transfer_budget_next_min': i32(le + 9), 'wage_spending': wc, 'wage_budget': wb}
+            m = b.find(b'\xff\xff\xff\x7f', le + 75, end)
+            j = b.find(_NULL_DATES, m, end) if m > 0 else -1
+            if j > 0:
+                fin['balance'] = i32(j - 8)
+            c['fin'] = fin
+        elif b[le] == 0 and b[le + 9:le + 21] == _NULL_DATES:
+            x = i32(le + 1)
+            if x != 0:
+                c['fin'] = {'balance': x}
 
 
 # -- Squads --------------------------------------------------------------------
