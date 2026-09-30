@@ -1,4 +1,4 @@
-"""FM24 Save Editor - main window."""
+"""FM Backroom 24 - main window."""
 import os
 import shutil
 from datetime import date
@@ -398,7 +398,7 @@ _SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 
 # Brand shown in the sidebar header (mockups/sidebar-header-options.html, option A).
 # The app is due a rename: change these two lines (plus the hard-coded titles listed in main.py / MainWindow).
 _BRAND_MARK_PX = 34
-_APP_WORDMARK = 'Save Editor'
+_APP_WORDMARK = 'Backroom'
 
 _SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
               'August', 'September', 'October', 'November', 'December')
@@ -2165,7 +2165,7 @@ class _HeaderHeroWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('FM24 Homegrown Editor')
+        self.setWindowTitle('FM Backroom 24')
         self.setMinimumSize(1000, 660)
         self.resize(1200, 780)
 
@@ -2197,7 +2197,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._update_ui_state()
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['welcome'])
-        self._set_header('FM24 Editor', 'Load a save to begin')
+        self._set_header('FM Backroom 24', 'Load a save to begin')
 
     # -- UI construction -------------------------------------------------------
 
@@ -2345,7 +2345,7 @@ class MainWindow(QMainWindow):
         self._nav_history: list[tuple] = []
         self._nav_pos: int = -1
 
-        self._breadcrumb = QLabel('FM Save Editor')
+        self._breadcrumb = QLabel('FM Backroom 24')
         self._breadcrumb.setStyleSheet(
             "color: rgba(255,255,255,0.55); font-size:12px; background:transparent;")
 
@@ -2651,7 +2651,7 @@ class MainWindow(QMainWindow):
             self._set_header('Save Info', info.get('game_name')
                              or (os.path.basename(self._save_path) if self._save_path else ''))
         elif key == 'welcome':
-            self._set_header('FM24 Editor', 'Load a save to begin')
+            self._set_header('FM Backroom 24', 'Load a save to begin')
 
     def _make_sidebar(self):
         sidebar = _SidebarFrame()
@@ -2693,7 +2693,7 @@ class MainWindow(QMainWindow):
         wordmark.setStyleSheet(
             f"QLabel#sbWordmark {{ background:transparent; color:{COLORS['text_primary']};"
             " font-family:'Barlow Condensed','Arial Narrow',sans-serif;"
-            " font-size:16px; font-weight:700; letter-spacing:0.05em; }")
+            " font-size:18px; font-weight:700; letter-spacing:0.05em; }")
         brand_row.addWidget(mark)
         brand_row.addWidget(wordmark, 1)
         bb.addLayout(brand_row)
@@ -3725,7 +3725,7 @@ class MainWindow(QMainWindow):
         vbox.addSpacing(16)
 
         # Title
-        title_lbl = QLabel('FM24 Homegrown Editor')
+        title_lbl = QLabel('FM Backroom 24')
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setStyleSheet(
             "font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
@@ -5250,7 +5250,7 @@ class MainWindow(QMainWindow):
         # Update sidebar + header
         dim = COLORS['text_dim']
         self._breadcrumb.setText(
-            f"FM Save Editor <span style='color:{dim}'> &rsaquo; </span>"
+            f"FM Backroom 24 <span style='color:{dim}'> &rsaquo; </span>"
             f"<b>{club['name']}</b>"
             f"<span style='color:{dim}'> &rsaquo; </span><b>Squads</b>")
         self._breadcrumb.setTextFormat(Qt.TextFormat.RichText)

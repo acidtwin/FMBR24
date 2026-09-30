@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# FM24 Homegrown Editor - desktop GUI for patching squad registration in FM24 saves.
+# FM Backroom 24 (FMBR24) - desktop GUI for patching squad registration in FM24 saves.
 # Direction: FM24 default dark skin. See gui/theme.py for the colour palette.
 import sys
 import faulthandler
@@ -21,7 +21,7 @@ from gui.icon import make_app_icon
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName('FM24 Homegrown Editor')
+    app.setApplicationName('FM Backroom 24')
     app.setStyleSheet(QSS)
     icon = make_app_icon()
     app.setWindowIcon(icon)
