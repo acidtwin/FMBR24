@@ -1,7 +1,7 @@
 """JSON cache for parsed save data, keyed by file mtime.
 
 Cache file: ~/.cache/fm24_editor/<sha256_of_path>.json
-Stores: mtime, clubs list, squads dict, sub_squads dict, people list.
+Stores: mtime, clubs list, squads dict, sub_squads dict, people list, save_info dict.
 Re-parse if mtime changed or cache missing.
 """
 import json
@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 15  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 16  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -58,7 +58,8 @@ def clear_cache(save_path):
         pass
 
 
-def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, club_staff=None):
+def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, club_staff=None,
+               save_info=None):
     os.makedirs(_CACHE_DIR, exist_ok=True)
     cp = _cache_path(save_path)
     slim_people = []
@@ -97,6 +98,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
         data['employment'] = employment
     if club_staff:
         data['club_staff'] = club_staff
+    if save_info:
+        data['save_info'] = save_info  # plain JSON types (str/int/list) - no key normalising needed
     try:
         with open(cp, 'w', encoding='utf-8') as f:
             json.dump(data, f, separators=(',', ':'))

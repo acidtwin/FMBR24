@@ -8,10 +8,10 @@ from PyQt6.QtWidgets import (
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
-    QInputDialog, QGridLayout,
+    QInputDialog, QGridLayout, QBoxLayout,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
@@ -117,6 +117,21 @@ _SVG_SAVE = (
     '<rect x="2" y="2" width="12" height="12" rx="1"/>'
     '<path d="M5 2v4h6V2"/>'
     '<rect x="4.5" y="9" width="7" height="4" rx="0.5"/>'
+    '</svg>'
+)
+
+_SVG_INFO = (
+    '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"'
+    ' stroke="{c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+    '<circle cx="8" cy="8" r="6.5"/>'
+    '<path d="M8 7.2v4M8 4.6v.1"/>'
+    '</svg>'
+)
+# Save Info avatar silhouette (mockup .avatar svg, viewBox 44x44, filled)
+_SVG_AVATAR = (
+    '<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="22" cy="15" r="8" fill="{c}"/>'
+    '<path d="M4 44c0-11 8-17 18-17s18 6 18 17z" fill="{c}"/>'
     '</svg>'
 )
 
@@ -377,6 +392,190 @@ def _club_kv_value(text='', color='#e8edf2'):
     return lbl
 
 
+# -- Save Info page helpers (mockups/save-info-page-design-b.html) --------------
+
+_SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+_SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
+              'August', 'September', 'October', 'November', 'December')
+
+
+def _fmt_game_date(iso):
+    """'2028-01-02' -> 'Sunday 2nd January 2028' (the game's own date wording); None if unparseable."""
+    try:
+        d = date.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return None
+    suffix = 'th' if 10 <= d.day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(d.day % 10, 'th')
+    return f"{_SI_DAYS[d.weekday()]} {d.day}{suffix} {_SI_MONTHS[d.month - 1]} {d.year}"
+
+
+def _fmt_game_time(seconds):
+    """116137 -> '1 Day, 8 Hours, 16 Minutes' (rounded to the nearest minute, zero units dropped)."""
+    total = (int(seconds) + 30) // 60
+    days, rem = divmod(total, 1440)
+    hours, mins = divmod(rem, 60)
+    parts = [f"{n} {unit}{'' if n == 1 else 's'}"
+             for n, unit in ((days, 'Day'), (hours, 'Hour'), (mins, 'Minute')) if n]
+    return ', '.join(parts) or '0 Minutes'
+
+
+def _fmt_file_size(n):
+    """Human-readable size, 1024-based: 197537792 -> '188.4 MB'."""
+    n = float(n)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return f"{int(n)} B" if unit == 'B' else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def _si_of(key, fn=str):
+    """Save Info row formatter: fn(src[key]), or None (row hidden) when the key is absent."""
+    return lambda src: fn(src[key]) if src.get(key) is not None else None
+
+
+def _si_folder(src):
+    p = src.get('folder_path')
+    if not p:
+        return None
+    parts = [x for x in p.split(os.sep) if x]
+    return (('…/' + '/'.join(parts[-2:])) if len(parts) > 2 else p, p)   # (text, tooltip)
+
+
+def _si_version(src):
+    v, b = src.get('game_version'), src.get('game_build')
+    return f"{v}+{b}" if v and b else (str(v or b) if (v or b) else None)
+
+
+def _si_nations_leagues(src):
+    n, lg = src.get('nations_count'), src.get('leagues')
+    return f"{n} · {len(lg)}" if n and lg else None
+
+
+def _si_league_note(src):
+    lg = src.get('leagues')
+    return None if not lg else ', '.join(lg[:3]) + (f' and {len(lg) - 3} more' if len(lg) > 3 else '')
+
+
+# The ledger, one band per tuple: (band title, rows). A row is
+#   (placement, key, label, formatter[, dim])
+# placement: 'full' (spans both columns) | 'left' | 'right' | 'note' (small text under the fields).
+# formatter(src) -> str | (str, tooltip) | None; None hides the row, and a band with no visible
+# rows hides. `src` = the parsed save_info dict + the file/database facts added by
+# _update_save_info_view (file_name, folder_path, file_size, file_modified, people_total).
+# To show a new saveinfo.py key, add ONE row here, e.g.
+#   ('left', 'database_size', 'Size', _si_of('database_size', _fmt_file_size)),
+_SI_LAYOUT = (
+    ('Save File', (
+        ('full',  'file_name',     'File name',    _si_of('file_name')),
+        ('full',  'folder',        'Folder',       _si_folder, True),
+        ('left',  'file_size',     'Size on disk', _si_of('file_size', _fmt_file_size)),
+        ('right', 'file_modified', 'Modified',     _si_of('file_modified')),
+    )),
+    ('Game', (
+        ('full',  'game_name',    'Game name',    _si_of('game_name')),
+        ('full',  'in_game_date', 'In-game date', _si_of('in_game_date', _fmt_game_date)),
+        ('full',  'date_created', 'Date created', _si_of('date_created', _fmt_game_date)),
+        ('full',  'game_time',    'Game time',    _si_of('game_time_seconds', _fmt_game_time)),
+        ('left',  'times_saved',  'Times saved',  _si_of('times_saved', '{:,}'.format)),
+        ('right', 'game_version', 'Game version', _si_version),
+    )),
+    ('Database', (
+        ('left',  'db_people',  'Players + staff',   _si_of('people_total', '{:,}'.format)),
+        ('left',  'db_version', 'Version',           _si_of('database_version')),
+        ('right', 'db_changes', 'Changes',           _si_of('database_changes', '{:,}'.format)),
+        ('right', 'db_nat',     'Nations · leagues', _si_nations_leagues),
+        ('note',  'db_note',    '',                  _si_league_note),
+    )),
+)
+
+
+def _si_label(text, size, color, bold=False, spacing_em=0.0, upper=False, weight=None):
+    """Save Info text label: QSS carries size/colour/weight, letter-spacing goes on the QFont
+    (QSS letter-spacing is not honoured; text-transform likewise, hence upper=)."""
+    lbl = QLabel(text.upper() if upper else text)
+    wt = f" font-weight:{weight};" if weight else (" font-weight:bold;" if bold else "")
+    lbl.setStyleSheet(f"color:{color}; font-size:{size}px;{wt} background:transparent;")
+    if spacing_em:
+        f = lbl.font()
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, size * spacing_em)
+        lbl.setFont(f)
+    return lbl
+
+
+class _ElideLabel(QLabel):
+    """QLabel that elides (with tooltip) instead of forcing its layout wider."""
+
+    def __init__(self, text='', parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(0)
+        self._full = ''
+        self.set_full_text(text)
+
+    def set_full_text(self, text):
+        self._full = text
+        self.setToolTip(text)
+        self._elide()
+
+    def _elide(self):
+        self.setText(self.fontMetrics().elidedText(
+            self._full, Qt.TextElideMode.ElideRight, max(self.width(), 0) or 10 ** 6))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._elide()
+
+
+class _FitLabel(_ElideLabel):
+    """_ElideLabel that first shrinks its font (start_px .. min_px, bold) to fit — the rail's
+    manager name, where the mockup's condensed Barlow face isn't bundled and the fallback is wider."""
+
+    def __init__(self, start_px, min_px, color, spacing_em, parent=None):
+        self._start, self._min, self._color, self._sp = start_px, min_px, color, spacing_em
+        self._px = start_px
+        super().__init__('', parent)
+        self._style(start_px)
+
+    def _style(self, px):
+        self._px = px
+        self.setStyleSheet(f"color:{self._color}; font-size:{px}px; font-weight:bold;"
+                           " background:transparent;")
+        f = self.font()
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, px * self._sp)
+        self.setFont(f)
+
+    def _elide(self):
+        if self.width() > 0 and self._full:
+            f = QFont(self.font())
+            f.setBold(True)
+            px = self._start
+            while px > self._min:
+                f.setPixelSize(px)
+                f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, px * self._sp)
+                if QFontMetrics(f).horizontalAdvance(self._full) <= self.width():
+                    break
+                px -= 1
+            if px != self._px:
+                self._style(px)
+        super()._elide()
+
+
+class _WidthWatcher(QWidget):
+    """Plain container that reports its width on resize (drives the Save Info narrow layout)."""
+
+    def __init__(self, on_width, parent=None):
+        super().__init__(parent)
+        self._on_width = on_width
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._on_width(event.size().width())
+
+
 def _club_player_row(rank, pos_code, name, injured):
     row = QWidget()
     row.setObjectName('clubPlayerRow')
@@ -525,13 +724,24 @@ class ParseWorker(QThread):
             self._emit("Parsing staff ability (CA/PA)...", 96)
             find_staff_extras(b, people, player_ids)
 
+            self._emit("Reading save info...", 97)
+            try:
+                from fm_editor.saveinfo import parse_save_info
+                save_info = parse_save_info(self.save_path, members, archive_name,
+                                            gdb=b, clubs=clubs, people=people)
+            except Exception:
+                import traceback
+                traceback.print_exc()  # untrusted bytes: a bad metadata block must not abort the load
+                save_info = {}
+
             self._emit("Caching results...", 98)
-            save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff)
+            save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
+                       save_info)
 
             self.pct.emit(100)
             result = {
                 'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
-                'employment': employment, 'club_staff': club_staff,
+                'employment': employment, 'club_staff': club_staff, 'save_info': save_info,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
@@ -2064,6 +2274,7 @@ class MainWindow(QMainWindow):
         self._main_stack.addWidget(self._make_view_players())     # 5
         self._main_stack.addWidget(self._make_view_club_staff())  # 6
         self._main_stack.addWidget(self._make_view_welcome())     # 7
+        self._main_stack.addWidget(self._make_view_save_info())   # 8
         right_vbox.addWidget(self._main_stack)
 
         self._status = QStatusBar()
@@ -2419,6 +2630,10 @@ class MainWindow(QMainWindow):
             n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
             self._set_header('Club Staff', sub)
+        elif key == 'save_info':
+            info = (self._save_data or {}).get('save_info') or {}
+            self._set_header('Save Info', info.get('game_name')
+                             or (os.path.basename(self._save_path) if self._save_path else ''))
         elif key == 'welcome':
             self._set_header('FM24 Editor', 'Load a save to begin')
 
@@ -2454,6 +2669,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_section_label('MAIN'))
         self._nav_btns = {}
         for key, svg, label in [
+            ('save_info',  _SVG_INFO,      'Save Info'),
             ('club',       _SVG_CLUB,      'Club'),
             ('squad',      _SVG_SQUAD,     'Squads'),
             ('club_staff', _SVG_STAFF,     'Club Staff'),
@@ -2465,6 +2681,7 @@ class MainWindow(QMainWindow):
                 btn = self._make_nav_btn(svg, label, lambda checked, k=key: self._nav_to(k))
             self._nav_btns[key] = btn
             vbox.addWidget(btn)
+        self._nav_btns['save_info'].setEnabled(False)
         self._nav_btns['club'].setEnabled(False)
 
         vbox.addWidget(self._make_hline())
@@ -2732,6 +2949,308 @@ class MainWindow(QMainWindow):
         vbox.addWidget(wrap, 1)
         vbox.addStretch(1)
         return outer
+
+    def _make_view_save_info(self):
+        """1:1 translation of mockups/save-info-page-design-b.html (Design B).
+
+        The mockup's context-only sidebar / masthead / Preview switch are skipped (the app's own
+        shared masthead is used). No PENDING state: a row whose value is absent from the parsed
+        save_info dict is hidden, and a band with no visible rows vanishes
+        (see _update_save_info_view). Sits flat on the page background — no card, no footer.
+        """
+        BORDER, DIM, TEXT = '#263140', '#7a8fa6', '#e8edf2'
+
+        page = _WidthWatcher(self._si_apply_width)
+        page.setObjectName('view_save_info')
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
+        scroll.setWidget(page)
+        outer = QWidget()
+        outer.setObjectName('view_save_info_outer')
+        outer_vbox = QVBoxLayout(outer)
+        outer_vbox.setContentsMargins(0, 0, 0, 0)
+        outer_vbox.setSpacing(0)
+        outer_vbox.addWidget(scroll, 1)
+
+        # .page: grid 280px 1fr
+        page_row = QHBoxLayout(page)
+        page_row.setContentsMargins(0, 0, 0, 0)
+        page_row.setSpacing(0)
+
+        # ── Rail (.rail): elevated surface, 1px right divider, padding 24 22 28 ──
+        rail = QFrame()
+        rail.setObjectName('siRail')
+        rail.setFixedWidth(280)
+        rail.setStyleSheet(
+            f"QFrame#siRail {{ background:#141c27; border-right:1px solid {BORDER}; }}")
+        self._si_rail = rail
+        rail_v = QVBoxLayout(rail)
+        rail_v.setContentsMargins(22, 24, 22, 28)
+        rail_v.setSpacing(0)
+
+        # .id: column, gap 16 — avatar then labels. Bottom margin 32 = .counts margin-top.
+        self._si_id_block = QWidget()
+        self._si_id_block.setObjectName('siIdBlock')
+        self._si_id_block.setStyleSheet("QWidget#siIdBlock { background:transparent; }")
+        id_v = QVBoxLayout(self._si_id_block)
+        id_v.setContentsMargins(0, 0, 0, 32)
+        id_v.setSpacing(16)
+        avatar = QFrame()
+        avatar.setObjectName('siAvatar')
+        avatar.setFixedSize(88, 88)
+        avatar.setStyleSheet(
+            f"QFrame#siAvatar {{ background:#18212d; border:1px solid {BORDER}; border-radius:3px; }}")
+        av_v = QVBoxLayout(avatar)
+        av_v.setContentsMargins(0, 0, 0, 0)
+        av_icon = QLabel()
+        av_icon.setPixmap(_svg_icon(_SVG_AVATAR, '#2a394b', 62).pixmap(62, 62))
+        av_icon.setStyleSheet("background:transparent;")
+        av_v.addWidget(av_icon, 0, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom)
+        id_v.addWidget(avatar)
+        id_text = QVBoxLayout()
+        id_text.setContentsMargins(0, 0, 0, 0)
+        id_text.setSpacing(0)
+        id_text.addWidget(_si_label('Manager', 11, DIM, spacing_em=0.07, upper=True))
+        id_text.addSpacing(2)
+        self._si_name = _FitLabel(38, 22, TEXT, 0.02)   # .id-name: 38px/44px bold
+        self._si_name.setFixedHeight(44)
+        id_text.addWidget(self._si_name)
+        id_text.addSpacing(14)                          # .lbl2 margin-top
+        id_text.addWidget(_si_label('Current club', 11, DIM, spacing_em=0.07, upper=True))
+        id_text.addSpacing(2)
+        self._si_club = _ElideLabel()                   # .id-club: 15px / 500, 24px tall
+        self._si_club.setFixedHeight(24)
+        id_text.addWidget(self._si_club)
+        id_v.addLayout(id_text)
+        rail_v.addWidget(self._si_id_block)
+
+        # .counts: 1px top divider, padding-top 12, three .count rows
+        self._si_counts = QWidget()
+        self._si_counts.setObjectName('siCounts')
+        self._si_counts.setStyleSheet("QWidget#siCounts { background:transparent; }")
+        counts_v = QVBoxLayout(self._si_counts)
+        counts_v.setContentsMargins(0, 0, 0, 0)
+        counts_v.setSpacing(0)
+        top_line = QFrame()
+        top_line.setFixedHeight(1)
+        top_line.setStyleSheet(f"background:{BORDER};")
+        counts_v.addWidget(top_line)
+        counts_v.addSpacing(12)
+        self._si_count_vals = {}
+        for i, (key, label, color) in enumerate((
+                ('clubs', 'Clubs', '#3d8bcd'),
+                ('players', 'Players', '#4caf82'),
+                ('staff', 'Staff', '#8b5cf6'))):
+            row = QFrame()
+            row.setObjectName('siCount')
+            row.setStyleSheet(
+                "QFrame#siCount { background:transparent;"
+                + (" border-bottom:1px solid rgba(255,255,255,0.04);" if i < 2 else "") + " }")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 7, 0, 7)
+            rl.setSpacing(0)
+            lbl = _si_label(label, 11, DIM, spacing_em=0.07, upper=True)
+            lbl.setContentsMargins(0, 0, 0, 3)          # baseline-align with the 22px value
+            rl.addWidget(lbl, 0, Qt.AlignmentFlag.AlignBottom)
+            rl.addStretch(1)
+            val = _si_label('0', 22, color, bold=True)
+            val.setFixedHeight(28)                      # .count-val line-height 28px
+            rl.addWidget(val)
+            counts_v.addWidget(row)
+            self._si_count_vals[key] = val
+        rail_v.addWidget(self._si_counts)
+        rail_v.addStretch(1)
+        page_row.addWidget(rail)
+
+        # ── Ledger (.ledger): one .band per topic ────────────────────────────
+        ledger = QWidget()
+        ledger_v = QVBoxLayout(ledger)
+        ledger_v.setContentsMargins(0, 0, 0, 0)
+        ledger_v.setSpacing(0)
+        self._si_rows = {}      # key -> (row frame, key label, value label)
+        self._si_bands = []     # (band frame, header label, [(row keys, is_full)], [(note key, note label)])
+        self._si_formatters = {}  # row key -> formatter(src)
+
+        def _kv(key, label, dim=False):
+            row = QFrame()
+            row.setObjectName('siKv')
+            row.setMinimumHeight(28)
+            hl = QHBoxLayout(row)
+            hl.setContentsMargins(0, 5, 0, 5)
+            hl.setSpacing(0)
+            lbl = _si_label(label, 12, DIM)
+            lbl.setFixedWidth(112)                      # .fields .kv: 112px label column
+            hl.addWidget(lbl)
+            val = _ElideLabel()
+            val.setStyleSheet(
+                f"color:{DIM if dim else TEXT}; font-size:12px;"
+                f" font-weight:{400 if dim else 500}; background:transparent;")
+            hl.addWidget(val, 1)
+            self._si_rows[key] = (row, lbl, val)
+            return row
+
+        def _band(title, rows):
+            band = QFrame()
+            band.setObjectName('siBand')
+            bl = QBoxLayout(QBoxLayout.Direction.LeftToRight, band)
+            bl.setContentsMargins(28, 20, 28, 20)
+            bl.setSpacing(24)
+            hdr = _si_label(title, 12, DIM, bold=True, spacing_em=0.12, upper=True)
+            hdr.setFixedWidth(120)
+            hdr.setContentsMargins(0, 6, 0, 0)          # .band-h padding-top 6
+            bl.addWidget(hdr, 0, Qt.AlignmentFlag.AlignTop)
+            fields = QWidget()
+            grid = QGridLayout(fields)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(40)               # .fields column-gap 40
+            grid.setVerticalSpacing(0)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
+            by = {pl: [row for row in rows if row[0] == pl] for pl in ('full', 'left', 'right', 'note')}
+            groups = []
+            r = 0
+            for row in by['full']:                      # .kv.full spans both columns
+                grid.addWidget(_kv(row[1], row[2], len(row) > 4 and row[4]), r, 0, 1, 2)
+                r += 1
+            if by['full']:
+                groups.append(([row[1] for row in by['full']], True))
+            for col, pl in enumerate(('left', 'right')):
+                if not by[pl]:
+                    continue
+                colw = QWidget()
+                cv = QVBoxLayout(colw)
+                cv.setContentsMargins(0, 0, 0, 0)
+                cv.setSpacing(0)
+                for row in by[pl]:
+                    cv.addWidget(_kv(row[1], row[2], len(row) > 4 and row[4]))
+                cv.addStretch(1)
+                grid.addWidget(colw, r, col)
+                groups.append(([row[1] for row in by[pl]], False))
+            notes = []
+            for row in by['note']:                      # .nat
+                nl = _si_label('', 11, DIM)
+                nl.setWordWrap(True)
+                nl.setContentsMargins(0, 8, 0, 0)
+                grid.addWidget(nl, r + 1 + len(notes), 0, 1, 2)
+                notes.append((row[1], nl))
+            bl.addWidget(fields, 1)
+            ledger_v.addWidget(band)
+            self._si_bands.append((band, hdr, groups, notes))
+            self._si_formatters.update({row[1]: row[3] for row in rows})
+
+        for title, rows in _SI_LAYOUT:
+            _band(title, rows)
+        ledger_v.addStretch(1)
+        page_row.addWidget(ledger, 1)
+        return outer
+
+    def _si_apply_width(self, width):
+        """Mockup @media (max-width:1100px) collapse — rail 240px, band title stacked above its
+        fields. Breakpoint raised from the mockup's 908px content width to 980px: the real
+        values (full-length dates, game time) are wider than the mockup's abbreviations, and
+        the 2-column grid clips them below that."""
+        if not hasattr(self, '_si_bands'):
+            return
+        narrow = width < 980
+        self._si_rail.setFixedWidth(240 if narrow else 280)
+        for band, hdr, groups, note in self._si_bands:
+            bl = band.layout()
+            bl.setDirection(QBoxLayout.Direction.TopToBottom if narrow
+                            else QBoxLayout.Direction.LeftToRight)
+            bl.setSpacing(4 if narrow else 24)
+            hdr.setFixedWidth(16777215 if narrow else 120)
+            hdr.setContentsMargins(0, 0 if narrow else 6, 0, 0)
+
+    def _update_save_info_view(self):
+        """Fill the Save Info page from self._save_data['save_info'] + file stats.
+        Absent values hide their row; a band with no visible rows hides; no PENDING chips."""
+        sd = self._save_data or {}
+        info = sd.get('save_info') or {}
+        people = sd.get('people') or []
+
+        # -- source facts: parsed save_info + what the app itself knows about the file / database --
+        src = dict(info)
+        path = self._save_path
+        if path:
+            src['file_name'] = os.path.basename(path)
+            src['folder_path'] = os.path.dirname(path)
+            try:
+                st = os.stat(path)
+                from datetime import datetime
+                src['file_size'] = st.st_size
+                src['file_modified'] = datetime.fromtimestamp(st.st_mtime).strftime('%-d %b %Y, %H:%M')
+            except OSError:
+                pass
+        if people:
+            src['people_total'] = len(people)
+        vals, tips = {}, {}
+        for key, fmt in self._si_formatters.items():
+            try:
+                out = fmt(src)
+            except Exception:                           # one bad value must not blank the page
+                out = None
+            if isinstance(out, tuple):
+                out, tips[key] = out
+            if out is not None:
+                vals[key] = out
+
+        # -- database counts the app already knows --
+        n_players = sum(1 for p in people if 'ca' in p)
+        counts = {}
+        if 'clubs' in sd:
+            counts['clubs'] = len(sd['clubs'])
+        if people:
+            counts['players'], counts['staff'] = n_players, len(people) - n_players
+        for key, lbl in self._si_count_vals.items():
+            lbl.parent().setVisible(key in counts)
+            lbl.setText(f"{counts.get(key, 0):,}")
+        self._si_counts.setVisible(bool(counts))
+
+        # -- rail identity --
+        mgr = info.get('manager_name')
+        self._si_rail.setVisible(bool(mgr or counts))
+        self._si_id_block.setVisible(bool(mgr))
+        if mgr:
+            self._si_name.set_full_text(mgr)
+            club = info.get('manager_club_name') or info.get('manager_club_short')
+            self._si_club.set_full_text(club or 'No club')
+            self._si_club.setStyleSheet(
+                f"color:{'#e8edf2' if club else '#7a8fa6'}; font-size:15px; font-weight:500;"
+                " background:transparent;")
+
+        # -- rows, hairlines, bands --
+        hair = "QFrame#siKv { border-bottom:1px solid rgba(255,255,255,0.04); }"
+        last_band = None
+        for band, hdr, groups, note in self._si_bands:
+            any_row = False
+            below = any(vals.get(k) is not None
+                        for keys, is_full in groups if not is_full for k in keys)
+            for keys, is_full in groups:
+                shown = [k for k in keys if vals.get(k) is not None]
+                for k in keys:
+                    row, _, val = self._si_rows[k]
+                    row.setVisible(k in shown)
+                    if k in shown:
+                        val.set_full_text(vals[k])
+                        if k in tips:
+                            val.setToolTip(tips[k])
+                for i, k in enumerate(shown):           # .kv:last-child has no hairline
+                    more = i < len(shown) - 1 or (is_full and below)
+                    self._si_rows[k][0].setStyleSheet(hair if more else "")
+                any_row = any_row or bool(shown)
+            for nkey, nlbl in note:
+                nlbl.setVisible(nkey in vals)
+                nlbl.setText(vals.get(nkey, ''))
+                any_row = any_row or nkey in vals
+            band.setVisible(any_row)
+            if any_row:
+                last_band = band
+        for band, *_ in self._si_bands:
+            band.setStyleSheet(
+                "" if band is last_band
+                else "QFrame#siBand { border-bottom:1px solid #263140; }")
 
     def _update_club_view(self):
         from fm_editor.patch import is_hgc
@@ -4309,7 +4828,8 @@ class MainWindow(QMainWindow):
 
     # -- Navigation -----------------------------------------------------------
 
-    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7}
+    _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7,
+                   'save_info': 8}
 
     def _nav_to(self, key: str):
         if key == 'club' and not self._current_club:
@@ -4321,7 +4841,9 @@ class MainWindow(QMainWindow):
             self._status_info_lbl.setText(self._staff_count_lbl.text())
         if key == 'club_staff':
             self._populate_club_staff_table()
-        if key in ('club', 'squad', 'shortlist'):
+        if key == 'save_info':
+            self._update_save_info_view()
+        if key in ('club', 'squad', 'shortlist', 'save_info'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
         # Push to history for non-club views (club is pushed by _show_squad)
@@ -4490,6 +5012,7 @@ class MainWindow(QMainWindow):
         for btn in self._report_btns.values():
             btn.setEnabled(has_abilities)
         self._players_nav_btn.setEnabled(has_abilities)
+        self._nav_btns['save_info'].setEnabled(has_data)
         self._nav_btns['club'].setEnabled(self._current_club is not None)
         self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['club_staff'].setEnabled(has_data and self._current_club is not None)
@@ -4556,6 +5079,7 @@ class MainWindow(QMainWindow):
         self._club_top_frame.setVisible(False)
         self._staff_loaded = False
         self._update_ui_state()
+        self._nav_to('save_info')  # land on Save Info after every load / reload
 
     # -- Search ---------------------------------------------------------------
 
