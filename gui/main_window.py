@@ -1633,7 +1633,9 @@ class _HeaderHeroWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._bg_pixmap = None
+        import os as _os
+        _asset = _os.path.join(_os.path.dirname(__file__), 'assets', 'stadium.webp')
+        self._bg_pixmap = QPixmap(_asset) if _os.path.exists(_asset) else None
         self.setFixedHeight(120)
 
     def set_bg(self, pixmap):
@@ -1648,15 +1650,16 @@ class _HeaderHeroWidget(QWidget):
         # 1. Dark base — slightly blue-tinted for separation from content
         p.fillRect(0, 0, w, h, QColor('#0D1520'))
 
-        # 2. Stadium image at 38% opacity (if set)
-        if self._bg_pixmap:
+        # 2. Stadium image at 38% opacity — center-40% position (shifted up 10%)
+        if self._bg_pixmap and not self._bg_pixmap.isNull():
             p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
                 w, h,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            p.drawPixmap(0, (h - scaled.height()) // 2, scaled)
+            y_offset = -int(scaled.height() * 0.10) + (h - scaled.height()) // 2
+            p.drawPixmap(0, y_offset, scaled)
             p.setOpacity(1.0)
 
         # 3. Gradient overlay — slate-blue top fading to near-black bottom
