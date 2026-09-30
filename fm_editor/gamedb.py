@@ -144,35 +144,74 @@ def add_club_finance(b, clubs, names_start):
 
 # -- Squads --------------------------------------------------------------------
 
-def find_squads(b, clubs, names_start):
+# Typed sub-team records (youth/reserve): owner id is club_id + _SUB_OWNER_SHIFT[kind].
+# Measured against player contracts: 18 -> +0 (97%), 21/23 -> +1 (95%); 19/20 mix both
+# (nation dependent), decided per array by contract vote, default +0.
+_SUB_OWNER_SHIFT = {18: 0, 19: 0, 20: 0, 21: -1, 23: -1}
+
+
+def _contract_clubs(b, people):
+    """{person_id: [club_id, ...]} from b11=0x6a employment records, file order (last = current)."""
+    res = {}
+    for p in people:
+        pid = p.get('id', -1)
+        if pid == -1: continue
+        end = p['end']
+        ents = [int.from_bytes(b[end + 35 + k * 16:end + 39 + k * 16], 'little') - 1
+                for k in range(min(b[end + 34], 60))
+                if b[end + 45 + k * 16] == 0x01 and b[end + 46 + k * 16] == 0x6a]
+        if ents:
+            res[pid] = ents
+    return res
+
+
+def find_squads(b, clubs, names_start, people=None):
     """Return (squads, sub_squads).
 
     squads: {person_id: club_id} for first-team (kind 100).
     sub_squads: {club_id: {kind: [person_ids]}} for youth/reserve (kinds 18-23).
+
+    A "team record" starts at an anchor (owner id, ten zero bytes, uid twice, type byte 10 =
+    club team, 11 = national team) and holds at most one person-id array. An array belongs to
+    the NEAREST PRECEDING team record, whatever it is: records without an array are the norm for
+    small clubs and national-team records (type 11) are not clubs, so scanning a fixed window
+    past a club anchor used to grab a later record's array (Argentina's national squad landed
+    on SuperSport United and won over Tottenham for Nico Paz; the U21 arrays of most clubs were
+    another club's).
+
+    Typed records (`01 <kind> ff ..`): kind 100 typed = academy intake pool of 2010-11 born kids
+    without contracts (NOT a first team; ignored). Kinds 18-23 -> sub_squads, owner shifted by
+    _SUB_OWNER_SHIFT.
+
+    people (optional, from find_people): only used (a) to settle persons still in two clubs'
+    arrays (loan / dual registration): prefer the club of their last employment record, then any
+    contract club, else the later array; (b) to decide the owner shift of kind 19/20 arrays.
     """
     club_by_id = {c['id']: c for c in clubs}
-    squads = {}
-    sub_squads = {}
+    anchors = []  # (offset, owner, kind, club or None); kind 100 + club = first-team record
     p = 4
     while p + 70 < names_start:
         at = p; p += 1
-        if b[at + 26] != 10: continue
+        if b[at + 26] not in (10, 11): continue
         if b[at + 4:at + 14] != b'\x00' * 10: continue
         owner = _u32(b, at); ordinal = _u32(b, at + 14); uid = _u32(b, at + 18)
         if owner > 100000 or ordinal > 500000 or uid == 0: continue
-        club = None
-        if owner in club_by_id and club_by_id[owner]['uid'] == uid:
-            if _u32(b, at + 22) == uid:
-                club = club_by_id[owner]
-        if club is None:
-            typed = (b[at - 4] == 1 and b[at - 2] == 0xFF and
-                     b[at - 3] in (18, 19, 20, 21, 23, 100))
+        typed = b[at - 4] == 1 and b[at - 2] == 0xFF
+        club = None; kind = None
+        if b[at + 26] == 10:
             if typed:
-                oid = owner - 1 if b[at - 3] in (20, 23) else owner
-                if oid in club_by_id:
-                    club = club_by_id[oid]
-        if club is None: continue
-        limit = min(at + 10000, names_start)
+                kind = b[at - 3]
+            elif owner in club_by_id and club_by_id[owner]['uid'] == uid and _u32(b, at + 22) == uid:
+                club, kind = club_by_id[owner], 100
+        anchors.append((at, owner, kind, club))
+
+    cc = _contract_clubs(b, people) if people is not None else {}
+    claims = {}  # person_id -> [club_id, ...] in file order
+    sub_squads = {}
+    for i, (at, owner, kind, club) in enumerate(anchors):
+        if kind is None or (kind == 100 and club is None) or (kind != 100 and kind not in _SUB_OWNER_SHIFT):
+            continue
+        limit = min(at + 10000, names_start, anchors[i + 1][0] if i + 1 < len(anchors) else names_start)
         q = at + 30
         while True:
             q = b.find(b'\xff\xff\xff\xff', q, limit - 14)
@@ -181,22 +220,39 @@ def find_squads(b, clubs, names_start):
             count = _u16(b, q + 4)
             if not (1 <= count <= 150):
                 q += 1; continue
-            end_q = q + 6 + count * 4 + 8
-            if end_q > limit:
+            if q + 6 + count * 4 + 8 > limit:
                 q += 1; continue
             ids = [_u32(b, q + 6 + k * 4) for k in range(count)]
             if len(set(ids)) != count or any(i > 3_000_000 for i in ids):
                 q += 1; continue
-            kind = b[at - 3] if b[at - 4] == 1 and b[at - 2] == 0xFF else 100
             if kind == 100:
                 for pid in ids:
-                    squads[pid] = club['id']
+                    claims.setdefault(pid, []).append(club['id'])
             else:
-                cid = club['id']
-                if cid not in sub_squads:
-                    sub_squads[cid] = {}
-                sub_squads[cid][kind] = ids
+                shift = _SUB_OWNER_SHIFT[kind]
+                if kind in (19, 20) and cc:
+                    votes = {0: 0, -1: 0}
+                    for pid in ids:
+                        for c in set(cc.get(pid, ())):
+                            for d in votes:
+                                votes[d] += c == owner + d
+                    if votes[0] != votes[-1]:
+                        shift = 0 if votes[0] > votes[-1] else -1
+                cid = owner + shift
+                if cid in club_by_id:
+                    sub_squads.setdefault(cid, {})[kind] = ids
             break
+
+    squads = {}
+    for pid, cl in claims.items():
+        pick = cl[-1]  # later array wins unless a contract says otherwise
+        if len(set(cl)) > 1 and pid in cc:
+            for want in ([cc[pid][-1]], cc[pid]):
+                m = [c for c in cl if c in want]
+                if m:
+                    pick = m[-1]
+                    break
+        squads[pid] = pick
     return squads, sub_squads
 
 
@@ -225,8 +281,10 @@ def find_people(b, first_names, last_names, names_end):
         name = f"{fname} {lname}".strip() or fn
         personality = list(b[end + 17:end + 25])  # adaptability,ambition,loyalty,pressure,professionalism,sportsmanship,temperament,controversy
         people.append({'offset': start, 'end': end, 'name': name,
-                       'nation': nation, 'birth_year': year, 'id': -1,
-                       'personality': personality})
+                       'nation': nation, 'birth_year': year, 'birth_day': day, 'id': -1,
+                       'personality': personality,
+                       # player traits: u64 bitmask just before the record (see fm_editor/traits.py)
+                       'trait_mask': int.from_bytes(b[start - 8:start], 'little') if start >= 8 else 0})
         p = end + 25
     return people
 
@@ -296,7 +354,7 @@ def find_employment(b, people):
     """Return {person_id: club_entity_id} for non-player staff.
 
     Covers two record types:
-      b10=0x01, b11=0x6a — current club contract (player or staff)
+      b10=0x01, b11=0x6a — club contract (players; the LAST such record is the current one)
       b10=0x01, b11=0x03, b8=0x04 — manager/head coach appointment (current)
 
     Note: b11=0x48 is the HGC (Homegrown at Club) training record — bytes 0-3
@@ -321,13 +379,11 @@ def find_employment(b, people):
             if b10 == 0x01 and b11 == 0x6a:
                 entity_id = int.from_bytes(b[roff:roff + 4], 'little')
                 if entity_id > 0:
-                    result[pid] = entity_id
-                    break
+                    result[pid] = entity_id  # last 6a = current contract (earlier = previous club)
             elif b10 == 0x01 and b11 == 0x03 and b[roff + 8] == 0x04:
                 entity_id = int.from_bytes(b[roff:roff + 4], 'little')
-                if entity_id > 0:
+                if entity_id > 0 and pid not in result:
                     result[pid] = entity_id
-                    break
     return result
 
 
@@ -349,7 +405,9 @@ def find_club_staff(b, clubs, people, abilities, names_start):
         cid = c['id']
         scan_start = c['offset']
         scan_end = sorted_clubs[idx + 1]['offset'] if idx + 1 < len(sorted_clubs) else names_start
-        scan_end = min(scan_end, names_start)
+        # the LAST club record has no successor: unbounded it scanned ~80 MB and claimed 874 random
+        # staff (Leones de Rosario); the biggest real club record is ~10 KB
+        scan_end = min(scan_end, names_start, scan_start + 20_000)
 
         if scan_end - scan_start < 10:
             continue

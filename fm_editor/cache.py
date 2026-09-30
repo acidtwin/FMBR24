@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 19  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 23  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -67,8 +67,9 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
         if p.get('id', -1) == -1:
             continue
         entry = {'id': p['id'], 'name': p['name'], 'nation': p['nation'],
-                 'birth_year': p['birth_year'], 'end': p['end'], 'offset': p['offset'],
-                 'hgp': p.get('hgp', False), 'personality': p.get('personality', [])}
+                 'birth_year': p['birth_year'], 'birth_day': p.get('birth_day', 0), 'end': p['end'], 'offset': p['offset'],
+                 'hgp': p.get('hgp', False), 'personality': p.get('personality', []),
+                 'trait_mask': p.get('trait_mask', 0)}
         if 'ca' in p:
             entry['ca'] = p['ca']
             entry['pa'] = p['pa']
@@ -76,6 +77,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
             entry['raw_attrs'] = p['raw_attrs']
             entry['injured'] = p.get('injured', False)
             entry['injury_days'] = p.get('injury_days', 0)
+            if 'stats' in p:
+                entry['stats'] = p['stats']
         else:
             # Non-player staff fields
             if 'coaching' in p:
