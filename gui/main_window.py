@@ -1953,13 +1953,13 @@ class MainWindow(QMainWindow):
         nav_row.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
-            "QPushButton { background: rgba(8,14,24,0.92); color: rgba(255,255,255,0.78);"
+            "QPushButton { background: rgba(8,14,24,0.70); color: rgba(255,255,255,0.78);"
             " border: 1px solid rgba(255,255,255,0.18); border-radius: 2px;"
             " padding: 3px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: rgba(20,32,50,0.92); color: #fff;"
+            "QPushButton:hover { background: rgba(20,32,50,0.85); color: #fff;"
             " border-color: rgba(255,255,255,0.32); }"
-            "QPushButton:disabled { background: rgba(8,14,24,0.55); color: rgba(255,255,255,0.22);"
-            " border-color: rgba(255,255,255,0.08); }"
+            "QPushButton:disabled { background: rgba(8,14,24,0.45); color: rgba(255,255,255,0.18);"
+            " border-color: rgba(255,255,255,0.06); }"
         )
         _tbtn_accent_ss = (
             "QPushButton { background: #2b6cb0; color: #fff;"
@@ -2032,12 +2032,12 @@ class MainWindow(QMainWindow):
         self._settings_btn.setToolTip('Settings')
         self._settings_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(8,14,24,0.92);
+                background: rgba(8,14,24,0.70);
                 border: 1px solid rgba(255,255,255,0.18);
                 border-radius: 2px;
                 padding: 0;
             }
-            QPushButton:hover { background: rgba(20,32,50,0.96); border-color: rgba(255,255,255,0.32); }
+            QPushButton:hover { background: rgba(20,32,50,0.85); border-color: rgba(255,255,255,0.32); }
         """)
         self._settings_btn.clicked.connect(self._open_settings)
 
