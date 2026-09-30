@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
-    QInputDialog, QGridLayout, QBoxLayout,
+    QInputDialog, QGridLayout, QBoxLayout, QTableView,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
@@ -19,6 +19,9 @@ from fm_editor.cache import load_cache, save_cache, clear_cache
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
 from gui.settings_page import SettingsPage
+from gui.people_model import PeopleModel, num_key
+from gui.player_window import PlayerWindow
+from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c'
@@ -42,7 +45,6 @@ NATIONS = {
 }
 
 POSITIONS = ['GK','SW','DL','DC','DR','DM','ML','MC','MR','AML','AMC','AMR','ST','WBL','WBR']
-FM_SEASON_YEAR = 2024
 
 # -- SVG icon strings ----------------------------------------------------------
 
@@ -619,7 +621,48 @@ class _WidthWatcher(QWidget):
         self._on_width(event.size().width())
 
 
-def _club_player_row(rank, pos_code, name, injured):
+# Mockup .rating-pill: green when >= 7.00 (.rating-good), muted otherwise (.rating-avg).
+# border-radius 20px in the mockup -> 10px here (QSS renders radius >= half the height as square).
+_CLUB_PILL_GOOD = ("background:rgba(93,196,90,0.15); color:#5dc45a; border:1px solid rgba(93,196,90,0.28);"
+                   " font-size:13px; font-weight:bold; padding:3px 8px; border-radius:10px;")
+_CLUB_PILL_AVG = ("background:rgba(74,95,115,0.12); color:#4a5f73; border:1px solid rgba(74,95,115,0.2);"
+                  " font-size:13px; font-weight:bold; padding:3px 8px; border-radius:10px;")
+_CLUB_TOP_N = 7
+
+
+def _club_rating_pill(text, good):
+    lbl = QLabel(text)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lbl.setMinimumWidth(48)
+    lbl.setStyleSheet(_CLUB_PILL_GOOD if good else _CLUB_PILL_AVG)
+    return lbl
+
+
+def _club_top_players(squad, n=_CLUB_TOP_N):
+    """Club page 'Top Players' list (pure, no Qt): ('rating'|'ca', [(player, value_text, good)]).
+
+    Ranked by season average match rating (p['stats']['rating'], all competitive games) among
+    players with enough rated appearances: at least 40% of the club's most-used player's rated
+    appearances, never fewer than 3 (FM's own best-rating lists use a similar minimum-games rule).
+    Ties: more rated apps, then higher CA, then name. Goalkeepers are included. With no eligible
+    player (club outside the detailed-stats leagues) it falls back to current ability (CA).
+    """
+    def st(p):
+        return p.get('stats') or {}
+    rated = [p for p in squad if st(p).get('rating') is not None]
+    most = max((st(p)['rated'] for p in rated), default=0)
+    floor = max(3, -(-most * 2 // 5))  # ceil(0.4 * most)
+    elig = [p for p in rated if st(p)['rated'] >= floor]
+    if len(elig) >= 3:
+        elig.sort(key=lambda p: (-st(p)['rating'], -st(p)['rated'], -(p.get('ca') or 0),
+                                 p.get('name', '')))
+        return 'rating', [(p, f"{st(p)['rating']:.2f}", st(p)['rating'] >= 7.0) for p in elig[:n]]
+    by_ca = sorted((p for p in squad if p.get('ca') is not None),
+                   key=lambda p: (-p['ca'], p.get('name', '')))
+    return 'ca', [(p, str(p['ca']), False) for p in by_ca[:n]]
+
+
+def _club_player_row(rank, pos_code, name, injured, value_widget):
     row = QWidget()
     row.setObjectName('clubPlayerRow')
     lay = QHBoxLayout(row)
@@ -638,7 +681,7 @@ def _club_player_row(rank, pos_code, name, injured):
     if injured:
         ibg, ifg = _CLUB_POS_BADGE['INJ']
         lay.addWidget(_club_badge('INJ', ibg, ifg, font_size=9, padding='1px 4px'))
-    lay.addWidget(_club_pending_chip())
+    lay.addWidget(value_widget)
     row.setStyleSheet(
         "QWidget#clubPlayerRow { border-bottom:1px solid rgba(255,255,255,0.04); background:transparent; }")
     return row
@@ -669,12 +712,11 @@ def _club_muted_row(text):
     return lbl
 
 
-def _age_in_range(p, mn, mx, year=None):
+def _age_in_range(p, mn, mx):
     """Age filter: a bound of 0 means disabled (no lower / no upper limit)."""
     if not mn and not mx:
         return True
-    y = year or FM_SEASON_YEAR
-    age = y - p.get('birth_year', y)
+    age = _age(p)
     return age >= mn and (not mx or age <= mx)
 
 
@@ -735,12 +777,12 @@ class ParseWorker(QThread):
             clubs = find_clubs(b, names_start)
             add_club_finance(b, clubs, names_start)
 
-            self._emit("Finding squad memberships...", 65)
-            squads, sub_squads = find_squads(b, clubs, names_start)
-
-            self._emit("Finding people and matching identities...", 72)
+            self._emit("Finding people and matching identities...", 65)
             people = find_people(b, first_names, last_names, names_end)
             match_identities(b, people, names_end)
+
+            self._emit("Finding squad memberships...", 72)
+            squads, sub_squads = find_squads(b, clubs, names_start, people)
 
             self._emit("Checking homegrown status...", 82)
             for p in people:
@@ -777,6 +819,20 @@ class ParseWorker(QThread):
             self._emit("Parsing staff ability (CA/PA)...", 96)
             find_staff_extras(b, people, player_ids)
 
+            self._emit("Reading season stats...", 96)
+            try:
+                from fm_editor.playerstats import parse_player_stats
+                ps_m = next((m for m in members if m['name'] == 'rgman/player_stats.dat'), None)
+                if ps_m:
+                    stats = parse_player_stats(get_member(self.save_path, ps_m),
+                                              {p['id'] for p in people if p.get('id', -1) != -1})
+                    for p in people:
+                        if p.get('id') in stats:
+                            p['stats'] = stats[p['id']]
+            except Exception:
+                import traceback
+                traceback.print_exc()  # season stats are optional: the Club page falls back to CA
+
             self._emit("Reading save info...", 97)
             try:
                 from fm_editor.saveinfo import parse_save_info
@@ -805,70 +861,27 @@ class ParseWorker(QThread):
             self.error.emit(str(e))
 
 
-class PatchWorker(QThread):
+class SaveWorker(QThread):
+    """Save Changes: verified temp file, 2 rotating backups, atomic replace (fm_editor/savefile.py)."""
     progress = pyqtSignal(str)
     pct = pyqtSignal(int)
-    done = pyqtSignal()
+    done = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, save_data, output_path, people_to_patch, mode='hgp',
-                 club_entity_id=None):
+    def __init__(self, save_data, path):
         super().__init__()
         self.save_data = save_data
-        self.output_path = output_path
-        self.people_to_patch = people_to_patch
-        self.mode = mode
-        self.club_entity_id = club_entity_id
+        self.path = path
 
     def run(self):
         try:
-            from fm_editor.patch import patch_to_homegrown, patch_to_hgc
-            from fm_editor.archive import write_archive
-
-            b = self.save_data['b']
-            count = 0
-            n = len(self.people_to_patch)
-
-            if self.mode == 'save_only':
-                pass  # just write current b state
-            elif self.mode == 'hgp':
-                for i, person in enumerate(self.people_to_patch):
-                    if patch_to_homegrown(b, person):
-                        count += 1
-                    self.pct.emit(5 + 5 * i // max(n, 1))
-            else:
-                ordered = sorted(self.people_to_patch,
-                                 key=lambda p: p['end'], reverse=True)
-                count = patch_to_hgc(b, ordered, self.club_entity_id)
-                self.pct.emit(10)
-
-            self.progress.emit(f"Patched {count} player(s). Writing file...")
-            self.pct.emit(10)
-
-            members = self.save_data['members']
-            gdb_m = next((m for m in members if m['name'] == 'game_db.dat'), None)
-            if gdb_m is None:
-                self.error.emit('game_db.dat member not found in archive')
-                return
-            gdb_m['p'] = len(b)
+            from fm_editor.savefile import save_in_place
 
             def _cb(msg, p):
                 self.progress.emit(msg)
-                self.pct.emit(10 + p * 90 // 100)
+                self.pct.emit(p)
 
-            write_archive(
-                self.output_path,
-                self.save_data['save_path'],
-                self.save_data['header'],
-                members,
-                self.save_data['index_marker'],
-                self.save_data['archive_name'],
-                self.save_data['subdir_count'],
-                self.save_data['subdirs'],
-                {'game_db.dat': b},
-                progress_cb=_cb,
-            )
-            self.done.emit()
+            self.done.emit(save_in_place(self.save_data, self.path, _cb))
         except Exception as e:
             self.error.emit(str(e))
 
@@ -876,8 +889,8 @@ class PatchWorker(QThread):
 # -- Player detail modal -------------------------------------------------------
 
 def _attr_val_color(v: int) -> str:
-    if v >= 17: return '#FFD700'
-    if v >= 16: return '#52C287'
+    if v >= 17: return '#52C287'   # FM: green is best
+    if v >= 16: return '#EAD95C'   # light yellow just below
     if v >= 13: return COLORS['accent_hover']
     if v >= 10: return COLORS['text_secondary']
     if v >= 7:  return COLORS['text_primary']
@@ -914,6 +927,23 @@ _STAFF_COL_TOOLTIPS = {
     'Prs': 'Pressure',    'Pro': 'Professionalism', 'Spt': 'Sportsmanship',
     'Tmp': 'Temperament', 'Ctr': 'Controversy',
 }
+
+_STAFF_COACHING_COLS = [
+    'Atk', 'Def', 'Fit', 'Mnt', 'SPc', 'Tac', 'Tch', 'WwY',
+    'Det', 'Mot', 'PMg',
+    'JPA', 'JSA', 'TKn',
+    'Neg', 'GKH', 'GKS',
+]
+_STAFF_COACHING_MAP = {
+    'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
+    'Mnt': 'Mental',    'SPc': 'Set Pieces', 'Tac': 'Tactical',
+    'Tch': 'Technical', 'WwY': 'WwY',
+    'Det': 'Determination', 'Mot': 'Motivating', 'PMg': 'People Mgt',
+    'JPA': 'JPA',       'JSA': 'JSA',       'TKn': 'Tact Knowledge',
+    'Neg': 'Negotiating', 'GKH': 'GK Handling', 'GKS': 'GK Shot Stop',
+}
+_STAFF_PERS_COLS = ['Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
+_STAFF_COLS = ['Name', 'Club', 'Nation', 'Age'] + _STAFF_COACHING_COLS + _STAFF_PERS_COLS
 
 # Position → (background, foreground) matching mockup color scheme
 _POS_BADGE_COLORS = {
@@ -989,436 +1019,6 @@ class _PosBadgeDelegate(QStyledItemDelegate):
             return QSize(68, 28)
 
 
-class PlayerDetailDialog(QDialog):
-    def __init__(self, person, save_data, club_entity_id, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(person['name'])
-        self.setMinimumSize(860, 560)
-        self.resize(920, 640)
-        self._person = person
-        self._save_data = save_data
-        self._club_entity_id = club_entity_id
-        self._patch_mode = None
-        self._shortlist_added = False
-        self._build()
-
-    def _build(self):
-        p = self._person
-        b = self._save_data.get('b') if self._save_data else None
-        from fm_editor.patch import is_hgc as _is_hgc
-
-        nation_name = NATIONS.get(p['nation'], f"n={p['nation']}")
-        age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-        pos = _primary_pos(p['positions']) if p.get('positions') else '?'
-        ca = p.get('ca')
-        pa = p.get('pa')
-        raw = p.get('raw_attrs', [])
-        personality = p.get('personality', [])
-        hgp = p.get('hgp', False)
-        hgc = _is_hgc(b, p, self._club_entity_id) if (b and self._club_entity_id) else None
-        dev = _progress_rate(p)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # ── Top bar ─────────────────────────────────────────────────────────
-        topbar = QFrame()
-        topbar.setFixedHeight(40)
-        topbar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        tb_row = QHBoxLayout(topbar)
-        tb_row.setContentsMargins(14, 0, 10, 0)
-        tb_row.setSpacing(8)
-
-        title_wrap = QWidget()
-        title_wrap.setStyleSheet("background:transparent;")
-        tw_vbox = QVBoxLayout(title_wrap)
-        tw_vbox.setContentsMargins(0, 4, 0, 4)
-        tw_vbox.setSpacing(0)
-        name_lbl = QLabel(p['name'])
-        name_lbl.setStyleSheet(
-            f"color:{COLORS['text_primary']}; font-size:14px; font-weight:bold;")
-        sub_lbl = QLabel(f"{pos}  ·  {nation_name}  ·  Age {age}")
-        sub_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-        tw_vbox.addWidget(name_lbl)
-        tw_vbox.addWidget(sub_lbl)
-        tb_row.addWidget(title_wrap, 1)
-
-        close_btn = QPushButton('✕')
-        close_btn.setFixedSize(28, 28)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: none; border: none;
-                color: {COLORS['text_dim']}; font-size: 16px; border-radius: 2px;
-            }}
-            QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_primary']}; }}
-        """)
-        close_btn.clicked.connect(self.accept)
-        tb_row.addWidget(close_btn)
-        layout.addWidget(topbar)
-
-        # ── Body (left | center | right) ────────────────────────────────────
-        body = QWidget()
-        body.setStyleSheet(f"background:{COLORS['window_bg']};")
-        body_hbox = QHBoxLayout(body)
-        body_hbox.setContentsMargins(0, 0, 0, 0)
-        body_hbox.setSpacing(0)
-
-        # ── Left panel (190px) ───────────────────────────────────────────────
-        left = QFrame()
-        left.setFixedWidth(190)
-        left.setStyleSheet(
-            f"background:{COLORS['surface']}; border-right:1px solid {COLORS['border']};")
-        left_vbox = QVBoxLayout(left)
-        left_vbox.setContentsMargins(0, 0, 0, 0)
-        left_vbox.setSpacing(0)
-
-        # Photo placeholder
-        photo = QFrame()
-        photo.setFixedSize(190, 140)
-        photo.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
-        photo_inner = QVBoxLayout(photo)
-        photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        photo_icon = QLabel()
-        photo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        photo_icon.setPixmap(_svg_icon(_SVG_STAFF, COLORS['text_dim'], 56).pixmap(56, 56))
-        photo_inner.addWidget(photo_icon)
-        left_vbox.addWidget(photo)
-
-        # Info rows
-        info_frame = QFrame()
-        info_frame.setStyleSheet(
-            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
-        info_vbox = QVBoxLayout(info_frame)
-        info_vbox.setContentsMargins(12, 8, 12, 8)
-        info_vbox.setSpacing(0)
-
-        def _info_row(label: str, value: str, val_color: str = None):
-            row = QHBoxLayout()
-            row.setContentsMargins(0, 3, 0, 3)
-            lbl = QLabel(label)
-            lbl.setStyleSheet(f"color:{COLORS['text_dim']}; font-size:11px;")
-            val = QLabel(value)
-            val.setStyleSheet(
-                f"color:{val_color or COLORS['text_primary']}; font-size:11px; font-weight:500;")
-            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            row.addWidget(lbl)
-            row.addStretch()
-            row.addWidget(val)
-            return row
-
-        info_vbox.addLayout(_info_row('Position', pos))
-        info_vbox.addLayout(_info_row('Age', str(age)))
-        info_vbox.addLayout(_info_row('Nationality', nation_name))
-        info_vbox.addLayout(_info_row('Born', str(p.get('birth_year', '?'))))
-        left_vbox.addWidget(info_frame)
-
-        # CA / PA section
-        ca_frame = QFrame()
-        ca_frame.setStyleSheet(
-            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
-        ca_vbox = QVBoxLayout(ca_frame)
-        ca_vbox.setContentsMargins(12, 8, 12, 8)
-        ca_vbox.setSpacing(4)
-
-        ca_title = QLabel('ABILITY')
-        ca_title.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;")
-        ca_vbox.addWidget(ca_title)
-
-        for name, val, color in [('CA', ca, COLORS['accent']), ('PA', pa, '#52C287')]:
-            bar_row = QHBoxLayout()
-            bar_row.setSpacing(6)
-            n_lbl = QLabel(name)
-            n_lbl.setFixedWidth(24)
-            n_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-            bar_bg = QFrame()
-            bar_bg.setFixedHeight(4)
-            bar_bg.setStyleSheet(
-                f"background:{COLORS['border']}; border-radius:2px;")
-            bar_fill = QFrame(bar_bg)
-            bar_fill.setFixedHeight(4)
-            pct = max(0, min(100, int((val or 0) / 200 * 100)))
-            bar_fill.setStyleSheet(f"background:{color}; border-radius:2px;")
-            bar_fill.resize(0, 4)
-            bar_fill.setMaximumWidth(int(166 * pct / 100))
-            num_lbl = QLabel(str(val) if val else '?')
-            num_lbl.setFixedWidth(28)
-            num_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            num_lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:bold;")
-            bar_row.addWidget(n_lbl)
-            bar_row.addWidget(bar_bg, 1)
-            bar_row.addWidget(num_lbl)
-            ca_vbox.addLayout(bar_row)
-
-        if dev is not None:
-            ca_vbox.addLayout(_info_row('Dev Rate', str(dev), COLORS['accent_hover']))
-
-        left_vbox.addWidget(ca_frame)
-
-        # HGP / HGC pills
-        hg_frame = QFrame()
-        hg_frame.setStyleSheet("background:transparent;")
-        hg_vbox = QVBoxLayout(hg_frame)
-        hg_vbox.setContentsMargins(12, 8, 12, 8)
-        hg_vbox.setSpacing(4)
-        hg_title = QLabel('HOMEGROWN')
-        hg_title.setStyleSheet(
-            f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;")
-        hg_vbox.addWidget(hg_title)
-        pills_row = QHBoxLayout()
-        pills_row.setSpacing(5)
-
-        for label, active, border_color in [
-            ('HGP', hgp, COLORS['hgp_green']),
-            ('HGC', hgc, '#52C287'),
-        ]:
-            pill = QLabel(label)
-            pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            if active:
-                pill.setStyleSheet(
-                    f"color:{border_color}; border:1px solid {border_color};"
-                    f"background:rgba(82,194,135,0.12); border-radius:10px;"
-                    "padding:2px 8px; font-size:10px; font-weight:bold;")
-            elif active is False:
-                pill.setStyleSheet(
-                    f"color:{COLORS['text_dim']}; border:1px solid {COLORS['border_bright']};"
-                    "background:transparent; border-radius:10px;"
-                    "padding:2px 8px; font-size:10px;")
-            else:
-                pill.setStyleSheet(
-                    f"color:{COLORS['text_dim']}; font-size:10px;")
-                pill.setText(f"{label}?")
-            pills_row.addWidget(pill)
-        pills_row.addStretch()
-        hg_vbox.addLayout(pills_row)
-        left_vbox.addWidget(hg_frame)
-
-        left_vbox.addStretch()
-        body_hbox.addWidget(left)
-
-        # ── Center: attributes + action strip ───────────────────────────────
-        center_scroll = QScrollArea()
-        center_scroll.setWidgetResizable(True)
-        center_scroll.setStyleSheet(
-            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
-        center_w = QWidget()
-        center_w.setStyleSheet(f"background:{COLORS['window_bg']};")
-        center_vbox = QVBoxLayout(center_w)
-        center_vbox.setContentsMargins(14, 14, 14, 14)
-        center_vbox.setSpacing(14)
-
-        def _display_val(raw_v):
-            return max(1, min(20, round(raw_v / 5)))
-
-        def _attr_col(attrs_list):
-            col = QVBoxLayout()
-            col.setSpacing(0)
-            for attr_name, idx in attrs_list:
-                if not raw or idx >= len(raw):
-                    continue
-                v = _display_val(raw[idx])
-                row = QHBoxLayout()
-                row.setContentsMargins(0, 3, 0, 2)
-                n = QLabel(attr_name)
-                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-                v_lbl = QLabel(str(v))
-                v_lbl.setFixedWidth(22)
-                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                v_lbl.setStyleSheet(
-                    f"color:{_attr_val_color(v)}; font-size:12px; font-weight:bold;")
-                row.addWidget(n)
-                row.addStretch()
-                row.addWidget(v_lbl)
-                sep = QFrame()
-                sep.setFixedHeight(1)
-                sep.setStyleSheet(f"background:rgba(52,55,64,0.4);")
-                col.addLayout(row)
-                col.addWidget(sep)
-            return col
-
-        def _block_title(text: str) -> QLabel:
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"color:{COLORS['text_dim']}; font-size:10px; letter-spacing:1px;"
-                f"border-bottom:1px solid {COLORS['border']}; padding-bottom:4px;"
-                "margin-bottom:4px;")
-            return lbl
-
-        # Row 1: Technical | Mental | Physical + Hidden
-        top_grid = QHBoxLayout()
-        top_grid.setSpacing(20)
-
-        TECH = [
-            ('Crossing', 0), ('Dribbling', 1), ('Finishing', 2), ('Heading', 3),
-            ('Long Shots', 4), ('Marking', 5), ('Off Ball', 6), ('Passing', 7),
-            ('Pen Taking', 8), ('Tackling', 9), ('Vision', 10),
-            ('First Touch', 22), ('Technique', 23), ('Corners', 27),
-            ('Long Throws', 30), ('Free Kick', 35),
-        ]
-        MENT = [
-            ('Anticipation', 17), ('Decisions', 18), ('Positioning', 20),
-            ('Teamwork', 28), ('Work Rate', 29), ('Leadership', 40),
-            ('Bravery', 43), ('Consistency', 44), ('Aggression', 45),
-            ('Composure', 52), ('Concentration', 53), ('Important Matches', 47),
-        ]
-        PHYS = [
-            ('Acceleration', 34), ('Pace', 38), ('Strength', 36), ('Stamina', 37),
-            ('Balance', 42), ('Agility', 46), ('Jumping Reach', 39),
-            ('Natural Fitness', 50),
-        ]
-        HIDD = [
-            ('Dirtiness', 41), ('Versatility', 49), ('Injury Prone', 48),
-            ('Determination', 51),
-        ]
-
-        for title, attrs in [('Technical', TECH), ('Mental', MENT)]:
-            col_w = QWidget()
-            col_w.setStyleSheet("background:transparent;")
-            col_vbox = QVBoxLayout(col_w)
-            col_vbox.setContentsMargins(0, 0, 0, 0)
-            col_vbox.setSpacing(0)
-            col_vbox.addWidget(_block_title(title))
-            col_vbox.addLayout(_attr_col(attrs))
-            col_vbox.addStretch()
-            top_grid.addWidget(col_w, 1)
-
-        # Physical + Hidden stacked in third column
-        phys_col = QWidget()
-        phys_col.setStyleSheet("background:transparent;")
-        phys_vbox = QVBoxLayout(phys_col)
-        phys_vbox.setContentsMargins(0, 0, 0, 0)
-        phys_vbox.setSpacing(0)
-        phys_vbox.addWidget(_block_title('Physical'))
-        phys_vbox.addLayout(_attr_col(PHYS))
-        phys_vbox.addSpacing(14)
-        phys_vbox.addWidget(_block_title('Hidden'))
-        phys_vbox.addLayout(_attr_col(HIDD))
-        phys_vbox.addStretch()
-        top_grid.addWidget(phys_col, 1)
-        center_vbox.addLayout(top_grid)
-
-        # Row 2: Personality (4 columns)
-        if personality:
-            PERS = [
-                ('Adaptability', 0), ('Ambition', 1), ('Loyalty', 2), ('Pressure', 3),
-                ('Professionalism', 4), ('Sportsmanship', 5), ('Temperament', 6),
-            ]
-            pers_w = QWidget()
-            pers_w.setStyleSheet("background:transparent;")
-            pers_vbox = QVBoxLayout(pers_w)
-            pers_vbox.setContentsMargins(0, 0, 0, 0)
-            pers_vbox.setSpacing(0)
-            pers_vbox.addWidget(_block_title('Personality'))
-            pers_grid = QHBoxLayout()
-            pers_grid.setSpacing(20)
-            cols = [QVBoxLayout() for _ in range(4)]
-            for i, (attr_name, idx) in enumerate(PERS):
-                if idx >= len(personality):
-                    continue
-                v = personality[idx]
-                row = QHBoxLayout()
-                row.setContentsMargins(0, 3, 0, 2)
-                n = QLabel(attr_name)
-                n.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
-                v_lbl = QLabel(str(v))
-                v_lbl.setFixedWidth(22)
-                v_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                v_lbl.setStyleSheet(
-                    f"color:{_attr_val_color(v)}; font-size:12px; font-weight:bold;")
-                row.addWidget(n)
-                row.addStretch()
-                row.addWidget(v_lbl)
-                cols[i % 4].addLayout(row)
-            for c in cols:
-                w = QWidget()
-                w.setStyleSheet("background:transparent;")
-                wv = QVBoxLayout(w)
-                wv.setContentsMargins(0, 0, 0, 0)
-                wv.addLayout(c)
-                wv.addStretch()
-                pers_grid.addWidget(w, 1)
-            pers_vbox.addLayout(pers_grid)
-            center_vbox.addWidget(pers_w)
-
-        center_vbox.addStretch()
-
-        # Action strip (Make HGP / Make HGC / Add to Shortlist)
-        action_frame = QFrame()
-        action_frame.setStyleSheet(
-            f"border-top:1px solid {COLORS['border']}; background:transparent;")
-        action_row = QHBoxLayout(action_frame)
-        action_row.setContentsMargins(0, 8, 0, 4)
-        action_row.setSpacing(8)
-
-        _btn_ss = f"""
-            QPushButton {{
-                background:{COLORS['accent']}; color:#fff; border:none;
-                padding:6px 16px; font-weight:bold; border-radius:2px; font-size:11px;
-            }}
-            QPushButton:hover {{ background:{COLORS['accent_hover']}; }}
-            QPushButton:pressed {{ background:{COLORS['accent_press']}; }}
-        """
-        action_row.addStretch()
-        add_shortlist = QPushButton('Add to Shortlist')
-        add_shortlist.setStyleSheet(_btn_ss)
-        add_shortlist.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_shortlist.clicked.connect(lambda: self._do_add_shortlist())
-        action_row.addWidget(add_shortlist)
-        center_vbox.addWidget(action_frame)
-
-        center_scroll.setWidget(center_w)
-        body_hbox.addWidget(center_scroll, 1)
-
-        # ── Right tab nav (110px) ────────────────────────────────────────────
-        right_tabs = QFrame()
-        right_tabs.setFixedWidth(110)
-        right_tabs.setStyleSheet(
-            f"background:{COLORS['surface']}; border-left:1px solid {COLORS['border']};")
-        rt_vbox = QVBoxLayout(right_tabs)
-        rt_vbox.setContentsMargins(0, 6, 0, 6)
-        rt_vbox.setSpacing(0)
-
-        _rtab_active = f"""
-            QPushButton {{
-                background: {COLORS['selection_bg']};
-                border: none; border-left: 2px solid {COLORS['accent']};
-                color: {COLORS['text_primary']}; text-align: left;
-                padding: 8px 10px; font-size: 11px; border-radius: 0;
-            }}
-        """
-        _rtab_future = f"""
-            QPushButton {{
-                background: transparent; border: none; border-left: 2px solid transparent;
-                color: {COLORS['text_dim']}; text-align: left;
-                padding: 8px 10px; font-size: 11px; font-style: italic; border-radius: 0;
-            }}
-        """
-        for tab_label, active in [
-            ('Profile', True), ('Transfer', False), ('Positions', False),
-            ('General Rating', False), ('Positional Rating', False),
-            ('Role Rating', False), ('Training Roles', False),
-        ]:
-            tb = QPushButton(tab_label)
-            tb.setEnabled(active)
-            tb.setStyleSheet(_rtab_active if active else _rtab_future)
-            rt_vbox.addWidget(tb)
-
-        rt_vbox.addStretch()
-        body_hbox.addWidget(right_tabs)
-
-        layout.addWidget(body)
-
-    def _emit_patch(self, mode):
-        self._patch_mode = mode
-
-    def _do_add_shortlist(self):
-        self._shortlist_added = True
-        self.accept()
-
-
 class StaffDetailDialog(QDialog):
     _PERS_LABELS = [
         ('Adaptability', 0), ('Ambition', 1), ('Loyalty', 2), ('Pressure', 3),
@@ -1438,7 +1038,7 @@ class StaffDetailDialog(QDialog):
     def _build(self):
         p = self._person
         nation_name = NATIONS.get(p.get('nation', 0), f"n={p.get('nation', 0)}")
-        age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+        age = _age(p)
         personality = p.get('personality', [])
 
         # Resolve club name
@@ -2206,7 +1806,10 @@ class MainWindow(QMainWindow):
 
         self._save_data = None
         self._dirty = False  # in-memory patches not yet written back with Save Changes
+        self._pending = []  # human-readable list of unsaved edits (for the Save / discard prompts)
+        self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
         self._squad = []
+        self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
         self._club_entity_id = None
         self._worker = None
         self._current_club = None
@@ -2475,7 +2078,7 @@ class MainWindow(QMainWindow):
         self._save_btn = QPushButton('Save Changes')
         self._save_btn.setFixedHeight(26)
         self._save_btn.setEnabled(False)
-        self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
+        self._save_btn.setToolTip('Write your edits to the save: backs up the current file (bk1, bk2), then overwrites it in place')
         _save_icon = QIcon()
         _save_icon.addPixmap(_svg_icon(_SVG_SAVE, '#ffffff', 13).pixmap(13, 13), QIcon.Mode.Normal)
         _save_icon.addPixmap(_svg_icon(_SVG_SAVE, '#3A4A58', 13).pixmap(13, 13), QIcon.Mode.Disabled)
@@ -2499,14 +2102,14 @@ class MainWindow(QMainWindow):
         self._reload_btn = QPushButton('Reload')
         self._reload_btn.setFixedHeight(26)
         self._reload_btn.setEnabled(False)
-        self._reload_btn.setToolTip('Re-parse the current save file')
+        self._reload_btn.setToolTip('Re-read the save from disk (asks before discarding unsaved changes)')
         _reload_icon = QIcon()
         _reload_icon.addPixmap(_svg_icon(_SVG_RELOAD, '#ffffff', 13).pixmap(13, 13), QIcon.Mode.Normal)
         _reload_icon.addPixmap(_svg_icon(_SVG_RELOAD, '#3A4A58', 13).pixmap(13, 13), QIcon.Mode.Disabled)
         self._reload_btn.setIcon(_reload_icon)
         self._reload_btn.setIconSize(QSize(13, 13))
         self._reload_btn.setStyleSheet(_tbtn_reload_ss)
-        self._reload_btn.clicked.connect(self._reload_save)
+        self._reload_btn.clicked.connect(self._on_reload_clicked)
 
         self._settings_btn = QPushButton()
         self._settings_btn.setFixedSize(28, 26)
@@ -2698,17 +2301,16 @@ class MainWindow(QMainWindow):
             n = len(getattr(self, '_squad', []))
             self._set_header('Squads', f"{club_name} · {n} players")
         elif key == 'staff':
-            n = self._staff_table.rowCount() if hasattr(self, '_staff_table') else 0
-            sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
-            self._set_header('Staff', sub)
+            self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'))
         elif key == 'reports':
             label = _REPORT_LABELS.get(self._current_report_key, '')
             n = self._reports_table.rowCount() if hasattr(self, '_reports_table') else 0
-            parts = [p for p in (label, f'{n:,} players' if n else '') if p]
+            tot = getattr(self, '_report_total', n)
+            cnt = '' if not n else f'{n:,} players' if tot <= n else f'top {n:,} of {tot:,} players'
+            parts = [p for p in (label, cnt) if p]
             self._set_header('Player Reports', ' · '.join(parts))
         elif key == 'players':
-            n = len(self._all_players_cache) if hasattr(self, '_all_players_cache') else 0
-            self._set_header('All Players', f"{n} players")
+            self._set_header('All Players', self._scouting_count_text(self._players_model, 'players'))
         elif key == 'shortlist':
             n = len(self._shortlist)
             self._set_header('Player Shortlist', f"{n} players")
@@ -2984,7 +2586,8 @@ class MainWindow(QMainWindow):
 
         # -- Col 1: Top Players / Positions ---------------------------------
         col1, col1_l = _col()
-        col1_l.addWidget(_club_sec_hdr('Top Players · Avg Rating'))
+        self._club_top_hdr = _club_sec_hdr('Top Players · Avg Rating')
+        col1_l.addWidget(self._club_top_hdr)
         self._club_top_list_w = QWidget()
         top_list_l = QVBoxLayout(self._club_top_list_w)
         top_list_l.setContentsMargins(0, 0, 0, 0)
@@ -3394,7 +2997,7 @@ class MainWindow(QMainWindow):
 
     def _update_club_view(self):
         from fm_editor.patch import is_hgc
-        squad = self._squad
+        squad = self._club_first_team  # not self._squad: that follows the U21/U18 tab
         b = self._save_data.get('b') if self._save_data else None
         club = self._current_club
 
@@ -3426,18 +3029,19 @@ class MainWindow(QMainWindow):
         self._club_kpi_labels['injured'].setText(str(n_injured))
         self._club_kpi_labels['staff'].setText(str(len(staff)))
 
-        # -- Col 1: top 7 by CA (real ranking; PENDING rating chip — the
-        # parser has no per-player match-rating stat), and the 9-cell grid --
+        # -- Col 1: top players (avg match rating, or CA when the club has no stats) + 9-cell grid --
         while self._club_top_list_w.layout().count():
             cw_item = self._club_top_list_w.layout().takeAt(0)
             if cw_item.widget():
                 cw_item.widget().deleteLater()
-        top = sorted((p for p in squad if p.get('ca') is not None),
-                     key=lambda p: -p['ca'])[:7]
-        for rank, p in enumerate(top, start=1):
+        mode, top = _club_top_players(squad)
+        self._club_top_hdr.setText('Top Players · Avg Rating' if mode == 'rating'
+                                   else 'Top Players · Current Ability')
+        for rank, (p, text, good) in enumerate(top, start=1):
             pos = _primary_pos(p['positions']) if p.get('positions') else '?'
             self._club_top_list_w.layout().addWidget(
-                _club_player_row(rank, pos, p.get('name', ''), p.get('injured', False)))
+                _club_player_row(rank, pos, p.get('name', ''), p.get('injured', False),
+                                 _club_rating_pill(text, good)))
 
         pos_counts = {code: 0 for code, _ in _CLUB_POS_GRID}
         for p in squad:
@@ -3700,10 +3304,57 @@ class MainWindow(QMainWindow):
         self._staff_count_lbl = QLabel('')
         vbox.addWidget(hdr)
 
-        self._staff_table = self._make_staff_table()
-        self._staff_table.cellDoubleClicked.connect(self._on_staff_double_click)
+        self._staff_model, self._staff_table = self._make_scouting_view(
+            self._make_staff_model(), _STAFF_COL_TOOLTIPS,
+            {0: 200, 1: 160, 2: 50, 3: 40}, 35, sort=(-1, Qt.SortOrder.AscendingOrder))
+        self._staff_table.doubleClicked.connect(self._on_staff_double_click)
         vbox.addWidget(self._staff_table, 1)
         return w
+
+    def _make_scouting_view(self, model, tips, fixed_widths, default_w, sort):
+        """Virtualised QTableView for Scouting Players/Staff (QTableWidget can't hold 78k rows)."""
+        tv = QTableView()
+        tv.setModel(model)
+        tv.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tv.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tv.setAlternatingRowColors(True)
+        tv.verticalHeader().setVisible(False)
+        tv.verticalHeader().setDefaultSectionSize(30)  # = old QTableWidget row height
+        tv.setShowGrid(False)
+        hdr = tv.horizontalHeader()
+        hdr.setHighlightSections(False)
+        hdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        for i in range(model.columnCount()):
+            hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+            tv.setColumnWidth(i, fixed_widths.get(i, default_w))
+        hdr.setResizeContentsPrecision(150)  # fit-to-content looks at ~150 rows (default 1000 = ~90 ms/column)
+        hdr.setSortIndicatorShown(True)
+        hdr.sortIndicatorChanged.connect(model.sort)  # own sort: see people_model.py
+        hdr.setSortIndicator(*sort)
+        model._sort = sort
+        return model, tv
+
+    def _make_staff_model(self):
+        num = lambda v: '' if v is None else str(v)
+        spec = [(str, None), (str, None), (str, None), (str, None)] \
+            + [(num, num_key)] * (len(_STAFF_COACHING_COLS) + len(_STAFF_PERS_COLS))
+        return PeopleModel(_STAFF_COLS, spec, _STAFF_COL_TOOLTIPS)
+
+    def _staff_row(self, p, club_by_id, club_by_entity, staff_club, employment):
+        pid = p.get('id', -1)
+        cid = staff_club.get(pid)
+        if cid is not None:
+            club_name = club_by_id.get(cid, '')
+        else:
+            eid = employment.get(pid)
+            club_name = club_by_entity.get(eid, '') if eid else ''
+        nid = p.get('nation', 0)
+        coaching = p.get('coaching', {})
+        pers = p.get('personality', [])
+        return (p.get('name', ''), club_name, _NATION_FLAG.get(nid, NATIONS.get(nid, '')),
+                _age(p),
+                *[coaching.get(_STAFF_COACHING_MAP.get(c, c)) for c in _STAFF_COACHING_COLS],
+                *[pers[i] if i < len(pers) else None for i in range(8)])
 
     def _make_staff_table(self):
         """Staff table (name/club/nation/age + coaching + personality); shared by Staff and Staff Shortlist."""
@@ -3717,23 +3368,10 @@ class MainWindow(QMainWindow):
         shdr = tbl.horizontalHeader()
         shdr.setHighlightSections(False)
         shdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        _COACHING_COLS = [
-            'Atk', 'Def', 'Fit', 'Mnt', 'SPc', 'Tac', 'Tch', 'WwY',
-            'Det', 'Mot', 'PMg',
-            'JPA', 'JSA', 'TKn',
-            'Neg', 'GKH', 'GKS',
-        ]
+        _COACHING_COLS = _STAFF_COACHING_COLS
         self._staff_coaching_cols = _COACHING_COLS
-        self._coaching_col_map = {
-            'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
-            'Mnt': 'Mental',    'SPc': 'Set Pieces', 'Tac': 'Tactical',
-            'Tch': 'Technical', 'WwY': 'WwY',
-            'Det': 'Determination', 'Mot': 'Motivating', 'PMg': 'People Mgt',
-            'JPA': 'JPA',       'JSA': 'JSA',       'TKn': 'Tact Knowledge',
-            'Neg': 'Negotiating', 'GKH': 'GK Handling', 'GKS': 'GK Shot Stop',
-        }
-        cols = ['Name', 'Club', 'Nation', 'Age'] + _COACHING_COLS + [
-            'Adp', 'Amb', 'Loy', 'Prs', 'Pro', 'Spt', 'Tmp', 'Ctr']
+        self._coaching_col_map = _STAFF_COACHING_MAP
+        cols = _STAFF_COLS
         tbl.setColumnCount(len(cols))
         tbl.setHorizontalHeaderLabels(cols)
         for i, col in enumerate(cols):
@@ -3779,7 +3417,7 @@ class MainWindow(QMainWindow):
                 club_name = club_by_entity.get(entity_id, '') if entity_id else ''
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
             for short_label in coaching_cols:
@@ -3802,17 +3440,26 @@ class MainWindow(QMainWindow):
             tbl.resizeColumnToContents(i)
 
     def _populate_staff_table(self):
-        if not self._save_data:
-            return
-        people = self._save_data.get('people', [])
-        staff = [p for p in people if 'ca' not in p]
+        """Apply the Staff age filter to the WHOLE staff set (no cap) and refresh counts."""
+        m = self._staff_model
+        rows = m.rows
+        idx = range(len(rows))
         if hasattr(self, '_staff_age_min'):
             mn, mx = self._staff_age_min.value(), self._staff_age_max.value()
-            staff = [p for p in staff if _age_in_range(p, mn, mx)]
-        self._fill_staff_rows(self._staff_table, staff)
-        total = len(staff)
-        self._staff_count_lbl.setText(f'{total:,} staff')
-        self._status_info_lbl.setText(f'{total:,} staff')
+            if mn or mx:
+                idx = [i for i in idx if rows[i][3] >= mn and (not mx or rows[i][3] <= mx)]
+        m.set_base(list(idx))
+        text = self._scouting_count_text(m, 'staff')
+        self._staff_count_lbl.setText(text)
+        self._status_info_lbl.setText(text)
+        if self._main_stack.currentIndex() == self._VIEW_INDEX['staff']:
+            self._update_header_for_view('staff')
+
+    @staticmethod
+    def _scouting_count_text(m, noun):
+        """'54,058 staff' when everything is shown, else '1,234 of 54,058 staff'."""
+        shown, total = m.rowCount(), m.total()
+        return f'{shown:,} {noun}' if shown == total else f'{shown:,} of {total:,} {noun}'
 
     def _clear_staff_filter(self):
         self._staff_age_min.blockSignals(True)
@@ -4008,7 +3655,7 @@ class MainWindow(QMainWindow):
             name = p.get('name', '')
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
             for short_label in coaching_cols:
@@ -4250,7 +3897,7 @@ class MainWindow(QMainWindow):
             pos = _primary_pos(p['positions']) if is_player and p.get('positions') else '-'
             ca = str(p.get('ca', '-')) if is_player else '-'
             pa = str(p.get('pa', '-')) if is_player else '-'
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            age = _age(p)
             nation = NATIONS.get(p.get('nation', 0), '')
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
@@ -4567,16 +4214,16 @@ class MainWindow(QMainWindow):
 
     def _get_report_players(self, key, pos_name=None, role_name=None):
         self._report_ratings = {}
+        self._report_total = 0
         if not self._save_data:
             return []
         people = self._save_data.get('people', [])
-        season_year = FM_SEASON_YEAR
         if key == 'prospects':
             c = [p for p in people if p.get('pa', 0) >= 160]
             c.sort(key=lambda p: -p['pa'])
         elif key == 'wonderkids':
             c = [p for p in people
-                 if p.get('ca') and p.get('birth_year', 0) >= season_year - 21
+                 if p.get('ca') and _age(p) <= 21
                  and p.get('pa', 0) >= 150]
             c.sort(key=lambda p: -p['pa'])
         elif key == 'best_pos':
@@ -4594,7 +4241,7 @@ class MainWindow(QMainWindow):
             mx_age = self._report_age_max.value()
             rated = []
             for p in people:
-                if not _age_in_range(p, mn_age, mx_age, season_year):
+                if not _age_in_range(p, mn_age, mx_age):
                     continue
                 r = role_rating(p, rname, role_weights)
                 if r is not None:
@@ -4607,7 +4254,7 @@ class MainWindow(QMainWindow):
         # Quick-filter fields (name/CA/PA/age/dev) — shared by every report mode.
         mn_age = self._report_age_min.value()
         mx_age = self._report_age_max.value()
-        c = [p for p in c if _age_in_range(p, mn_age, mx_age, season_year)]
+        c = [p for p in c if _age_in_range(p, mn_age, mx_age)]
         name_q = self._report_name_filter.text().strip().lower()
         if name_q:
             c = [p for p in c if name_q in p.get('name', '').lower()]
@@ -4620,6 +4267,7 @@ class MainWindow(QMainWindow):
         min_dev = self._report_dev_filter.value()
         if min_dev:
             c = [p for p in c if (_progress_rate(p) or 0) >= min_dev]
+        self._report_total = len(c)  # reports are deliberately top-200; header says so
         return c[:200]
 
     def _populate_reports_table(self, players):
@@ -4646,7 +4294,7 @@ class MainWindow(QMainWindow):
             ca = p.get('ca')
             pa = p.get('pa')
             col4_val = ratings.get(p.get('id'), None) if is_role else _progress_rate(p)
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            age = _age(p)
             nation_id = p.get('nation', 0)
             flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
             club_id = squads.get(p.get('id'))
@@ -4869,56 +4517,69 @@ class MainWindow(QMainWindow):
         clear_btn.setStyleSheet(
             f"background:transparent; color:{COLORS['text_secondary']}; font-size:11px;"
             f"border:1px solid {COLORS['border']}; border-radius:2px; padding:0 10px;")
-        clear_btn.clicked.connect(self._clear_players_filter)
+        clear_btn.clicked.connect(lambda checked=False: self._clear_players_filter())
         filter_row.addWidget(clear_btn)
 
         hdr_vbox.addLayout(filter_row)
         vbox.addWidget(hdr)
 
-        # Players table
-        self._players_table = _HoverTable()
-        self._players_table.setColumnCount(9)
-        self._players_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._players_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._players_table.setAlternatingRowColors(True)
-        self._players_table.verticalHeader().setVisible(False)
-        self._players_table.setShowGrid(False)
-        self._players_table.setSortingEnabled(True)
-        self._players_table.setStyleSheet(self._table.styleSheet() if hasattr(self, '_table') else '')
+        # Players table: virtualised QTableView + PeopleModel (all players, no cap)
+        self._players_model, self._players_table = self._make_scouting_view(
+            self._make_players_model(), _COL_TT,
+            {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}, 35,
+            sort=(2, Qt.SortOrder.AscendingOrder))
         self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
         self._players_table.setItemDelegateForColumn(1, self._players_inj_delegate)
         self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
-
-        phdr = self._players_table.horizontalHeader()
-        phdr.setHighlightSections(False)
-        phdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE'] + _ATTR_ABBREV
-        self._players_table.setColumnCount(len(cols))
-        self._players_table.setHorizontalHeaderLabels(cols)
-        for i, col in enumerate(cols):
-            if col in _COL_TT:
-                self._players_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
-        for i in range(len(cols)):
-            phdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}
-        for i, cw in fixed_widths.items():
-            self._players_table.setColumnWidth(i, cw)
-        for i in range(11, len(cols)):
-            self._players_table.setColumnWidth(i, 35)
-        phdr.setStretchLastSection(True)
-
+        self._players_table.horizontalHeader().setStretchLastSection(True)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._players_table.customContextMenuRequested.connect(
             lambda pos: self._on_list_table_context_menu(self._players_table, pos))
         vbox.addWidget(self._players_table)
 
-        self._all_players_cache = []
+        self._players_subset = None  # search-result restriction (list of person dicts) or None = everyone
         return w
 
+    def _make_players_model(self):
+        opt = lambda v: '?' if v is None else str(v)
+        spec = [
+            (str, None),                                                   # 0 name
+            (lambda v: 'INJ' if v else '', int),                           # 1 injured
+            (str, lambda v: _POS_SORT_ORDER.get(v, 99)),                   # 2 pos
+            (opt, num_key), (opt, num_key), (opt, num_key),                # 3-5 CA PA Dev
+            (str, None), (str, None),                                      # 6 age, 7 flag
+            (lambda v: 'HGP' if v else '-', None),                         # 8 hgp
+            (str, None), (str, None),                                      # 9 club, 10 contract end
+        ]
+        def attr(p, c):  # columns 11+: raw_attrs[c-11] shown on the 1-20 scale
+            ra = p.get('raw_attrs') or ()
+            return max(1, min(20, round(ra[c - 11] / 5))) if c - 11 < len(ra) else None
+        m = PeopleModel(['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE']
+                        + _ATTR_ABBREV, spec, _COL_TT, attr)
+        m.align_center = {7}
+        f = QFont()
+        f.setPointSize(14)
+        m.big_font_cols = {7: f}
+        green, dim = QColor(COLORS['hgp_green']), QColor(COLORS['text_dim'])
+        m.fg = {8: lambda r: green if r[8] else dim}
+        m.tooltip_fn = lambda p, c: (f"Out for {p.get('injury_days', 0)} days"
+                                     if c == 1 and p.get('injured') and p.get('injury_days', 0) > 0 else None)
+        return m
+
+    @staticmethod
+    def _player_row(p, squads, club_by_id):
+        pos = _primary_pos(p['positions']) if p.get('positions') else '?'
+        nid = p.get('nation', 0)
+        cid = squads.get(p.get('id'))
+        return (p.get('name', ''), bool(p.get('injured', False)), pos, p.get('ca'), p.get('pa'),
+                _progress_rate(p), _age(p),
+                _NATION_FLAG.get(nid, NATIONS.get(nid, '')), bool(p.get('hgp', False)),
+                club_by_id.get(cid, '') if cid else '', p.get('contract_end', ''))
+
     def _open_players_view(self, players=None, highlight_name=None):
-        """Navigate to Players view. If players list given, show those; else load all."""
+        """Navigate to Players view: everyone, or (players given) just those search results."""
         self._main_stack.setCurrentIndex(self._VIEW_INDEX['players'])
         for btn in self._nav_btns.values():
             btn.setChecked(False)
@@ -4927,24 +4588,17 @@ class MainWindow(QMainWindow):
         self._players_nav_btn.setChecked(True)
         self._scouting_staff_nav_btn.setChecked(False)
 
-        if players is not None:
-            self._all_players_cache = players
-        elif not self._all_players_cache and self._save_data:
-            people = self._save_data.get('people', [])
-            self._all_players_cache = sorted(
-                [p for p in people if p.get('ca') is not None],
-                key=lambda p: -(p.get('ca') or 0))
-
+        self._players_subset = players
         self._clear_players_filter(silent=True)
-        self._populate_players_table(self._all_players_cache)
-        self._update_header_for_view('players')
+        self._apply_players_filter()  # also refreshes header + counts
+        self._players_table.clearSelection()
 
         if highlight_name:
-            for r in range(self._players_table.rowCount()):
-                item = self._players_table.item(r, 0)
-                if item and item.text() == highlight_name:
-                    self._players_table.scrollToItem(item)
+            m = self._players_model
+            for r in range(m.rowCount()):
+                if m.rows[m.view[r]][0] == highlight_name:
                     self._players_table.selectRow(r)
+                    self._players_table.scrollTo(m.index(r, 0))
                     break
 
     def _clear_players_filter(self, silent=False):
@@ -4969,10 +4623,14 @@ class MainWindow(QMainWindow):
         self._players_age_min.blockSignals(False)
         self._players_age_max.blockSignals(False)
         self._players_dev_filter.blockSignals(False)
+        if not silent:  # the Clear button: back to everyone
+            self._players_subset = None
+            self._apply_players_filter()
 
     def _apply_players_filter(self):
-        if not self._all_players_cache:
-            return
+        """Filters run over the WHOLE player set (or the search-result subset); nothing is capped."""
+        m = self._players_model
+        rows, src = m.rows, m.src
         name_q = self._players_name_filter.text().strip().lower()
         pos_q = self._players_pos_filter.currentText()
         if pos_q == 'All Positions':
@@ -4983,108 +4641,39 @@ class MainWindow(QMainWindow):
         age_max = self._players_age_max.value()
         min_dev = self._players_dev_filter.value()
 
-        filtered = self._all_players_cache
+        if self._players_subset is not None:
+            ids = {id(p) for p in self._players_subset}
+            idx = [i for i in range(len(src)) if id(src[i]) in ids]
+        else:
+            idx = list(range(len(src)))
         if name_q:
-            filtered = [p for p in filtered if name_q in p.get('name', '').lower()]
+            idx = [i for i in idx if name_q in rows[i][0].lower()]
         if pos_q and pos_q in POSITIONS:
             pos_idx = POSITIONS.index(pos_q)
-            filtered = [p for p in filtered
-                        if p.get('positions') and pos_idx < len(p['positions'])
-                        and p['positions'][pos_idx] == max(p['positions'])]
+            def best(p):
+                ps = p.get('positions')
+                return bool(ps) and pos_idx < len(ps) and ps[pos_idx] == max(ps)
+            idx = [i for i in idx if best(src[i])]
         if min_ca:
-            filtered = [p for p in filtered if (p.get('ca') or 0) >= min_ca]
+            idx = [i for i in idx if (rows[i][3] or 0) >= min_ca]
         if min_pa:
-            filtered = [p for p in filtered if (p.get('pa') or 0) >= min_pa]
-        filtered = [p for p in filtered if _age_in_range(p, age_min, age_max)]
+            idx = [i for i in idx if (rows[i][4] or 0) >= min_pa]
+        if age_min or age_max:
+            idx = [i for i in idx if rows[i][6] >= age_min and (not age_max or rows[i][6] <= age_max)]
         if min_dev:
-            filtered = [p for p in filtered if (_progress_rate(p) or 0) >= min_dev]
+            idx = [i for i in idx if (rows[i][5] or 0) >= min_dev]
 
-        self._populate_players_table(filtered)
-
-    def _populate_players_table(self, players):
-        if not self._save_data:
-            return
-        clubs = self._save_data.get('clubs', [])
-        squads = self._save_data.get('squads', {})
-        club_by_id = {c['id']: c['name'] for c in clubs}
-
-        limit = 3000
-        display = players[:limit]
-        total = len(players)
-
-        self._players_table.setSortingEnabled(False)
-        self._players_table.setRowCount(len(display))
-        self._players_table.clearSelection()
-
-        for row, p in enumerate(display):
-            pos = _primary_pos(p['positions']) if p.get('positions') else '?'
-            ca = p.get('ca')
-            pa = p.get('pa')
-            dev = _progress_rate(p)
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
-            nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
-            hgp = p.get('hgp', False)
-            club_id = squads.get(p.get('id'))
-            club_name = club_by_id.get(club_id, '') if club_id else ''
-
-            injured = p.get('injured', False)
-            injury_days = p.get('injury_days', 0)
-            contract_end = p.get('contract_end', '')
-            raw_attrs = p.get('raw_attrs', [])
-
-            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
-            if injured and injury_days > 0:
-                inj_item.setToolTip(f"Out for {injury_days} days")
-
-            name_item = _SortItem(p.get('name', ''))
-            name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
-            items = [
-                name_item,
-                inj_item,
-                _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
-                _SortItem(str(ca) if ca is not None else '?', ca if ca is not None else -1),
-                _SortItem(str(pa) if pa is not None else '?', pa if pa is not None else -1),
-                _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
-                _SortItem(str(age), age),
-                _SortItem(flag),
-                _SortItem('HGP' if hgp else '-'),
-                _SortItem(club_name),
-                _SortItem(contract_end),
-            ]
-            for raw in raw_attrs:
-                dv = max(1, min(20, round(raw / 5)))
-                items.append(_SortItem(str(dv), dv))
-            while len(items) < 11 + 54:
-                items.append(_SortItem(''))
-            for col, item in enumerate(items):
-                if col == 7:
-                    item.setTextAlignment(
-                        Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
-                    f = QFont()
-                    f.setPointSize(14)
-                    item.setFont(f)
-                else:
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 8:
-                    item.setForeground(QColor(COLORS['hgp_green'] if hgp else COLORS['text_dim']))
-                self._players_table.setItem(row, col, item)
-
-        self._players_table.setSortingEnabled(True)
-        self._players_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
-        for i in range(self._players_table.columnCount()):
-            self._players_table.resizeColumnToContents(i)
-        shown = len(display)
-        suffix = f' (showing {shown:,} of {total:,})' if total > limit else f' ({total:,})'
-        count_text = f'{total:,} players' + (f' - showing {limit:,}' if total > limit else '')
-        self._players_count_lbl.setText(count_text)
-        info = f'{total:,} players' + (f'  ·  showing {limit:,}' if total > limit else '')
-        self._status_info_lbl.setText(info)
+        m.set_base(idx)
+        text = self._scouting_count_text(m, 'players')
+        self._players_count_lbl.setText(text)
+        self._status_info_lbl.setText(text)
+        if self._main_stack.currentIndex() == self._VIEW_INDEX['players']:
+            self._update_header_for_view('players')
 
     def _on_players_table_dblclick(self, index):
-        item = self._players_table.item(index.row(), 0)
-        if item:
-            self._open_player_detail_by_pid(item.data(Qt.ItemDataRole.UserRole))
+        p = self._players_model.person(index.row())
+        if p is not None:
+            self._open_player_detail_by_pid(p.get('id', -1), person=p)
 
     # -- Navigation -----------------------------------------------------------
 
@@ -5094,10 +4683,7 @@ class MainWindow(QMainWindow):
     def _nav_to(self, key: str):
         if key == 'club' and not self._current_club:
             key = 'welcome'
-        if key == 'staff' and not getattr(self, '_staff_loaded', False):
-            self._populate_staff_table()
-            self._staff_loaded = True
-        elif key == 'staff':
+        if key == 'staff':  # list is pre-built during load (_preload_scouting); just show it
             self._status_info_lbl.setText(self._staff_count_lbl.text())
         if key == 'club_staff':
             self._populate_club_staff_table()
@@ -5182,13 +4768,8 @@ class MainWindow(QMainWindow):
 
     # -- Staff double-click handlers ------------------------------------------
 
-    def _on_staff_double_click(self, row: int, col: int):
-        item = self._staff_table.item(row, 0)
-        if not item:
-            return
-        pid = item.data(Qt.ItemDataRole.UserRole)
-        people = self._save_data.get('people', []) if self._save_data else []
-        person = next((p for p in people if p.get('id') == pid and 'ca' not in p), None)
+    def _on_staff_double_click(self, index):
+        person = self._staff_model.person(index.row())
         if not person:
             return
         dlg = StaffDetailDialog(person, self._save_data, self)
@@ -5216,7 +4797,7 @@ class MainWindow(QMainWindow):
         hdr = self._table.horizontalHeader()
         hdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         _TT = _COL_TT | {
-            'Age': 'Age at start of FM24 season',
+            'Age': 'Age on the save\'s in-game date',
         }
         if mode == 'squad':
             cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
@@ -5259,6 +4840,24 @@ class MainWindow(QMainWindow):
         self._table_mode = mode
 
     def closeEvent(self, event):
+        w = getattr(self, '_worker', None)
+        if isinstance(w, SaveWorker) and w.isRunning():
+            event.ignore()
+            self._status.showMessage('Saving: wait until the save finishes before closing.')
+            return
+        if self._dirty:
+            B = QMessageBox.StandardButton
+            box = QMessageBox(QMessageBox.Icon.Warning, 'Unsaved changes',
+                              f'You have unsaved changes ({self._pending_text()}).\n\nSave them before closing?',
+                              parent=self)
+            box.setStandardButtons(B.Save | B.Discard | B.Cancel)
+            box.setDefaultButton(B.Save)
+            r = box.exec()
+            if r != B.Discard:
+                event.ignore()
+                if r == B.Save:
+                    self._do_save(after=self.close, confirm=False)  # closes again once saved
+                return
         if self._save_path:
             clear_cache(self._save_path)
         super().closeEvent(event)
@@ -5288,7 +4887,7 @@ class MainWindow(QMainWindow):
         has_data = self._save_data is not None
         has_b = has_data and 'b' in self._save_data
         self._reload_btn.setEnabled(has_file)
-        self._save_btn.setEnabled(has_b)
+        self._save_btn.setEnabled(has_b and self._dirty)
         self._search_box.setEnabled(has_data)
         has_abilities = has_data and any(
             'ca' in p for p in self._save_data.get('people', []))
@@ -5319,13 +4918,18 @@ class MainWindow(QMainWindow):
             self, 'Open FM24 Save File', start_dir, 'FM Save Files (*.fm);;All Files (*)')
         if not path:
             return
+        self._guard_dirty(lambda: self._load_path(path), 'loading another save')
+
+    def _load_path(self, path):
         self._save_path = path
         self._save_data = None
         self._squad = []
+        self._club_first_team = []
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
         self._dirty = False
+        self._pending = []
         self._status_ready_lbl.setText(
             f'<span style="color:{COLORS["text_dim"]};">&#9679;</span> Loading...')
         self._update_ui_state()
@@ -5334,7 +4938,15 @@ class MainWindow(QMainWindow):
     def _reload_save(self):
         if not self._save_path:
             return
+        try:
+            from fm_editor.savefile import file_signature
+            self._load_sig = file_signature(self._save_path)  # Save Changes refuses if the file changes after this
+        except OSError:
+            self._load_sig = None
         self._set_busy(True, 'Parsing save file')
+        self._preload_gen = getattr(self, '_preload_gen', 0) + 1  # cancels any preload in flight
+        self._players_model.clear()  # drop the previous save's rows now, not at first visit
+        self._staff_model.clear()
         self._worker = ParseWorker(self._save_path)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
@@ -5343,16 +4955,124 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _on_parse_done(self, result):
+        """Parse finished. Stay in the busy/locked state while the Scouting Players + Staff models
+        are built in ~10 ms GUI-thread slices (no processEvents), then _finish_load unlocks."""
+        _set_age_ref((result.get('save_info') or {}).get('in_game_date'))  # ages follow the save's date
+        self._preload_gen = getattr(self, '_preload_gen', 0) + 1
+        token = self._preload_gen
+        self._players_model.clear()
+        self._staff_model.clear()
+        self._dot_timer.stop()  # we write our own "Preparing ... N%" status text
+        gen = self._preload_scouting(result)
+        self._step_preload(gen, token, lambda: self._finish_load(result))
+
+    def _step_preload(self, gen, token, done):
+        if token != self._preload_gen:
+            return  # a newer load superseded this one
+        try:
+            pct = next(gen)
+        except StopIteration:
+            done()
+            return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            self._players_model.clear()
+            self._staff_model.clear()
+            done()
+            return
+        self._progress_target = 98 + 1.9 * pct / 100
+        self._status.showMessage(f'Preparing player and staff lists\u2026 {pct}%')
+        QTimer.singleShot(0, lambda: self._step_preload(gen, token, done))
+
+    def _preload_scouting(self, sd):
+        """Generator: build the Players (default sort) and Staff models. Each `yield pct` returns
+        to the event loop; work between yields is time-boxed to ~10 ms so the window stays live."""
+        from time import perf_counter as now
+        BUDGET = 0.010
+        people = sd.get('people', [])
+        clubs = sd.get('clubs', [])
+        squads = sd.get('squads', {})
+        t0 = now()
+
+        players, staff = [], []
+        for i, p in enumerate(people):
+            if p.get('ca') is not None:
+                players.append(p)
+            elif 'ca' not in p:
+                staff.append(p)
+            if not (i & 1023) and now() - t0 > BUDGET:
+                yield 5 * i // max(1, len(people))
+                t0 = now()
+        yield 5
+        # players in base order = CA descending (old "All Players" order; default-sort ties keep it)
+        ks = []
+        for i, p in enumerate(players):
+            ks.append(-(p.get('ca') or 0))
+            if not (i & 1023) and now() - t0 > BUDGET:
+                yield 5 + 10 * i // max(1, len(players))
+                t0 = now()
+        order = sorted(range(len(players)), key=ks.__getitem__)
+        players = [players[i] for i in order]
+        del ks, order
+        yield 15
+        club_by_id = {c['id']: c['name'] for c in clubs}
+        yield 16
+        t0 = now()
+        prows = []
+        for i, p in enumerate(players):
+            prows.append(self._player_row(p, squads, club_by_id))
+            if not (i & 255) and now() - t0 > BUDGET:
+                yield 16 + 44 * i // len(players)
+                t0 = now()
+        yield 60
+        club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+        employment = sd.get('employment', {})
+        staff_club = {}
+        for cid, pids in sd.get('club_staff', {}).items():
+            for pid in pids:
+                staff_club.setdefault(pid, cid)
+        yield 61
+        t0 = now()
+        srows = []
+        for i, p in enumerate(staff):
+            srows.append(self._staff_row(p, club_by_id, club_by_entity, staff_club, employment))
+            if not (i & 255) and now() - t0 > BUDGET:
+                yield 61 + 24 * i // len(staff)
+                t0 = now()
+        yield 85
+        self._players_model.set_data(players, prows)  # applies the default sort (Pos asc)
+        yield 90
+        self._staff_model.set_data(staff, srows)
+        yield 93
+        # column widths: fit to the first rows, floored so long names/clubs further down aren't clipped
+        for tv, floor in ((self._players_table, {0: 260, 9: 240}), (self._staff_table, {0: 230, 1: 300})):
+            for c in range(tv.model().columnCount()):
+                tv.resizeColumnToContents(c)
+                tv.setColumnWidth(c, max(tv.columnWidth(c), floor.get(c, 0)))
+                yield 93 + 7 * c // tv.model().columnCount() // 2
+        yield 100
+
+    def _finish_load(self, result):
         self._save_data = result
         self._dirty = False
+        self._pending = []
         self._save_data['save_path'] = self._save_path
-        self._all_players_cache = []  # invalidate on new load
+        self._save_data['disk_sig'] = getattr(self, '_load_sig', None)
         self._sg_idx = None  # search index is rebuilt lazily
+        # fresh lists: reset filters/search subset without re-running them
+        self._players_subset = None
+        self._clear_players_filter(silent=True)
+        for sp in (self._staff_age_min, self._staff_age_max):
+            sp.blockSignals(True)
+            sp.setValue(0)
+            sp.blockSignals(False)
+        self._players_count_lbl.setText(self._scouting_count_text(self._players_model, 'players'))
+        self._staff_count_lbl.setText(self._scouting_count_text(self._staff_model, 'staff'))
         self._set_busy(False)
         n_clubs = len(result.get('clubs', []))
-        people_all = result.get('people', [])
-        n_people = len([p for p in people_all if p.get('ca') is not None])
-        n_staff = len([p for p in people_all if p.get('ca') is None])
+        n_people = self._players_model.total()
+        n_staff = self._staff_model.total()
         fname = os.path.basename(self._save_path) if self._save_path else ''
         self._status_ready_lbl.setText(
             f'<span style="color:#4ade80;">&#9679;</span> Ready &nbsp;&middot;&nbsp; {fname}'
@@ -5362,7 +5082,6 @@ class MainWindow(QMainWindow):
         self._club_stats_frame.setVisible(False)
         self._club_pos_frame.setVisible(False)
         self._club_top_frame.setVisible(False)
-        self._staff_loaded = False
         self._update_ui_state()
         self._land_after_load()  # Settings > Landing page (default Save Info)
 
@@ -5489,6 +5208,7 @@ class MainWindow(QMainWindow):
         squad = [p for p in people if p.get('id', -1) in club_pids]
         squad.sort(key=lambda p: p['name'])
         self._squad = squad
+        self._club_first_team = squad
 
         from fm_editor.patch import find_club_entity_id, is_hgc
         b = self._save_data.get('b')
@@ -5608,7 +5328,7 @@ class MainWindow(QMainWindow):
             ca = p.get('ca')
             pa = p.get('pa')
             dev = _progress_rate(p)
-            age = FM_SEASON_YEAR - p.get('birth_year', FM_SEASON_YEAR)
+            age = _age(p)
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
@@ -5699,14 +5419,15 @@ class MainWindow(QMainWindow):
         self._nav_to('staff')
         self._staff_table.clearSelection()
         names = {p['name'] for p in staff}
+        m = self._staff_model
+        sel = self._staff_table.selectionModel()
         first = True
-        for r in range(self._staff_table.rowCount()):
-            item = self._staff_table.item(r, 0)
-            if item and item.text() in names:
+        for r in range(m.rowCount()):
+            if m.rows[m.view[r]][0] in names:
                 if first:
-                    self._staff_table.scrollToItem(item)
+                    self._staff_table.scrollTo(m.index(r, 0))
                     first = False
-                self._staff_table.selectRow(r)
+                sel.select(m.index(r, 0), sel.SelectionFlag.Select | sel.SelectionFlag.Rows)
 
     def _on_row_double_clicked(self, index):
         if self._table_mode == 'squad':
@@ -5744,33 +5465,33 @@ class MainWindow(QMainWindow):
         person = next((p for p in self._squad if p.get('id') == pid), None)
         if not person:
             return
-        dlg = PlayerDetailDialog(person, self._save_data, self._club_entity_id, self)
+        self._run_player_window(person, self._club_entity_id, in_squad=True)
+
+    def _run_player_window(self, person, club_entity_id, in_squad):
+        """Show the player window; then run the shortlist / in-memory patch flow it asked for.
+        Patching works on the Squads table selection, so it is only offered when opened from there."""
+        pid = person.get('id')
+        dlg = PlayerWindow(person, self._save_data, club_entity_id, self,
+                           shortlisted=any(p.get('id') == pid for p in self._shortlist),
+                           can_patch=in_squad)
         dlg.exec()
         if dlg._shortlist_added:
             self._add_to_shortlist(person)
-        if dlg._patch_mode == 'hgp':
+        if dlg._patch_mode in ('hgp', 'hgc'):
             self._table.clearSelection()
             for r in range(self._table.rowCount()):
                 if self._table.item(r, 0) and \
                    self._table.item(r, 0).data(Qt.ItemDataRole.UserRole) == pid:
                     self._table.selectRow(r)
                     break
-            self._do_patch_hgp()
-        elif dlg._patch_mode == 'hgc':
-            self._table.clearSelection()
-            for r in range(self._table.rowCount()):
-                if self._table.item(r, 0) and \
-                   self._table.item(r, 0).data(Qt.ItemDataRole.UserRole) == pid:
-                    self._table.selectRow(r)
-                    break
-            self._do_patch_hgc()
+            (self._do_patch_hgp if dlg._patch_mode == 'hgp' else self._do_patch_hgc)()
 
-    def _open_player_detail_by_pid(self, pid):
-        """Open PlayerDetailDialog for any player by ID (reports/players views)."""
+    def _open_player_detail_by_pid(self, pid, person=None):
+        """Open the player window for any player by ID (reports/players views)."""
         if not self._save_data or pid is None:
             return
         people = self._save_data.get('people', [])
-        person = next((p for p in people if p.get('id') == pid), None)
+        person = person or next((p for p in people if p.get('id') == pid), None)
         if not person:
             return
         squads = self._save_data.get('squads', {})
@@ -5782,20 +5503,23 @@ class MainWindow(QMainWindow):
             if club and club_id == getattr(self, '_current_club', {}).get('id') \
                     if isinstance(getattr(self, '_current_club', None), dict) else False:
                 club_entity_id = self._club_entity_id
-        dlg = PlayerDetailDialog(person, self._save_data, club_entity_id, self)
-        dlg.exec()
-        if dlg._shortlist_added:
-            self._add_to_shortlist(person)
+        self._run_player_window(person, club_entity_id, in_squad=False)
 
     def _on_list_table_context_menu(self, table, pos):
         """Shared context menu for reports and players tables."""
-        row = table.rowAt(pos.y())
-        if row < 0:
-            return
-        item = table.item(row, 0)
-        if not item:
-            return
-        name = item.text()
+        if isinstance(table.model(), PeopleModel):  # virtualised Players view
+            p = table.model().person(table.rowAt(pos.y()))
+            if p is None:
+                return
+            name = p.get('name', '')
+        else:
+            row = table.rowAt(pos.y())
+            if row < 0:
+                return
+            item = table.item(row, 0)
+            if not item:
+                return
+            name = item.text()
         menu = QMenu(self)
         copy_action = menu.addAction(f'Copy name: {name}')
         action = menu.exec(table.viewport().mapToGlobal(pos))
@@ -5955,6 +5679,18 @@ class MainWindow(QMainWindow):
                 persons.append(person)
         return persons
 
+    def _patch_allowed(self):
+        if 'b' not in self._save_data:
+            QMessageBox.warning(self, 'Reload required', 'Click Reload before patching.')
+            return False
+        if self._save_data.get('offsets_stale'):
+            QMessageBox.information(
+                self, 'Save and reload first',
+                'An earlier HGC patch inserted data, so player positions in memory are out of date.\n\n'
+                'Click Save Changes, then Reload, before making further edits.')
+            return False
+        return True
+
     def _do_patch_hgp(self):
         if not self._save_data or not self._squad:
             return
@@ -5964,20 +5700,21 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, 'Nothing to patch',
                                     'All selected players are already HGP.')
             return
-        if 'b' not in self._save_data:
-            QMessageBox.warning(self, 'Reload required',
-                                'Click Reload before patching.')
+        if not self._patch_allowed() or not self._confirm_patch_dialog(people_to_patch, 'HGP'):
             return
-        out_path = self._confirm_patch_dialog(people_to_patch, 'HGP')
-        if not out_path:
-            return
-        self._set_busy(True, 'Applying HGP patch')
-        self._worker = PatchWorker(self._save_data, out_path, people_to_patch, mode='hgp')
-        self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._on_progress_pct)
-        self._worker.done.connect(self._on_patch_done)
-        self._worker.error.connect(self._on_error)
-        self._worker.start()
+        from fm_editor.patch import patch_to_homegrown, is_homegrown
+        b = self._save_data['b']
+
+        def _recs(p):  # the person's record block; HGP patching is in place so offsets stay valid
+            e = p['end']
+            return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
+        n = 0
+        for p in people_to_patch:
+            before = _recs(p)
+            patch_to_homegrown(b, p)
+            p['hgp'] = is_homegrown(b, p)
+            n += before != _recs(p)
+        self._after_patch('HGP', n, False)
 
     def _do_patch_hgc(self):
         if not self._save_data or not self._squad or not self._club_entity_id:
@@ -5986,7 +5723,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'Reload required',
                                 'Click Reload before patching.')
             return
-        from fm_editor.patch import is_hgc
+        from fm_editor.patch import is_hgc, patch_to_hgc
         b = self._save_data['b']
         people_to_patch = [p for p in self._get_selected_persons()
                            if not is_hgc(b, p, self._club_entity_id)]
@@ -5994,79 +5731,133 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, 'Nothing to patch',
                                     'All selected players are already HGC.')
             return
-        out_path = self._confirm_patch_dialog(people_to_patch, 'HGC')
-        if not out_path:
+        if not self._patch_allowed() or not self._confirm_patch_dialog(people_to_patch, 'HGC'):
             return
-        self._set_busy(True, 'Applying HGC patch')
-        self._worker = PatchWorker(self._save_data, out_path, people_to_patch,
-                                   mode='hgc', club_entity_id=self._club_entity_id)
-        self._worker.progress.connect(self._on_progress)
-        self._worker.pct.connect(self._on_progress_pct)
-        self._worker.done.connect(self._on_patch_done)
-        self._worker.error.connect(self._on_error)
-        self._worker.start()
+        old_len = len(b)
+        ordered = sorted(people_to_patch, key=lambda p: p['end'], reverse=True)  # inserts shift later offsets
+        n = patch_to_hgc(b, ordered, self._club_entity_id)
+        self._after_patch('HGC', n, len(b) != old_len)
 
     def _confirm_patch_dialog(self, people_to_patch, label):
-        orig = self._save_path
-        suggested = orig.replace('.fm', f'_{label.lower()}.fm')
-        out_path, _ = QFileDialog.getSaveFileName(
-            self, 'Save Patched File', suggested, 'FM Save Files (*.fm)')
-        if not out_path:
-            return ''
         names = ', '.join(p['name'] for p in people_to_patch[:5])
         if len(people_to_patch) > 5:
             names += f' ... (+{len(people_to_patch) - 5} more)'
         msg = QMessageBox(self)
         msg.setWindowTitle(f'Confirm {label} patch')
         msg.setText(
-            f"Patch {len(people_to_patch)} player(s) as {label}?\n\n"
+            f"Make {len(people_to_patch)} player(s) {label}?\n\n"
             f"{names}\n\n"
-            f"Output: {os.path.basename(out_path)}\n\n"
-            "This may take 30-60 seconds to recompress.")
+            "This changes the save in memory only. Nothing is written until you click "
+            "Save Changes, which first backs up the current file (bk1/bk2) and then "
+            "overwrites it in place.")
         msg.setStandardButtons(
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        return out_path if msg.exec() == QMessageBox.StandardButton.Ok else ''
+        return msg.exec() == QMessageBox.StandardButton.Ok
 
-    def _on_patch_done(self):
-        self._dirty = True  # patch mutated the in-memory buffer; original save not yet overwritten
-        self._set_busy(False)
-        QMessageBox.information(
-            self, 'Done',
-            'File saved successfully.\n\n'
-            'Load the new file in FM24. If it works, you can rename it '
-            'over the original save.')
-        self._status.showMessage('Patch complete.')
+    def _after_patch(self, label, n, layout_changed):
+        """An in-memory patch finished: n players changed. Marks the save dirty (written by Save Changes)."""
+        if n:
+            self._dirty = True
+            self._pending.append(f'{label}: {n} player(s)')
+        name = os.path.basename(self._save_path)
+        if layout_changed:
+            self._save_data['offsets_stale'] = True  # HGC insert moved bytes; parsed offsets are now wrong
+            QMessageBox.information(
+                self, 'Patch applied',
+                f'{label} applied to {n} player(s) in memory.\n\n'
+                'This patch inserted data, so the lists on screen are out of date. '
+                'Click Save Changes, then Reload, before making further edits.')
+        else:
+            self._populate_squad_table(self._squad)
+        self._update_ui_state()
+        self._status.showMessage(
+            f'{label}: {n} player(s) changed in memory. Click Save Changes to write them to {name}.'
+            if n else f'{label}: nothing needed changing.')
 
-    def _do_save(self):
-        if not self._save_data or 'b' not in self._save_data:
+    # -- Save / discard guards ------------------------------------------------
+
+    def _pending_text(self):
+        return '; '.join(self._pending) or 'edits'
+
+    def _guard_dirty(self, proceed, what):
+        """Call proceed() now, or after Save / Discard / Cancel when there are unsaved changes."""
+        if not self._dirty:
+            proceed()
             return
-        orig = self._save_path
-        folder = os.path.dirname(orig)
-        fname = os.path.basename(orig)
-        bk1 = os.path.join(folder, f'bk1-{fname}')
-        bk2 = os.path.join(folder, f'bk2-{fname}')
-        # Rotate: bk1 → bk2, then orig → bk1
-        if os.path.exists(bk1):
-            shutil.copy2(bk1, bk2)
-        shutil.copy2(orig, bk1)
-        self._set_busy(True, 'Writing save file')
-        self._worker = PatchWorker(self._save_data, orig, [], mode='save_only')
+        box = QMessageBox(QMessageBox.Icon.Warning, 'Unsaved changes',
+                          f'You have unsaved changes ({self._pending_text()}).\n\n'
+                          f'Save them before {what}?', parent=self)
+        B = QMessageBox.StandardButton
+        box.setStandardButtons(B.Save | B.Discard | B.Cancel)
+        box.setDefaultButton(B.Save)
+        r = box.exec()
+        if r == B.Save:
+            self._do_save(after=proceed, confirm=False)
+        elif r == B.Discard:
+            proceed()
+
+    def _on_reload_clicked(self, checked=False):
+        if self._dirty:
+            B = QMessageBox.StandardButton
+            box = QMessageBox(QMessageBox.Icon.Warning, 'Discard unsaved changes?',
+                              f'Reload re-reads {os.path.basename(self._save_path)} from disk and '
+                              f'discards your unsaved changes ({self._pending_text()}).\n\n'
+                              'Discard them?', parent=self)
+            box.setStandardButtons(B.Discard | B.Cancel)
+            box.setDefaultButton(B.Cancel)
+            if box.exec() != B.Discard:
+                return
+        self._reload_save()
+
+    def _do_save(self, checked=False, after=None, confirm=True):
+        """Save Changes: verified temp file, 2 backups, overwrite in place (fm_editor/savefile.py)."""
+        if not self._save_data or 'b' not in self._save_data or not self._dirty:
+            return
+        from fm_editor.savefile import backup_state
+        path = self._save_path
+        name = os.path.basename(path)
+        first, _prev = backup_state(path)
+        if confirm:
+            plan = (f'First save of this file: the current original is kept in BOTH {name}.bk1 and '
+                    f'{name}.bk2.' if first else
+                    f'Backups: {name}.bk2 becomes the previous bk1, {name}.bk1 becomes the file as it '
+                    'is now.')
+            box = QMessageBox(QMessageBox.Icon.Question, 'Save changes',
+                              f'Overwrite {name} with your changes?\n\n{self._pending_text()}\n\n'
+                              f'{plan}\n\nThe save keeps its name and location. This can take up to a minute.',
+                              parent=self)
+            box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel)
+            if box.exec() != QMessageBox.StandardButton.Save:
+                return
+        self._after_save = after
+        self._set_busy(True, 'Saving')
+        self._worker = SaveWorker(self._save_data, path)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_save_done)
-        self._worker.error.connect(self._on_error)
+        self._worker.error.connect(self._on_save_error)
         self._worker.start()
 
-    def _on_save_done(self):
+    def _on_save_done(self, info):
+        self._worker.wait()  # run() returns right after emitting; lets close-after-save proceed
         self._dirty = False
+        self._pending = []
+        clear_cache(self._save_path)  # cache is keyed by path+mtime; drop the entry for the old layout
         self._set_busy(False)
-        orig = os.path.basename(self._save_path)
-        folder = os.path.dirname(self._save_path)
-        bk2 = os.path.join(folder, f'bk2-{orig}')
-        msg = f'Saved · bk1 created'
-        if os.path.exists(bk2):
-            msg += ' · bk2 rotated'
+        name = os.path.basename(self._save_path)
+        msg = (f'Saved {name} \u00b7 original kept in both backups ({name}.bk1, {name}.bk2)'
+               if info.get('first') else f'Saved {name} \u00b7 backups bk1, bk2 updated')
+        if self._save_data.get('offsets_stale'):
+            msg += ' \u00b7 click Reload to refresh the lists'
         self._status.showMessage(msg)
+        after, self._after_save = self._after_save, None
+        if after:
+            after()
+
+    def _on_save_error(self, msg):
+        self._after_save = None
+        self._on_error(msg if msg.startswith('Saved') else
+                       f'Save failed: {msg}\n\nThe original save file was not changed.')
 
     # -- Progress / error -----------------------------------------------------
 
@@ -6151,7 +5942,7 @@ class MainWindow(QMainWindow):
         self._load_btn.setEnabled(not busy)
         self._welcome_load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
-        self._save_btn.setEnabled(not busy and bool(self._save_data) and 'b' in (self._save_data or {}))
+        self._save_btn.setEnabled(not busy and self._dirty and bool(self._save_data) and 'b' in (self._save_data or {}))
         self._search_box.setEnabled(not busy and self._save_data is not None)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn.setEnabled(False)
