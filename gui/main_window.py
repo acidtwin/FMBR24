@@ -1647,10 +1647,10 @@ class _HeaderHeroWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
 
-        # 1. Dark base — slightly blue-tinted for separation from content
-        p.fillRect(0, 0, w, h, QColor('#0D1520'))
+        # 1. Base
+        p.fillRect(0, 0, w, h, QColor('#080C12'))
 
-        # 2. Stadium image at 38% opacity — center-40% position (shifted up 10%)
+        # 2. Stadium image
         if self._bg_pixmap and not self._bg_pixmap.isNull():
             p.setOpacity(0.38)
             scaled = self._bg_pixmap.scaled(
@@ -1662,28 +1662,19 @@ class _HeaderHeroWidget(QWidget):
             p.drawPixmap(0, y_offset, scaled)
             p.setOpacity(1.0)
 
-        # 3. Gradient overlay — slate-blue top fading to near-black bottom
+        # 3. Gradient overlay
         grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0, QColor(30, 40, 55, 180))   # slate-blue tint
-        grad.setColorAt(0.5, QColor(15, 25, 40, 160))
-        grad.setColorAt(1.0, QColor(4, 6, 10, 240))     # near-black
+        grad.setColorAt(0.0, QColor(8, 12, 18, 102))
+        grad.setColorAt(1.0, QColor(8, 12, 18, 217))
         p.fillRect(0, 0, w, h, QBrush(grad))
 
-        # 4. Pitch-line texture — horizontal lines every 28px
-        p.setPen(QColor(255, 255, 255, 15))  # alpha 15 (~6% opacity)
-        for y in range(0, h, 28):
+        # 4. Pitch line texture — horizontal only, every 32px
+        p.setPen(QColor(255, 255, 255, 5))
+        for y in range(0, h, 32):
             p.drawLine(0, y, w, y)
 
-        # 4b. Subtle vertical grid every 80px
-        p.setPen(QColor(255, 255, 255, 6))
-        for x in range(0, w, 80):
-            p.drawLine(x, 0, x, h)
-
-        # 5. Left accent stripe — FM green
-        p.fillRect(0, 0, 3, h, QColor(0, 255, 135, 255))
-
-        # 6. Bottom border — green-tinted
-        p.setPen(QColor(0, 255, 135, 38))  # rgba(0,255,135,0.15)
+        # 5. Bottom border
+        p.setPen(QColor(255, 255, 255, 15))
         p.drawLine(0, h - 1, w, h - 1)
 
         p.end()
@@ -2001,9 +1992,9 @@ class MainWindow(QMainWindow):
         self._header_badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._header_badge_lbl.setStyleSheet(
             "border-radius: 22px;"
-            " background: rgba(0,255,135,0.10);"
-            " border: 1.5px solid rgba(0,255,135,0.4);"
-            " color: #00FF87;"
+            " background: rgba(255,255,255,0.12);"
+            " border: 1.5px solid rgba(255,255,255,0.2);"
+            " color: #E8EDF3;"
             " font-size: 18px;"
             " font-weight: bold;"
             " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
@@ -2024,7 +2015,7 @@ class MainWindow(QMainWindow):
         )
         self._header_subtitle_lbl = QLabel('')
         self._header_subtitle_lbl.setStyleSheet(
-            "color: #5A6780; font-size: 11px; background: transparent;"
+            "color: #8892A0; font-size: 11px; background: transparent;"
         )
         tb_layout.addWidget(self._header_title_lbl)
         tb_layout.addWidget(self._header_subtitle_lbl)
@@ -2076,8 +2067,8 @@ class MainWindow(QMainWindow):
         for i in range(5):
             lbl = QLabel('★' if i < stars else '☆')
             lbl.setStyleSheet(
-                f"color: {'#F5C518' if i < stars else '#2A3040'};"
-                " font-size: 16px; background: transparent;"
+                f"color: {'#F5C518' if i < stars else '#3A4050'};"
+                " font-size: 14px; background: transparent;"
             )
             row.addWidget(lbl)
         return w
