@@ -164,5 +164,7 @@ def write_archive(output_path, orig_path, header, members, index_marker,
             f.write(member_data[m['name']])
         f.write(new_marker)
         f.write(compressed_idx)
+        f.flush()
+        os.fsync(f.fileno())  # durable before the caller swaps it over the original
 
     emit(f"Done. {os.path.getsize(output_path) // 1024 // 1024} MB written.", 100)
