@@ -1659,7 +1659,7 @@ class _HeaderHeroWidget(QWidget):
 
         # 2. Stadium at 38% opacity, horizontally centered, vertically at 40% position
         if self._bg_pixmap and not self._bg_pixmap.isNull():
-            p.setOpacity(0.38)
+            p.setOpacity(0.50)
             scaled = self._bg_pixmap.scaled(
                 w, h,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
@@ -1672,8 +1672,8 @@ class _HeaderHeroWidget(QWidget):
 
         # 3. Gradient overlay — rgba(8,12,18,0.4) → rgba(8,12,18,0.85)
         grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0, QColor(8, 12, 18, 102))   # 0.4 * 255
-        grad.setColorAt(1.0, QColor(8, 12, 18, 217))   # 0.85 * 255
+        grad.setColorAt(0.0, QColor(8, 12, 18, 51))    # 0.2 * 255
+        grad.setColorAt(1.0, QColor(8, 12, 18, 204))  # 0.8 * 255
         p.fillRect(0, 0, w, h, QBrush(grad))
 
         # 4. Pitch grid texture — horizontal every 32px, vertical every 80px
