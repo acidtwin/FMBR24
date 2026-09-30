@@ -35,6 +35,16 @@ Crash log: `/tmp/fm_editor_crash.log`
 - `HANDOVER.md` — current state, bug history, UI layout
 - `PRODUCT.md` — product purpose and capabilities
 
+## Mockup → PyQt6 translation rule
+
+When told to match a mockup artifact 1:1: **read the artifact HTML/CSS source first**, extract every value in scope (px heights, opacity floats, gradient stops, alpha ints, letter-spacing, font-size, border-radius), then translate each mechanically to its PyQt6 equivalent. Never approximate by eye.
+
+Key translations:
+- `rgba(r,g,b,a)` → `QColor(r,g,b, round(a*255))`
+- `background-position: center X%` → `y_off = int((h - scaled.height()) * (X/100))`
+- CSS `opacity: N` on image → `p.setOpacity(N)` before `drawPixmap`
+- Gradient stops → `grad.setColorAt(pos, QColor(...))`
+
 ## FM24 binary format
 
 See memory file `~/.claude/projects/…/memory/fm24-binary-format.md` — ability block offsets,

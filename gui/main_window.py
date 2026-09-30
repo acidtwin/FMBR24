@@ -1644,7 +1644,7 @@ class _HeaderHeroWidget(QWidget):
                 self._bg_pixmap = QPixmap.fromImage(img)
             else:
                 self._bg_pixmap = QPixmap(_asset)  # fallback
-        self.setFixedHeight(148)
+        self.setFixedHeight(186)
 
     def set_bg(self, pixmap):
         self._bg_pixmap = pixmap
@@ -1811,8 +1811,6 @@ class MainWindow(QMainWindow):
         right_vbox.setContentsMargins(0, 0, 0, 0)
         right_vbox.setSpacing(0)
 
-        right_vbox.addWidget(self._make_topbar())
-
         self._progress = QProgressBar()
         self._progress.setRange(0, 10000)
         self._progress.setValue(0)
@@ -1852,28 +1850,28 @@ class MainWindow(QMainWindow):
         self.statusBar().hide()
         self._save_path = None
 
-    def _make_topbar(self):
-        bar = QFrame()
-        bar.setObjectName('topbar')
-        bar.setFixedHeight(42)
-        bar.setStyleSheet(f"""
-            QFrame#topbar {{
-                background: {COLORS['elevated']};
-                border-bottom: 1px solid {COLORS['border']};
-            }}
-        """)
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(8, 0, 12, 0)
-        layout.setSpacing(6)
+    # -- Persistent header bar ------------------------------------------------
 
-        # Back / forward nav + breadcrumb
-        _nav_ss = f"""
-            QPushButton {{
+    def _make_header_bar(self):
+        hero = _HeaderHeroWidget()
+
+        # Outer VBox: nav row at top, stretch, content strip at bottom
+        outer = QVBoxLayout(hero)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Nav row (absorbed from _make_topbar)
+        nav_row = QHBoxLayout()
+        nav_row.setContentsMargins(8, 6, 12, 0)
+        nav_row.setSpacing(6)
+
+        _nav_ss = """
+            QPushButton {
                 background: transparent; border: none;
-                color: {COLORS['text_dim']}; font-size: 13px;
+                color: rgba(255,255,255,0.55); font-size: 13px;
                 padding: 4px 6px; border-radius: 2px;
-            }}
-            QPushButton:hover {{ background: {COLORS['border']}; color: {COLORS['text_secondary']}; }}
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.10); }
         """
         self._back_btn = QPushButton('◀')
         self._back_btn.setFixedSize(26, 26)
@@ -1887,71 +1885,64 @@ class MainWindow(QMainWindow):
         self._fwd_btn.clicked.connect(self._nav_fwd)
         self._nav_history: list[tuple] = []
         self._nav_pos: int = -1
-        back_btn = self._back_btn
-        fwd_btn = self._fwd_btn
 
         self._breadcrumb = QLabel('FM Save Editor')
         self._breadcrumb.setStyleSheet(
-            f"color:{COLORS['text_secondary']}; font-size:12px; background:transparent;")
+            "color: rgba(255,255,255,0.55); font-size:12px; background:transparent;")
 
-        layout.addWidget(back_btn)
-        layout.addWidget(fwd_btn)
+        nav_row.addWidget(self._back_btn)
+        nav_row.addWidget(self._fwd_btn)
 
-        # Centred search
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText('Search clubs, players or staff...')
         self._search_box.setEnabled(False)
         self._search_box.returnPressed.connect(self._do_search)
-        self._search_box.setFixedHeight(28)
-        self._search_box.setMaximumWidth(16777215)  # no cap
-        self._search_box.setStyleSheet(f"""
-            QLineEdit {{
-                background: {COLORS['window_bg']};
-                border: 1px solid {COLORS['border']};
+        self._search_box.setFixedHeight(26)
+        self._search_box.setMaximumWidth(16777215)
+        self._search_box.setStyleSheet("""
+            QLineEdit {
+                background: rgba(0,0,0,0.30);
+                border: 1px solid rgba(255,255,255,0.15);
                 border-radius: 2px;
-                padding: 4px 10px 4px 10px;
+                padding: 4px 10px;
                 font-size: 12px;
-                color: {COLORS['text_primary']};
-            }}
-            QLineEdit:focus {{ border-color: {COLORS['accent']}; outline: none; }}
-            QLineEdit:disabled {{ color: {COLORS['text_dim']}; }}
+                color: rgba(255,255,255,0.85);
+            }
+            QLineEdit:focus { border-color: rgba(255,255,255,0.40); outline: none; }
+            QLineEdit:disabled { color: rgba(255,255,255,0.35); }
         """)
         search_action = QAction(
-            _svg_icon(_SVG_SEARCH, COLORS['text_dim'], 14), '', self._search_box)
+            _svg_icon(_SVG_SEARCH, 'rgba(255,255,255,0.55)', 14), '', self._search_box)
         self._search_box.addAction(search_action, QLineEdit.ActionPosition.LeadingPosition)
-
-        layout.addWidget(self._search_box, 1)
+        nav_row.addWidget(self._search_box, 1)
 
         _tbtn_ss = (
-            f"QPushButton {{ background:{COLORS['elevated']}; color:{COLORS['text_secondary']};"
-            f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:4px 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{COLORS['border']}; color:{COLORS['text_primary']}; }}"
-            f"QPushButton:disabled {{ color:{COLORS['text_dim']}; }}"
+            "QPushButton { background: rgba(0,0,0,0.25); color: rgba(255,255,255,0.75);"
+            " border: 1px solid rgba(255,255,255,0.15); border-radius: 2px;"
+            " padding: 4px 10px; font-size: 11px; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.9); }"
+            "QPushButton:disabled { color: rgba(255,255,255,0.30); }"
         )
         _tbtn_accent_ss = (
-            f"QPushButton {{ background:{COLORS['accent']}; color:#fff;"
-            f" border:none; border-radius:2px;"
-            f" padding:4px 10px; font-size:11px; font-weight:bold; }}"
-            f"QPushButton:hover {{ background:{COLORS['accent_hover']}; }}"
-            f"QPushButton:pressed {{ background:{COLORS['accent_press']}; }}"
-            f"QPushButton:disabled {{ background:{COLORS['elevated']}; color:{COLORS['text_dim']};"
-            f" border:1px solid {COLORS['border']}; font-weight:normal; }}"
+            "QPushButton { background: rgba(61,139,205,0.85); color: #fff;"
+            " border: none; border-radius: 2px;"
+            " padding: 4px 10px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background: rgba(77,155,221,0.9); }"
+            "QPushButton:disabled { background: rgba(0,0,0,0.25); color: rgba(255,255,255,0.30);"
+            " border: 1px solid rgba(255,255,255,0.15); font-weight: normal; }"
         )
 
-        # Save button (left of Load)
         self._save_btn = QPushButton('Save Changes')
-        self._save_btn.setFixedHeight(28)
+        self._save_btn.setFixedHeight(26)
         self._save_btn.setEnabled(False)
         self._save_btn.setToolTip('Save current file (default: SaveName-Edited-DATE)')
-        self._save_btn.setIcon(_svg_icon(_SVG_SAVE, COLORS['text_secondary'], 13))
+        self._save_btn.setIcon(_svg_icon(_SVG_SAVE, 'rgba(255,255,255,0.75)', 13))
         self._save_btn.setIconSize(QSize(13, 13))
         self._save_btn.setStyleSheet(_tbtn_ss)
         self._save_btn.clicked.connect(self._do_save)
 
-        # Load button
         self._load_btn = QPushButton('Load')
-        self._load_btn.setFixedHeight(28)
+        self._load_btn.setFixedHeight(26)
         self._load_btn.setObjectName('accent')
         self._load_btn.setToolTip('Open an FM24 save file')
         self._load_btn.setIcon(_svg_icon(_SVG_LOAD, '#fff', 13))
@@ -1959,51 +1950,37 @@ class MainWindow(QMainWindow):
         self._load_btn.setStyleSheet(_tbtn_accent_ss)
         self._load_btn.clicked.connect(self._load_file)
 
-        # Reload button (right of Load, greyed when no file)
         self._reload_btn = QPushButton('Reload')
-        self._reload_btn.setFixedHeight(28)
+        self._reload_btn.setFixedHeight(26)
         self._reload_btn.setEnabled(False)
         self._reload_btn.setToolTip('Re-parse the current save file')
-        self._reload_btn.setIcon(_svg_icon(_SVG_RELOAD, COLORS['text_secondary'], 13))
+        self._reload_btn.setIcon(_svg_icon(_SVG_RELOAD, 'rgba(255,255,255,0.75)', 13))
         self._reload_btn.setIconSize(QSize(13, 13))
         self._reload_btn.setStyleSheet(_tbtn_ss)
         self._reload_btn.clicked.connect(self._reload_save)
 
-        # Settings cog
         self._settings_btn = QPushButton()
-        self._settings_btn.setFixedSize(28, 28)
-        self._settings_btn.setIcon(_svg_icon(_SVG_COG, COLORS['text_secondary'], 15))
+        self._settings_btn.setFixedSize(28, 26)
+        self._settings_btn.setIcon(_svg_icon(_SVG_COG, 'rgba(255,255,255,0.75)', 15))
         self._settings_btn.setIconSize(QSize(15, 15))
         self._settings_btn.setToolTip('Settings')
-        self._settings_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {COLORS['elevated']};
-                border: 1px solid {COLORS['border']};
+        self._settings_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.15);
                 border-radius: 2px;
                 padding: 0;
-            }}
-            QPushButton:hover {{
-                background: {COLORS['border']};
-                border-color: {COLORS['border_bright']};
-            }}
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.10); }
         """)
-
         self._settings_btn.clicked.connect(self._open_settings)
-        layout.addWidget(self._save_btn)
-        layout.addWidget(self._load_btn)
-        layout.addWidget(self._reload_btn)
-        layout.addWidget(self._settings_btn)
-        return bar
 
-    # -- Persistent header bar ------------------------------------------------
+        nav_row.addWidget(self._save_btn)
+        nav_row.addWidget(self._load_btn)
+        nav_row.addWidget(self._reload_btn)
+        nav_row.addWidget(self._settings_btn)
 
-    def _make_header_bar(self):
-        hero = _HeaderHeroWidget()
-
-        # Outer VBox: stretch pushes content strip to bottom
-        outer = QVBoxLayout(hero)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.addLayout(nav_row)
         outer.addStretch(1)
 
         # Content row — bottom-aligned
@@ -2205,6 +2182,7 @@ class MainWindow(QMainWindow):
                 btn = self._make_nav_btn(svg, label, lambda checked, k=key: self._nav_to(k))
             self._nav_btns[key] = btn
             vbox.addWidget(btn)
+        self._nav_btns['club'].setEnabled(False)
 
         vbox.addWidget(self._make_hline())
 
@@ -3862,9 +3840,10 @@ class MainWindow(QMainWindow):
         for btn in self._report_btns.values():
             btn.setEnabled(has_abilities)
         self._players_nav_btn.setEnabled(has_abilities)
+        self._nav_btns['club'].setEnabled(self._current_club is not None)
         self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
         self._nav_btns['club_staff'].setEnabled(has_data and self._current_club is not None)
-        self._nav_btns['shortlist'].setEnabled(has_data)
+        self._nav_btns['shortlist'].setEnabled(True)
         self._scouting_staff_nav_btn.setEnabled(has_data)
         self._table.setEnabled(has_data)
         has_squad = bool(self._squad) and self._table_mode == 'squad'
