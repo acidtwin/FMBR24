@@ -1677,12 +1677,12 @@ class _HeaderHeroWidget(QWidget):
         p.fillRect(0, 0, w, h, QBrush(grad))
 
         # 4. Pitch grid texture — horizontal every 32px, vertical every 80px
-        pen = QPen(QColor(255, 255, 255, 5))
+        pen = QPen(QColor(255, 255, 255, 12))
         pen.setWidth(1)
         p.setPen(pen)
         for y in range(0, h, 32):
             p.drawLine(0, y, w, y)
-        pen2 = QPen(QColor(255, 255, 255, 6))
+        pen2 = QPen(QColor(255, 255, 255, 8))
         pen2.setWidth(1)
         p.setPen(pen2)
         for x in range(0, w, 80):
