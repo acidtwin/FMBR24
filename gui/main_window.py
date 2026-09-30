@@ -4398,6 +4398,7 @@ class MainWindow(QMainWindow):
             self._report_title_lbl.setText(_labels.get(key, key))
             self._populate_reports_table(players)
             self._main_stack.setCurrentIndex(self._VIEW_INDEX['reports'])
+            self._update_header_for_view('reports')
         except Exception:
             import traceback
             traceback.print_exc()
