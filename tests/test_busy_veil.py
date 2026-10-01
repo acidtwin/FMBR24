@@ -27,6 +27,13 @@ assert v.geometry() == w._main_stack.rect(), (v.geometry(), w._main_stack.rect()
 w.resize(1000, 700)                       # veil follows the content when the window resizes
 app.processEvents()
 assert v.geometry() == w._main_stack.rect()
+assert v._base == 'Saving' and v._dots == 1
+seen = []
+for _ in range(8):                      # dots bounce 1 2 3 4 3 2 1 2 ...
+    w._tick_dots(); seen.append(v._dots)
+assert seen == [1, 2, 3, 4, 3, 2, 1, 2], seen
+w._on_progress('Parsing archive...')
+assert v._base == 'Parsing archive' and v._dots == 1
 w._set_busy(False)
 app.processEvents()
 assert not v.isVisible() and w._main_stack.isEnabled()

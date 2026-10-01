@@ -145,7 +145,7 @@ _SVG_AVATAR = (
 )
 
 # Growing dot cycle: . .. ... ....
-_DOT_SEQ = [1, 2, 3, 4]
+_DOT_SEQ = [1, 2, 3, 4, 3, 2]  # bounces . .. ... .... ... .. (then . again), user's preferred animation
 
 # Column header tooltips shared across all player tables
 _COL_TT = {
@@ -237,8 +237,27 @@ class _BusyVeil(QWidget):
             self.raise_()
         self.setVisible(on)
 
+    def set_text(self, base, dots=0):
+        self._base, self._dots = base, dots
+        self.update()
+
     def paintEvent(self, _ev):
-        QPainter(self).fillRect(self.rect(), QColor(20, 21, 26, self.ALPHA))
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(20, 21, 26, self.ALPHA))
+        base = getattr(self, '_base', '')
+        if not base:
+            return
+        f = QFont(self.font())
+        f.setPixelSize(18)
+        f.setWeight(QFont.Weight.DemiBold)
+        p.setFont(f)
+        p.setPen(QColor(COLORS['text_primary']))
+        fm = QFontMetrics(f)
+        total = fm.horizontalAdvance(base + '....')  # reserve the widest dot count so the text never wobbles
+        x = (self.width() - total) // 2
+        y = self.height() // 2 + fm.ascent() // 2
+        p.drawText(x, y, base)
+        p.drawText(x + fm.horizontalAdvance(base), y, '.' * getattr(self, '_dots', 0))
 
     def mousePressEvent(self, ev):  # swallow clicks / wheel so nothing underneath reacts
         ev.accept()
@@ -5790,6 +5809,7 @@ class MainWindow(QMainWindow):
         self._dot_phase = (self._dot_phase + 1) % len(_DOT_SEQ)
         dots = '.' * _DOT_SEQ[self._dot_phase]
         self._status.showMessage(self._status_base + dots)
+        self._busy_veil.set_text(self._status_base, _DOT_SEQ[self._dot_phase])
 
     def _on_progress_pct(self, pct: int):
         self._progress_target = float(pct)
@@ -5829,6 +5849,7 @@ class MainWindow(QMainWindow):
         self._status_base = msg.rstrip('.')
         self._dot_phase = -1
         self._status.showMessage(self._status_base)
+        self._busy_veil.set_text(self._status_base, 1)
 
     def _on_error(self, msg):
         self._set_busy(False)
@@ -5845,6 +5866,7 @@ class MainWindow(QMainWindow):
             self._dot_phase = -1
             self._status_base = msg or self._status_base
             self._status.showMessage(self._status_base)
+            self._busy_veil.set_text(self._status_base, 1)
             self._dot_timer.start()
             self._load_btn.setText('Loading')
             for k, btn in self._nav_btns.items():
