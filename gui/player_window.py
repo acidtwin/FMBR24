@@ -626,8 +626,44 @@ class PlayerWindow(QDialog):
         pa.end()
         return px
 
+    # Star-mode header grid (CA / PA / slot share it so labels, stars and captions line up across all three):
+    # top pad 8 | label 14 | gap 4 | value row 24 | gap 4 | caption 14  = 68px
+    _HG_TOP, _HG_LAB, _HG_GAP, _HG_VAL, _HG_CAP = 8, 14, 4, 24, 14
+    _HG_H = _HG_TOP + _HG_LAB + _HG_GAP + _HG_VAL + _HG_GAP + _HG_CAP
+    _CAB_CAPTION = {'CA': 'Current ability', 'PA': 'Potential ability'}
+
+    @staticmethod
+    def _star_row(n):
+        sw = QWidget()
+        sh = QHBoxLayout(sw)
+        sh.setContentsMargins(0, 0, 0, 0)
+        sh.setSpacing(2)
+        for i in range(5):
+            sh.addWidget(_StarWidget(max(0.0, min(1.0, n - i))), 0, Qt.AlignmentFlag.AlignVCenter)
+        sh.addStretch()
+        return sw
+
+    def _cab_stars(self, label, val):
+        """Star-mode CA / PA box: label, 5 stars, caption on the shared header grid."""
+        f = QFrame()
+        f.setObjectName('pwCab')
+        f.setFixedSize(116, self._HG_H)
+        f.setToolTip(f'{label} {val}')
+        v = QVBoxLayout(f)
+        v.setContentsMargins(12, self._HG_TOP, 10, 0)
+        v.setSpacing(self._HG_GAP)
+        v.addWidget(_spaced(_lab(label, 'pwBigLab', None, self._HG_LAB), 0.8))
+        sw = self._star_row(ability_stars(val))
+        sw.setFixedHeight(self._HG_VAL)
+        v.addWidget(sw)
+        v.addWidget(_lab(self._CAB_CAPTION.get(label, ''), 'pwSlotS', None, self._HG_CAP))
+        v.addStretch()
+        return f
+
     def _cab(self, label, val, color):
         """CA / PA box 104x52: label 10/700 + value 20/700 on one 26px row, then a 6px bar (mockup .cab)."""
+        if self._ability_stars and val is not None:
+            return self._cab_stars(label, val)
         f = QFrame()
         f.setObjectName('pwCab')
         f.setFixedSize(104, 52)
@@ -733,11 +769,14 @@ class PlayerWindow(QDialog):
         hl.addWidget(self._cab('PA', p.get('pa'), C_POT))
         self._slot_w = QWidget()
         self._slot_w.setObjectName('pwSlot')
-        self._slot_w.setFixedSize(172, 56)
+        stars_grid = self._ability_stars
+        self._slot_w.setFixedSize(172, self._HG_H if stars_grid else 56)
         sv = QVBoxLayout(self._slot_w)
-        sv.setContentsMargins(16, 0, 0, 0)
-        sv.setSpacing(3)
+        sv.setContentsMargins(16, self._HG_TOP if stars_grid else 0, 0, 0)
+        sv.setSpacing(self._HG_GAP if stars_grid else 3)
         self._slot_l = _spaced(_lab('', 'pwBigLab'), 0.8)
+        if stars_grid:
+            self._slot_l.setFixedHeight(self._HG_LAB)
         self._slot_vh = QHBoxLayout()
         self._slot_vh.setContentsMargins(0, 0, 0, 0)
         self._slot_vh.setSpacing(8)
@@ -746,7 +785,8 @@ class PlayerWindow(QDialog):
         vw.setLayout(self._slot_vh)
         self._slot_s = _ElideLabel('', 'pwSlotS')
         self._slot_s.setFixedHeight(14)
-        sv.addStretch()
+        if not stars_grid:
+            sv.addStretch()
         sv.addWidget(self._slot_l)
         sv.addWidget(vw)
         sv.addWidget(self._slot_s)
@@ -782,15 +822,9 @@ class PlayerWindow(QDialog):
         if dev is None:
             return 'Dev Rate', [self._slot_val('-')], ''
         if self._ability_stars:
-            n = dev_stars(dev)
-            sw = QWidget()
+            sw = self._star_row(dev_stars(dev))
             sw.setToolTip(f'Dev Rate {dev} out of 20')
-            sh = QHBoxLayout(sw)
-            sh.setContentsMargins(0, 0, 0, 0)
-            sh.setSpacing(1)
-            for i in range(5):
-                sh.addWidget(_StarWidget(max(0.0, min(1.0, n - i))))
-            return 'Dev Rate', [sw], ''
+            return 'Dev Rate', [sw], 'How fast they develop'
         return 'Dev Rate', [self._slot_val(str(dev), TIER_HEX[tier(dev)])], 'out of 20'
 
     def _slot_contract(self):
