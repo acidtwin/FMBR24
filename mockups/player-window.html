@@ -21,7 +21,7 @@ HOW TO USE
   Screenshot mode: ?bare before the # hides the review bar + OS title bar so the window starts at 0,0 (1122x760).
   Profile = layout C 'Dossier' only (chosen; A/B and ?profile removed); ?full (with ?bare) lets the window grow for screenshots.
   Recommended traits now live on the Training tab.
-  Texture variants: ?tex=a|b|c|off before the # (or the 'texture' toggle in the review bar), e.g.  ?tex=b#positions
+  Themes: ?tex=steel|pitch|floodlit|plain (registry THEMES); header variants ?hdr=a|b|c (review bar: header, theme), e.g.  ?hdr=c&tex=pitch#positions
   e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
@@ -175,29 +175,32 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .hdr{height:80px;padding:0 16px;display:flex;align-items:center;gap:14px;flex:none}
 .avatar{width:48px;height:48px;background:var(--elev);border-radius:3px;display:flex;align-items:center;justify-content:center;flex:none}
 .avatar svg{width:30px;height:30px}
-.hid{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.hid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .hid .r1{display:flex;align-items:center;gap:10px;height:24px}
 .hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hid .r2{color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hid .r3{display:flex;align-items:center;gap:6px;height:20px}
-.hid .r3 .hw{margin-left:2px;color:var(--tx2);font-size:11px;display:flex;align-items:center;gap:6px}
-.cab{width:104px;height:52px;padding:6px 10px 0;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
-.cab .t{display:flex;align-items:baseline;justify-content:space-between;height:26px}
-.cab small{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx2)}
-.cab b{font-size:20px;line-height:1.1}
-.cab .bar{display:block;flex:none;margin-top:3px}
-.cab.st{width:116px;height:68px;padding:8px 10px 0 12px;display:flex;flex-direction:column;gap:4px}
-.cab.st small{display:block;height:14px;line-height:14px}
-.cab.st .stars,.slot .stars{height:24px;display:flex;align-items:center;gap:2px}
-.cab.st .cpt{height:14px;line-height:14px;font-size:11px;color:var(--tx2)}
-.slot{width:172px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:15px;display:flex;flex-direction:column;justify-content:flex-start;gap:0}
-/* numbers mode: 14 + 3 + 24 + 1 + 14 = 56 (Qt squeezes the 58px of content into the 56px slot: label y+0, value row y+17, caption y+42) */
-.slot small{height:14px;line-height:14px;margin-bottom:3px}
-.slot .v{margin-bottom:1px}
-.slot.st{height:68px;padding-top:8px;gap:4px}
-.slot.st small,.slot.st .v{margin-bottom:0}
-.slot small{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);white-space:nowrap}
+.hid .r2{display:flex;align-items:center;gap:6px;color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden}
+.hid .r2 .fl{font:14px/16px "Noto Color Emoji",sans-serif}
+.hid .r2 .sep{color:var(--tx3)}
+.hid .r2 .age{cursor:default;border-bottom:1px dotted var(--tx3)}
+.hdr .pills{display:flex;align-items:center;gap:6px;flex:none}
+.hdr .pills.end{margin-left:auto}
+.hdr .pill{height:18px;padding:0 8px;font-size:10px;line-height:1}   /* calm: small, hairline border, only lit when set */
+.hdr .pill.unk{padding:0 2px}
+/* variant C: slim meta column between identity and the ability boxes (hairline like the Dev Rate slot) */
+.hmeta{width:136px;height:56px;flex:none;border-left:1px solid var(--border);padding-left:14px;display:flex;flex-direction:column;justify-content:center;gap:4px;color:var(--tx2);font-size:11px;white-space:nowrap}
+.hmeta>div{height:16px;display:flex;align-items:center;gap:6px}
+.hmeta>div:last-child{height:18px}
+/* ONE grid shared by the CA box, PA box and slot (stars AND numbers mode): 56 high, 6 top pad | label 14 | gap 4 | value row 24 | 6 */
+.cab{width:150px;height:56px;padding:6px 10px 0 12px;display:flex;flex-direction:column;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
+.cab small,.slot small{display:block;height:14px;line-height:14px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);white-space:nowrap}
+.cab .stars,.slot .stars{height:24px;display:flex;align-items:center;gap:2px}
+.cab .nv{height:24px;display:flex;align-items:center;gap:8px}
+.cab .nv b{font-size:20px;line-height:24px;font-weight:700}
+.cab .bar{flex:1}
+.slot{width:172px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:15px;display:flex;flex-direction:column;justify-content:center}
+.slot small{margin-bottom:4px}   /* label 14 + 4 + value 24 (+ sub 14 on the other tabs = 56) */
 .slot .v{font-size:20px;font-weight:700;line-height:24px;height:24px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.slot .v .u{font-size:11px;font-weight:400;color:var(--tx2)}
 .slot .s{font-size:11px;color:var(--tx2);height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- persistent tab strip ---- */
@@ -215,93 +218,38 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .strip .sp{flex:1}
 
 /* =====================================================================================================================
-   TEXTURE VARIANTS (?tex=a|b|c|off, or the "texture" toggle in the review bar). Three surfaces: .hdr (header panel),
-   .tabs (left strip), .strip (bottom action bar). Every layer is a gradient / pre-rendered tile / pinstripe / line that
+   THEMES (player window texture). ONE registry, THEMES (section 2, after the helpers): add / remove / change a theme = one entry. Each theme has a recipe
+   for three surfaces: hdr (header panel), tabs (left strip), bar (bottom action bar), plus optional `extra` CSS (active tab / primary-button glow).
+   The CSS is generated from the registry at load (data-tex=<id> on the frame). Every layer is a gradient / pre-rendered tile / pinstripe / line that
    QPainter can draw in paintEvent (see the QPAINTER RECIPE below). Layers are listed TOP first (CSS order).
    --nzf / --nzd are tiled noise pixmaps generated at load (fine grain / sparse dust), standing in for QPixmap tiles.
    Panel bases stay opaque so contrast is unchanged: lightest base #1F2A3C vs text_secondary #8B96A8 = 5.4:1.
    ===================================================================================================================== */
-/* ---- A  PITCH LINES: mown stripes (hero pitch greens) + markings; header gets a centre-circle motif at the right ---- */
-.frame[data-tex=a] .hdr{
-  background:
-    linear-gradient(90deg,rgba(26,34,38,0) 0,rgba(26,34,38,0) 40%,rgba(26,34,38,0.55) 78%,rgba(26,34,38,0) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='80'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'%3E%3Cline x1='232.5' y1='0' x2='232.5' y2='80'/%3E%3Ccircle cx='232.5' cy='40' r='46'/%3E%3C/g%3E%3Ccircle cx='232.5' cy='40' r='2' fill='rgba(255,255,255,0.14)'/%3E%3C/svg%3E") right top no-repeat,
-    repeating-linear-gradient(90deg,rgba(29,66,41,0.22) 0 40px,rgba(21,48,31,0.10) 40px 80px),
-    var(--surface)}
-.frame[data-tex=a] .tabs{
-  background:
-    repeating-linear-gradient(90deg,rgba(29,66,41,0.24) 0 22px,rgba(21,48,31,0.10) 22px 44px),
-    var(--surface)}
-.frame[data-tex=a] .strip{
-  border-top-color:rgba(82,194,135,0.55);
-  background:
-    linear-gradient(180deg,rgba(82,194,135,0.18) 0,rgba(82,194,135,0.05) 6px,rgba(82,194,135,0) 12px),
-    repeating-linear-gradient(90deg,rgba(29,66,41,0.20) 0 40px,rgba(21,48,31,0.08) 40px 80px),
-    var(--surface)}
-
-/* ---- B  BRUSHED STEEL / TUNNEL: diagonal grain (sidebar family) + raised-panel depth + violet glow on the active bits ---- */
-.frame[data-tex=b] .hdr,.frame[data-tex=b] .tabs,.frame[data-tex=b] .strip{
-  background:
-    linear-gradient(180deg,rgba(255,255,255,0.09) 0,rgba(255,255,255,0.09) 1px,rgba(255,255,255,0.035) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
-    linear-gradient(0deg,rgba(0,0,0,0.30) 0,rgba(0,0,0,0) 12px) 0 100%/100% 12px no-repeat,
-    repeating-linear-gradient(135deg,rgba(255,255,255,0.040) 0 1px,rgba(255,255,255,0) 1px 3px),
-    var(--nzf),
-    linear-gradient(180deg,#222D32 0,#1A2226 55%,#161D21 100%)}
-.frame[data-tex=b] .strip{border-top-color:var(--border2);isolation:isolate}
-.frame[data-tex=b] .tab.on,.frame[data-tex=b] .tab.on:hover{
-  background:linear-gradient(0deg,rgba(115,92,228,0.34) 0,rgba(115,92,228,0) 18px) 0 100%/100% 18px no-repeat,
-             linear-gradient(90deg,rgba(115,92,228,0.20) 0,rgba(115,92,228,0) 75%),var(--sel)}
-.frame[data-tex=b] .strip .b1{position:relative}
-.frame[data-tex=b] .strip .b1::before{content:"";position:absolute;left:-18px;right:-18px;top:-12px;bottom:-12px;z-index:-1;
-  background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(115,92,228,0.65) 0,rgba(115,92,228,0.26) 55%,rgba(115,92,228,0) 100%)}
-
-/* ---- C  FLOODLIT: navy-to-charcoal, floodlight bloom + rays from the header's top-right, dust specks, glass top edge ---- */
-.frame[data-tex=c] .hdr{
-  background:
-    linear-gradient(180deg,rgba(255,255,255,0.16) 0,rgba(255,255,255,0.16) 1px,rgba(255,255,255,0.05) 1px,rgba(255,255,255,0) 22px) 0 0/100% 22px no-repeat,
-    var(--nzd),
-    radial-gradient(ellipse 300px 140px at 100% 0,rgba(205,222,255,0.22) 0,rgba(205,222,255,0.08) 45%,rgba(205,222,255,0) 100%),
-    radial-gradient(ellipse 620px 170px at 100% 0,rgba(26,34,48,0) 0,rgba(26,34,48,0.92) 100%),
-    repeating-conic-gradient(from 195deg at 100% 0,rgba(205,222,255,0.06) 0 5deg,rgba(205,222,255,0) 5deg 12deg),
-    linear-gradient(180deg,#1F2A3C 0,#1A2230 55%,#171C23 100%)}
-.frame[data-tex=c] .tabs{
-  background:
-    linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 18px) 0 0/100% 18px no-repeat,
-    var(--nzd),
-    radial-gradient(ellipse 230px 300px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
-    linear-gradient(180deg,#1C2639 0,#181F2B 50%,#16191F 100%)}
-.frame[data-tex=c] .strip{
-  background:
-    linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
-    var(--nzd),
-    radial-gradient(ellipse 360px 70px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
-    linear-gradient(180deg,#1A2230 0,#161B22 100%)}
-
-/* QPAINTER RECIPE (paintEvent of the panel, rect r, clip rounded radius 3; draw in REVERSE of the CSS order, bottom layer first):
-   A header: fillRect surface; stripes: for x in 0,80,160..: fillRect(x,0,40,h,QColor(29,66,41,56)) + fillRect(x+40,0,40,h,QColor(21,48,31,26));
+/* QPAINTER RECIPE per theme (steel = old B, pitch = old A, floodlit = old C; paintEvent of the panel, rect r, clip rounded radius 3; draw in REVERSE of the CSS order, bottom layer first):
+   pitch header: fillRect surface; stripes: for x in 0,80,160..: fillRect(x,0,40,h,QColor(29,66,41,56)) + fillRect(x+40,0,40,h,QColor(21,48,31,26));
              centre circle: pen QColor(255,255,255,41) 1px: drawEllipse(QPointF(w-67.5,h/2),46,46), drawLine at x=w-67.5 full height, spot r2 QColor(255,255,255,36);
              calm zone: QLinearGradient(0,0,w,0) stops 0:a0 .40:a0 .78:QColor(26,34,38,140) 1:a0 over the whole rect.
-   A strip : fillRect surface; stripes period 44: 22 on QColor(29,66,41,61), 22 off QColor(21,48,31,26).
-   A bar   : fillRect surface; stripes period 80: 40 on (29,66,41,51) / 40 off (21,48,31,20); glow QLinearGradient(0,0,0,12) 0:(82,194,135,46) .5:(82,194,135,13) 1:(82,194,135,0);
+   pitch tabs  : fillRect surface; stripes period 44: 22 on QColor(29,66,41,61), 22 off QColor(21,48,31,26).
+   pitch bar   : fillRect surface; stripes period 80: 40 on (29,66,41,51) / 40 off (21,48,31,20); glow QLinearGradient(0,0,0,12) 0:(82,194,135,46) .5:(82,194,135,13) 1:(82,194,135,0);
              top line: drawLine y=0 pen QColor(82,194,135,140).  (QSS border-top on the bar stays 1px; just recolour it.)
-   B all 3 : base QLinearGradient(0,0,0,h) 0:#222D32 .55:#1A2226 1:#161D21; drawTiledPixmap(fine-grain tile 128x128: half light px alpha<=9, half dark px alpha<=14);
+   steel all 3 : base QLinearGradient(0,0,0,h) 0:#222D32 .55:#1A2226 1:#161D21; drawTiledPixmap(fine-grain tile 128x128: half light px alpha<=9, half dark px alpha<=14);
              pinstripe: pre-rendered 3x3 ARGB tile with a 135deg 1px line QColor(255,255,255,10) -> drawTiledPixmap;
              bottom inner shadow QLinearGradient(0,h-12,0,h) 0:(0,0,0,0) 1:(0,0,0,77);
              top: drawLine y=0 QColor(255,255,255,23) + sheen QLinearGradient(0,1,0,14) (255,255,255,9)->(255,255,255,0).
      active tab (row rect): fillRect sel #2A1B4A; QLinearGradient left->.75w (115,92,228,51)->a0; bottom 18px QLinearGradient up (115,92,228,87)->a0.
      primary button: in the bar's paintEvent before children: QRadialGradient centred on button, painter.translate(c); scale(rx/ry ratio) for the ellipse,
              rx=btn.w/2+18, ry=btn.h/2+12, stops 0:(115,92,228,166) .55:(115,92,228,66) 1:(115,92,228,0); fillRect expanded rect.
-   C header: base QLinearGradient #1F2A3C / .55 #1A2230 / #171C23; rays: loop 360/12 wedges: painter.drawPie/drawPolygon from (w,0), 5deg wedge QColor(205,222,255,15) every 12deg,
+   floodlit header: base QLinearGradient #1F2A3C / .55 #1A2230 / #171C23; rays: loop 360/12 wedges: painter.drawPie/drawPolygon from (w,0), 5deg wedge QColor(205,222,255,15) every 12deg,
              CSS 'from 195deg' (clockwise from up) starts at Qt angle 90-195 = -105deg (counter-clockwise from 3 o'clock);
              falloff: QRadialGradient scaled to 620x170 at (w,0) 0:(26,34,48,0) 1:(26,34,48,235); bloom: same centre, 300x140, 0:(205,222,255,56) .45:(…,20) 1:(…,0);
              drawTiledPixmap(dust tile 128x128: ~0.8% px, white-blue (200,215,255), alpha 30-60);
              glass top: drawLine y=0 QColor(255,255,255,41) + QLinearGradient(0,1,0,22) (255,255,255,13)->0.
-   C strip : base #1C2639 / .5 #181F2B / #16191F; dust; bloom 230x300 at (w,0) alpha 26->0; glass top 18px.
-   C bar   : base #1A2230 -> #161B22; dust; bloom 360x70 at (w,0) alpha 26->0; glass top 14px.  */
+   floodlit tabs  : base #1C2639 / .5 #181F2B / #16191F; dust; bloom 230x300 at (w,0) alpha 26->0; glass top 18px.
+   floodlit bar   : base #1A2230 -> #161B22; dust; bloom 360x70 at (w,0) alpha 26->0; glass top 14px.  */
 
 /* ---- PROFILE ---- */
 .p-attr{flex:1;min-width:0}
-.p-cols{display:flex;gap:8px;padding:0 4px 10px}
+.p-cols{display:flex;gap:8px;padding:2px 4px 10px}
 .p-cols>.col{flex:1;min-width:0}
 .ch{height:24px;padding:0 4px;display:flex;align-items:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2)}
 .tr2{height:26px;padding:0 4px;display:flex;align-items:center;gap:6px}
@@ -309,7 +257,6 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .trow{padding:4px 12px;line-height:17px;display:flex;align-items:center;font-weight:var(--semi)}
 .trow:nth-child(even){background:var(--alt)}
 .trow.mute{color:var(--tx2);font-weight:400}
-.cp{padding:0 12px 10px;color:var(--tx2);font-size:11px;line-height:15px}
 
 /* recommended traits (Profile rail): owned = muted + tick; score = bold tier colour */
 .rec{padding:2px 12px;line-height:17px;display:flex;align-items:center;gap:6px;font-weight:var(--semi)}
@@ -379,7 +326,8 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <div class="rv">
   <h1>Player window</h1>
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
-  <span class="lab">texture</span><div class="rseg" id="texSeg"></div>
+  <span class="lab">header</span><div class="rseg" id="hdrSeg"></div>
+  <span class="lab">theme</span><div class="rseg" id="texSeg"></div>
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
@@ -489,13 +437,55 @@ const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,s
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
-/* texture: ?tex=a|b|c|off (query string, before the #) */
-const TEXS=[['off','Off'],['a','A Pitch lines'],['b','B Steel'],['c','C Floodlit']];
-S.tex=(new URLSearchParams(location.search).get('tex')||'off').toLowerCase();if(!TEXS.some(t=>t[0]===S.tex))S.tex='off';
+/* header variant: ?hdr=a|b|c (default a = recommended). Texture theme: ?tex=<theme id> (default steel; legacy a|b|c|off still accepted). */
+const HDRS=[['a','A Calm'],['b','B Inline'],['c','C Split']];
+const qs0=new URLSearchParams(location.search);
+S.hdr=(qs0.get('hdr')||'a').toLowerCase();if(!HDRS.some(h=>h[0]===S.hdr))S.hdr='a';
 /* seeded noise tiles (stand-ins for pre-rendered QPixmap tiles): fine grain (dense, alpha<=14/255) and dust (sparse specks) */
 function mkTile(fn){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),im=x.createImageData(128,128);let r=1234567;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;fn(im.data,rnd);x.putImageData(im,0,0);return `url(${c.toDataURL()})`}
 document.documentElement.style.setProperty('--nzf',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){const v=rnd();d[i]=d[i+1]=d[i+2]=v<.5?0:255;d[i+3]=Math.round(rnd()*(v<.5?14:9))}}));
 document.documentElement.style.setProperty('--nzd',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){if(rnd()<.008){d[i]=200;d[i+1]=215;d[i+2]=255;d[i+3]=30+Math.round(rnd()*30)}}}));
+
+/* ---- THEME REGISTRY (the Settings 'Player window theme' dropdown lists these, in this order; the default is DEFAULT_THEME) ----
+   {name, hdr, tabs, bar: CSS `background` values (layers TOP first); barBorder: border-top colour of the action bar; extra(sel): extra CSS for the theme}.
+   Surfaces: hdr = header panel (.hdr), tabs = left tab strip (.tabs), bar = bottom action bar (.strip).  'plain' has no layers (flat surface). */
+const STEEL_BG=`linear-gradient(180deg,rgba(255,255,255,0.09) 0,rgba(255,255,255,0.09) 1px,rgba(255,255,255,0.035) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
+  linear-gradient(0deg,rgba(0,0,0,0.30) 0,rgba(0,0,0,0) 12px) 0 100%/100% 12px no-repeat,
+  repeating-linear-gradient(135deg,rgba(255,255,255,0.040) 0 1px,rgba(255,255,255,0) 1px 3px),
+  var(--nzf),
+  linear-gradient(180deg,#222D32 0,#1A2226 55%,#161D21 100%)`;
+const THEMES={
+ steel:{name:'Steel',hdr:STEEL_BG,tabs:STEEL_BG,bar:STEEL_BG,barBorder:'var(--border2)',
+   extra:s=>`${s} .strip{isolation:isolate}
+${s} .tab.on,${s} .tab.on:hover{background:linear-gradient(0deg,rgba(115,92,228,0.34) 0,rgba(115,92,228,0) 18px) 0 100%/100% 18px no-repeat,linear-gradient(90deg,rgba(115,92,228,0.20) 0,rgba(115,92,228,0) 75%),var(--sel)}
+${s} .strip .b1{position:relative}
+${s} .strip .b1::before{content:"";position:absolute;left:-18px;right:-18px;top:-12px;bottom:-12px;z-index:-1;background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(115,92,228,0.65) 0,rgba(115,92,228,0.26) 55%,rgba(115,92,228,0) 100%)}`},
+ pitch:{name:'Pitch lines',
+   hdr:`linear-gradient(90deg,rgba(26,34,38,0) 0,rgba(26,34,38,0) 40%,rgba(26,34,38,0.55) 78%,rgba(26,34,38,0) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='80'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'%3E%3Cline x1='232.5' y1='0' x2='232.5' y2='80'/%3E%3Ccircle cx='232.5' cy='40' r='46'/%3E%3C/g%3E%3Ccircle cx='232.5' cy='40' r='2' fill='rgba(255,255,255,0.14)'/%3E%3C/svg%3E") right top no-repeat,
+    repeating-linear-gradient(90deg,rgba(29,66,41,0.22) 0 40px,rgba(21,48,31,0.10) 40px 80px),var(--surface)`,
+   tabs:`repeating-linear-gradient(90deg,rgba(29,66,41,0.24) 0 22px,rgba(21,48,31,0.10) 22px 44px),var(--surface)`,
+   bar:`linear-gradient(180deg,rgba(82,194,135,0.18) 0,rgba(82,194,135,0.05) 6px,rgba(82,194,135,0) 12px),
+    repeating-linear-gradient(90deg,rgba(29,66,41,0.20) 0 40px,rgba(21,48,31,0.08) 40px 80px),var(--surface)`,barBorder:'rgba(82,194,135,0.55)'},
+ floodlit:{name:'Floodlit',
+   hdr:`linear-gradient(180deg,rgba(255,255,255,0.16) 0,rgba(255,255,255,0.16) 1px,rgba(255,255,255,0.05) 1px,rgba(255,255,255,0) 22px) 0 0/100% 22px no-repeat,
+    var(--nzd),
+    radial-gradient(ellipse 300px 140px at 100% 0,rgba(205,222,255,0.22) 0,rgba(205,222,255,0.08) 45%,rgba(205,222,255,0) 100%),
+    radial-gradient(ellipse 620px 170px at 100% 0,rgba(26,34,48,0) 0,rgba(26,34,48,0.92) 100%),
+    repeating-conic-gradient(from 195deg at 100% 0,rgba(205,222,255,0.06) 0 5deg,rgba(205,222,255,0) 5deg 12deg),
+    linear-gradient(180deg,#1F2A3C 0,#1A2230 55%,#171C23 100%)`,
+   tabs:`linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 18px) 0 0/100% 18px no-repeat,
+    var(--nzd),radial-gradient(ellipse 230px 300px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
+    linear-gradient(180deg,#1C2639 0,#181F2B 50%,#16191F 100%)`,
+   bar:`linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
+    var(--nzd),radial-gradient(ellipse 360px 70px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
+    linear-gradient(180deg,#1A2230 0,#161B22 100%)`},
+ plain:{name:'Plain'}};
+const DEFAULT_THEME='steel',LEGACY_TEX={a:'pitch',b:'steel',c:'floodlit',off:'plain'};
+(function(){let css='';for(const[id,t]of Object.entries(THEMES)){if(!t.hdr)continue;const sel=`.frame[data-tex=${id}]`;
+  css+=`${sel} .hdr{background:${t.hdr}}\n${sel} .tabs{background:${t.tabs}}\n${sel} .strip{background:${t.bar};${t.barBorder?`border-top-color:${t.barBorder}`:''}}\n${t.extra?t.extra(sel):''}\n`}
+  const e=document.createElement('style');e.textContent=css;document.head.appendChild(e)})();
+S.tex=(qs0.get('tex')||DEFAULT_THEME).toLowerCase();S.tex=LEGACY_TEX[S.tex]||S.tex;if(!THEMES[S.tex])S.tex=DEFAULT_THEME;
 const isGK=()=>D().pos==='GK';
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
 const HEX=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
@@ -519,23 +509,29 @@ const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16'
 /* =====================================================================================================================
    3. PERSISTENT SHELL: header (core never moves; `slot` is per tab), tab strip, action strip
    ===================================================================================================================== */
+const NATFLAG={Netherlands:'\u{1F1F3}\u{1F1F1}',Italy:'\u{1F1EE}\u{1F1F9}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};   // in the app: the same flag emoji font as the tables
+/* HEADER VARIANTS (?hdr=a|b|c). Injury information is NOT in the header (Fitness card). Height / weight are NOT in the header for A and B: Position card 'Physique' row (hidden when absent).
+   A calm  : line 1 = name + position badge ...... HGP HGC (small, right end) | line 2 = flag nation · club · age (birth date in the age tooltip)
+   B inline: line 1 = name + badge + HGP HGC (inline) | line 2 = same meta | no third line
+   C split : identity (name + badge / flag nation · club) | hairline | meta column: age · born / height · weight / HGP HGC | then the ability boxes */
 function header(slotHTML){
-  const d=D();
-  /* Ability display setting: stars (default; label + 5 half-step stars, value in tooltip; stars = value/40 to nearest .5, clamp .5..5) | numbers (#nums flag: number + bar) */
-  const cab=(l,v,c)=>S.nums?`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`:`<div class="cab st" title="${l} ${v}"><small>${l}</small><div class="stars">${star(v)}</div><div class="cpt">${l==='CA'?'Current ability':'Potential ability'}</div></div>`;
-  return `<div class="pn hdr"><div class="avatar">${person}</div>
-    <div class="hid">
-      <div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div>
-      <div class="r2">${d.nat} · ${d.age} years (born ${d.born}) · ${d.club}</div>
-      <div class="r3"><span class="pill ${S.hgp?'on':''}">HGP</span>${S.unk&&!S.hgc?'<span class="pill unk" data-tip="Homegrown status at this club could not be determined">HGC?</span>':`<span class="pill ${S.hgc?'on':''}">HGC</span>`}
-        ${S.data||!S.nopend?`<span class="hw">${S.data?d.height+' · '+d.weight:'Height / weight '+pend}</span>`:''}</div>
-    </div>
-    ${cab('CA',d.ca,'#735CE4')}${cab('PA',d.pa,'#9A8AF5')}
-    <div class="slot${S.nums?'':' st'}">${slotHTML}</div></div>`;
+  const d=D(),v=S.hdr;
+  const cab=(l,code,v,c)=>S.nums?`<div class="cab" title="${code} ${v}"><small>${l}</small><div class="nv"><b style="color:${c}">${v}</b><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div></div>`:`<div class="cab" title="${code} ${v}"><small>${l}</small><div class="stars">${star(v)}</div></div>`;
+  const pills=cls=>`<span class="pills ${cls}"><span class="pill ${S.hgp?'on':''}">HGP</span>${S.unk&&!S.hgc?'<span class="pill unk" data-tip="Homegrown status at this club could not be determined">HGC?</span>':`<span class="pill ${S.hgc?'on':''}">HGC</span>`}</span>`;
+  const dot='<span class="sep">·</span>';
+  const fl=`<span class="fl">${NATFLAG[d.nat]||''}</span><span>${d.nat}</span>${dot}<span>${d.club}</span>`;
+  const hw=S.data?`${d.height} · ${d.weight}`:S.nopend?'':'Height / weight '+pend;
+  let id;
+  if(v==='c')id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div><div class="r2">${fl}</div></div>
+    <div class="hmeta"><div>${d.age} years ${dot} ${d.born}</div>${hw?`<div>${hw}</div>`:''}<div>${pills('')}</div></div>`;
+  else id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}${pills(v==='a'?'end':'')}</div><div class="r2">${fl}${dot}<span class="age" data-tip="Born ${d.born}">${d.age} years</span></div></div>`;
+  return `<div class="pn hdr"><div class="avatar">${person}</div>${id}
+    ${cab('Current ability','CA',d.ca,'#735CE4')}${cab('Potential ability','PA',d.pa,'#9A8AF5')}
+    <div class="slot">${slotHTML}</div></div>`;
 }
 /* Ability display: stars = value/div (CA/PA div 40, Dev Rate div 4) to nearest .5, clamp .5..5 */
 const star=(v,div=40)=>{const n=Math.max(.5,Math.min(5,Math.round(v/div*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v}_${div})"/></svg>`}return s};
-const slot=(label,valueHTML,sub)=>`<small>${label}</small><span class="v">${valueHTML}</span><span class="s">${sub||'&nbsp;'}</span>`;
+const slot=(label,valueHTML,sub)=>`<small>${label}</small><span class="v">${valueHTML}</span>${sub?`<span class="s">${sub}</span>`:''}`;
 
 /* 16x16 line icons, stroke 1.5 (mirrored 1:1 in gui/player_window.py _TAB_SVG). A hairline sits before General Rating
    and Training: player | ratings | development. */
@@ -567,7 +563,7 @@ function actionStrip(){
    ===================================================================================================================== */
 
 /* ---------- 4.1 PROFILE (approved option B content, tighter) -------------------------------------------------------- */
-function slotProfile(){const d=D();return S.nums?slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20'):slot('Dev Rate',`<span class="stars" title="Dev Rate ${d.dev} out of 20">${star(d.dev,4)}</span>`,'How fast they develop')}
+function slotProfile(){const d=D();return S.nums?slot('Development rate',`<span class="c${tier(d.dev)}">${d.dev}</span><span class="u">/ 20</span>`):slot('Development rate',`<span class="stars" title="Dev Rate ${d.dev} out of 20">${star(d.dev,4)}</span>`)}
 /* PROFILE has THREE candidate layouts (?profile=a|b|c, review-bar 'profile'); the user picks one, then it is built in gui/player_window.py.
    Recommended traits moved to the Training tab. Every element below is fed by real per-player data only (see HANDOVER 'Profile layouts');
    sections with no data are hidden (season stats, career) or PENDING (contract values), never invented. */
@@ -576,17 +572,16 @@ const good=a=>a[3]?21-gv(a):gv(a);                               // lower-is-bet
 const tileA=a=>{const v=gv(a),t=tier(good(a));return `<span class="tile k${t} c${t}">${v}</span>`};
 const GRP=()=>{const g=D().g;return {Technical:g.tech,Mental:g.ment,Physical:g.phys,Hidden:g.hid,Goalkeeping:g.gk}};   // foot rows (g.foot) are drawn by the Footedness panel, not listed
 /* attribute grid columns (3 cols: fits the 692 px left of the 204 px right column). Footedness is NOT a group any more: it is the feet panel. */
-const COLS=()=>isGK()?[['Goalkeeping','Physical'],['Mental','Hidden'],['Technical']]:[['Technical'],['Mental'],['Physical','Hidden']];
+const COLS=()=>isGK()?[['Goalkeeping'],['Technical'],['Mental'],['Physical','Hidden']]:[['Technical'],['Mental'],['Physical','Hidden']];   // GK: 4 columns (11 | 14 | 14 | 8+5 rows) so no column is much taller than the rest
 function attrPanel(){
   const d=D(),G=GRP();
   const grp=(t,l)=>`<div class="ch">${t.toUpperCase()}</div>`+l.map(a=>`<div class="tr2"><span class="an">${a[0]}</span>${tileA(a)}</div>`).join('');
   const grid=COLS().map(names=>`<div class="col">${names.map((n,i)=>(i?'<div style="height:10px"></div>':'')+grp(n,G[n])).join('')}</div>`).join('');
   const note=S.pot&&d.potNote?`<span class="pnote">${d.potNote}</span>`:'';
   return `<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}
-    <div class="p-cols" style="padding-top:2px">${grid}</div>
-    ${S.pot?'<div class="cp">Projection from CA weights; real growth depends on training, playing time and personality.</div>':''}</div>`;
+    <div class="p-cols">${grid}</div></div>`;
 }
-const modeNote=()=>`<span class="pnote">${S.pot?'Full Potential':'Current'}</span>`;
+const modeNote=()=>`<span class="pnote">${S.pot?'Potential':'Current'}</span>`;
 /* best positions: from the 15 stored position ratings, >= 10 (Competent+), best first */
 function bestPositions(n){const d=D(),R=d.posr;return POS.slice().sort((a,b)=>R[b]-R[a]||(b===d.pos)-(a===d.pos)||POS.indexOf(a)-POS.indexOf(b)).filter(p=>R[p]>=10).slice(0,n)}
 const mins=n=>n.toLocaleString('en-GB');
@@ -598,7 +593,7 @@ const row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
    Data: attribute groups of the player (g.tech/ment/phys/hid/gk), value = mean of good(a) (Current or Full Potential), colour = tier(round(mean)). */
 function radar(){const G=GRP();
   const ax=(isGK()?['Goalkeeping','Technical','Mental','Physical','Hidden']:['Technical','Mental','Physical','Hidden']).map(n=>({n,v:G[n].reduce((s,a)=>s+good(a),0)/G[n].length}));
-  const W=204,H=212,cx=102,cy=108,n=ax.length,R=n===4?74:64,a0=n===4?-135:-90,pt=(i,k)=>{const t=(a0+i*360/n)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=k=>ax.map((_,i)=>pt(i,k).map(x=>x.toFixed(1)).join(',')).join(' ');
+  const W=204,H=176,cx=102,n=ax.length,cy=n===4?88:92,R=n===4?66:56,a0=n===4?-135:-90,pt=(i,k)=>{const t=(a0+i*360/n)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=k=>ax.map((_,i)=>pt(i,k).map(x=>x.toFixed(1)).join(',')).join(' ');
   let s=[.25,.5,.75,1].map(k=>`<polygon points="${poly(k)}" fill="none" stroke="rgba(255,255,255,${k===1?.22:.10})" stroke-width="1"/>`).join('');
   s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="rgba(255,255,255,.10)"/>`}).join('');
   s+=`<polygon points="${ax.map((a,i)=>pt(i,a.v/20).map(x=>x.toFixed(1)).join(',')).join(' ')}" fill="rgba(115,92,228,.30)" stroke="#735CE4" stroke-width="1.5" stroke-linejoin="round"/>`;
@@ -626,14 +621,14 @@ const footColor=v=>'rgb('+footRGB(v).join(',')+')';
 function feet(){const f=D().g.foot,L=f[0][1],Rr=f[1][1],pref=Math.abs(L-Rr)>=3?(L>Rr?0:1):-1;
   const foot=(i,v,x)=>{const c=footRGB(v),col=c.join(','),edge=c.map(k=>Math.round(k+(255-k)*.35)).join(',');
     const g=`<path d="${FOOT_SOLE}"/>${FOOT_TOES.map(([cx,cy,rx,ry])=>`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/>`).join('')}`;
-    const tf=i===0?`translate(${x+64},18) scale(-1,1)`:`translate(${x},18)`;
+    const tf=i===0?`translate(${x+64},8) scale(-1,1)`:`translate(${x},8)`;
     const lab=i===0?'LEFT':'RIGHT',lx=x+32;
     return `<g transform="${tf}"><g fill="none" stroke="rgba(${col},.18)" stroke-width="7" stroke-linejoin="round">${g}</g><g fill="rgba(${col},.92)" stroke="rgb(${edge})" stroke-width="1.5">${g}</g></g>
-      <text x="${x+32}" y="${18+62}" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="700" fill="#14151A">${v}</text>
-      ${pref===i?`<circle cx="${lx-(lab==='LEFT'?19:22)}" cy="166" r="3" fill="#FFFFFF"/>`:''}<text x="${lx+(pref===i?5:0)}" y="170" text-anchor="middle" font-size="10" font-weight="700" letter-spacing=".8" fill="#8B96A8">${lab}</text>`};
-  const bar=`<defs><linearGradient id="fg" x1="0" x2="1" y1="0" y2="0">${FOOT_STOPS.map(([o,c])=>`<stop offset="${o}" stop-color="rgb(${c})"/>`).join('')}</linearGradient></defs><rect x="18" y="190" width="168" height="6" fill="url(#fg)"/>
-    <text x="18" y="209" font-size="10" fill="#8B96A8">1</text><text x="186" y="209" text-anchor="end" font-size="10" fill="#8B96A8">20</text>`;
-  return `<div class="pn">${ph('Footedness')}<svg class="rd" width="204" height="212" viewBox="0 0 204 212">${foot(0,L,19)}${foot(1,Rr,121)}${bar}</svg></div>`}
+      <text x="${x+32}" y="${8+62}" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="700" fill="#14151A">${v}</text>
+      ${pref===i?`<circle cx="${lx-(lab==='LEFT'?19:22)}" cy="148" r="3" fill="#FFFFFF"/>`:''}<text x="${lx+(pref===i?5:0)}" y="152" text-anchor="middle" font-size="10" font-weight="700" letter-spacing=".8" fill="#8B96A8">${lab}</text>`};
+  const bar=`<defs><linearGradient id="fg" x1="0" x2="1" y1="0" y2="0">${FOOT_STOPS.map(([o,c])=>`<stop offset="${o}" stop-color="rgb(${c})"/>`).join('')}</linearGradient></defs><rect x="18" y="162" width="168" height="6" fill="url(#fg)"/>
+    <text x="18" y="181" font-size="10" fill="#8B96A8">1</text><text x="186" y="181" text-anchor="end" font-size="10" fill="#8B96A8">20</text>`;
+  return `<div class="pn">${ph('Footedness')}<svg class="rd" width="204" height="184" viewBox="0 0 204 184">${foot(0,L,19)}${foot(1,Rr,121)}${bar}</svg></div>`}
 
 /* ---- PROFILE (chosen layout C 'Dossier'): row 1 = Position | This season (or Career) | Fitness (cards share the row evenly);
    row 2 = attribute grid (left) + right column 206 px: Attribute groups radar over Footedness; row 3 = Personality + Player traits. */
@@ -641,7 +636,7 @@ function profC(){const d=D(),R=d.posr,b=bestPos(R),oth=bestPositions(4).filter(p
   const card=(t,rows,r='')=>`<div class="pn card">${ph(t,r)}<div style="padding-bottom:8px">${rows}</div></div>`;
   const t=(v,inv)=>{const k=tier(inv?21-v:v);return `<span class="tile k${k} c${k}">${v}</span>`};
   /* Position: g/posr (best position + 'Also' = next 2 rated >= 10 + rating word). No foot word. */
-  const pos=card('Position',kv('Best position',`${badge(b,1)}${t(R[b])}`)+kv('Also',oth.length?oth.map(p=>`<span style="color:var(--tx2)">${CODE[p]}</span>${t(R[p])}`).join(''):'<span style="color:var(--tx2)">None 10+</span>')+kv('Rating',word(R[b])));
+  const pos=card('Position',kv('Best position',`${badge(b,1)}${t(R[b])}`)+kv('Also',oth.length?oth.map(p=>`<span style="color:var(--tx2)">${CODE[p]}</span>${t(R[p])}`).join(''):'<span style="color:var(--tx2)">None 10+</span>')+kv('Rating',word(R[b]))+(S.hdr!=='c'&&S.data?kv('Physique',`${d.height} · ${d.weight}`):''));
   /* This season: p['stats'] (apps/starts/subs/goals/assists/avg/potm); else Career from History rows (install DB only); else hidden */
   let form='';
   if(st)form=card('This season',kv('Apps',`${st.apps} <span style="color:var(--tx2);font-weight:400">(${st.starts}+${st.subs})</span>`)+kv('Goals · assists',`${st.goals} · ${st.assists}`)+kv('Avg rating',st.avg.toFixed(2))+kv('Player of the Match',st.potm));
@@ -760,11 +755,13 @@ function render(){
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
   Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;render()};sm.appendChild(b)});
   const tx=document.getElementById('texSeg');tx.innerHTML='';
-  TEXS.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
+  Object.entries(THEMES).forEach(([k,t])=>{const b=document.createElement('button');b.textContent=t.name;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
+  const hs=document.getElementById('hdrSeg');hs.innerHTML='';
+  HDRS.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.hdr===k)b.className='on';b.onclick=()=>{S.hdr=k;render()};hs.appendChild(b)});
   const tg=document.getElementById('tgs');tg.innerHTML='';
   TOGGLES.forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
   const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f])].filter(Boolean);
-  const q=new URLSearchParams(location.search);S.tex==='off'?q.delete('tex'):q.set('tex',S.tex);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
+  const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
