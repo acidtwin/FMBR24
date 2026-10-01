@@ -1,4 +1,5 @@
 """FM Backroom 24 - main window."""
+import math
 import os
 from datetime import date
 from PyQt6.QtWidgets import (
@@ -9,7 +10,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QStyledItemDelegate, QSpinBox,
     QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication,
 )
-from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent
+from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent, QElapsedTimer
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
@@ -1512,6 +1513,29 @@ class WeightEditorDialog(QDialog):
 
 # -- Hero header widget --------------------------------------------------------
 
+# Welcome-hero "loading glow": the grid lines pulse while the first load runs (all tunables here).
+HERO_GLOW = dict(
+    period_ms=2400,         # one slow pulse
+    peak_alpha=0.45,        # painter opacity of the glow layers at full intensity (kept modest)
+    tint=(150, 130, 255),   # lilac, between COLORS['accent_hover'] and the progress-bar shimmer peak
+    halo_gain=0.50,         # wide soft halo strength relative to the core line
+    halo_widths=(14, 7),    # halo stroke widths (px); the core line is the grid's own 2 px
+    base=0.08,              # steady intensity at 0 % progress
+    progress_gain=0.17,     # extra steady intensity at 100 % progress
+    pulse_depth=0.60,       # intensity added at the top of each pulse
+    flash=1.0,              # finishing flash intensity
+    fade_in_ms=500,         # ease in from 0
+    flash_ms=160,           # rise to the flash
+    fade_ms=450,            # fade out after the flash
+    fps_ms=33,              # ~30 fps timer
+)
+
+
+def _smooth(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3 - 2 * x)
+
+
 class _HeaderHeroWidget(QWidget):
     """140px header bar painted with dark base + stadium image + gradient + pitch-line texture."""
 
@@ -1538,6 +1562,18 @@ class _HeaderHeroWidget(QWidget):
         super().__init__(parent)
         self._pixmap_cache = {}
         self._bg_pixmap = self._load('welcome.webp')
+        self._page = 'welcome'
+        self._g_state = 'off'    # 'off' | 'run' (first load in progress) | 'end' (flash + fade)
+        self._g_t = 0.0          # ms since the glow started
+        self._g_end_t = 0.0      # ms since the finish began
+        self._g_from = 0.0       # intensity when the finish began (the flash eases from here: no jump)
+        self._g_prog = 0.0       # load progress 0..1
+        self._g_flash = True     # finish with the bright flash (False after an error)
+        self._g_cache = None     # ((w, h, dpr), core, halo)
+        self._g_clock = QElapsedTimer()
+        self._g_timer = QTimer(self)
+        self._g_timer.setInterval(HERO_GLOW['fps_ms'])
+        self._g_timer.timeout.connect(self._glow_timer_tick)
         self.setFixedHeight(186)
 
     def _load(self, filename):
@@ -1557,6 +1593,7 @@ class _HeaderHeroWidget(QWidget):
         return px
 
     def set_page(self, key: str):
+        self._page = key
         filename = self._PAGE_IMAGE.get(key, self._FALLBACK)
         self._bg_pixmap = self._load(filename)
         self.update()
@@ -1564,6 +1601,117 @@ class _HeaderHeroWidget(QWidget):
     def set_bg(self, pixmap):
         self._bg_pixmap = pixmap
         self.update()
+
+    @staticmethod
+    def _grid_lines(w, h):
+        """The pitch-texture grid (mockup ::before): single source for the faint texture AND the glow mask."""
+        return ([(x, 0, x, h) for x in range(38, w, 40)] + [(0, y, w, y) for y in range(58, h, 60)])
+
+    # -- loading glow (Welcome page, first load only) ----------------------------
+
+    def glow_start(self):
+        """Begin pulsing; only on the Welcome hero (the caller says nothing about veils: first load only)."""
+        if self._page != 'welcome':
+            return
+        self._g_state, self._g_t, self._g_prog = 'run', 0.0, 0.0
+        self._glow_timer_resume()
+
+    def glow_finish(self, flash=True):
+        """Load ended: ease from the current intensity to a brief flash (if ok) and fade out, then stop."""
+        if self._g_state != 'run':
+            return
+        self._g_from = self.glow_intensity()
+        self._g_end_t = 0.0
+        self._g_state = 'end'
+        self._g_flash = bool(flash)
+        self._glow_timer_resume()
+
+    def glow_stop(self):
+        self._g_state, self._g_t, self._g_end_t = 'off', 0.0, 0.0
+        self._g_timer.stop()
+        self.update()
+
+    def set_glow_progress(self, frac):
+        self._g_prog = min(1.0, max(0.0, frac))
+
+    def glow_active(self):
+        return self._g_state != 'off'
+
+    def _glow_timer_resume(self):
+        self._g_clock.start()
+        if self.isVisible():
+            self._g_timer.start()
+        self.update()
+
+    def glow_intensity(self):
+        """0..1 glow strength now (pure function of state; the paint opacity is peak_alpha * this)."""
+        g = HERO_GLOW
+        if self._g_state == 'run':
+            pulse = 0.5 - 0.5 * math.cos(2 * math.pi * self._g_t / g['period_ms'])  # 0 at t=0: starts at a trough
+            v = g['base'] + g['progress_gain'] * self._g_prog + g['pulse_depth'] * pulse
+            return min(1.0, v * _smooth(self._g_t / g['fade_in_ms']))
+        if self._g_state == 'end':
+            t = self._g_end_t
+            if not self._g_flash:   # failed load: just fade the current level out
+                return self._g_from * (1.0 - _smooth(t / g['fade_ms']))
+            if t < g['flash_ms']:
+                return self._g_from + (g['flash'] - self._g_from) * _smooth(t / g['flash_ms'])
+            return g['flash'] * (1.0 - _smooth((t - g['flash_ms']) / g['fade_ms']))
+        return 0.0
+
+    def glow_step(self, dt_ms):
+        """Advance the animation by dt_ms; stops the timer when finished (no idle cost)."""
+        if self._g_state == 'run':
+            self._g_t += dt_ms
+        elif self._g_state == 'end':
+            self._g_end_t += dt_ms
+            g = HERO_GLOW
+            if self._g_end_t >= (g['flash_ms'] + g['fade_ms'] if self._g_flash else g['fade_ms']):
+                self.glow_stop()
+                return
+        self.update()
+
+    def _glow_timer_tick(self):
+        if not self.isVisible():     # minimised / hidden: stop burning cycles; showEvent resumes
+            self._g_timer.stop()
+            return
+        self.glow_step(self._g_clock.restart())
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if self._g_state != 'off':
+            self._glow_timer_resume()
+
+    def hideEvent(self, e):
+        super().hideEvent(e)
+        self._g_timer.stop()
+
+    def _glow_layers(self):
+        """Core + halo pixmaps: the grid itself drawn in the tint (cached per size). This IS the line mask."""
+        w, h, dpr = self.width(), self.height(), self.devicePixelRatioF()
+        if self._g_cache and self._g_cache[0] == (w, h, dpr):
+            return self._g_cache[1], self._g_cache[2]
+        g = HERO_GLOW
+        lines = self._grid_lines(w, h)
+
+        def layer(strokes):
+            px = QPixmap(round(w * dpr), round(h * dpr))
+            px.setDevicePixelRatio(dpr)
+            px.fill(Qt.GlobalColor.transparent)
+            q = QPainter(px)
+            for width, a in strokes:
+                c = QColor(*g['tint'], round(255 * a))
+                q.setPen(QPen(c, width))
+                for ln in lines:
+                    q.drawLine(*ln)
+            q.end()
+            return px
+
+        core = layer([(2, 1.0)])
+        n = len(g['halo_widths'])
+        halo = layer([(wd, 0.35 * (i + 1) / n) for i, wd in enumerate(g['halo_widths'])])
+        self._g_cache = ((w, h, dpr), core, halo)
+        return core, halo
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -1604,14 +1752,21 @@ class _HeaderHeroWidget(QWidget):
         pen = QPen(QColor(255, 255, 255, 4))
         pen.setWidth(2)
         p.setPen(pen)
-        x = 38
-        while x < w:
-            p.drawLine(x, 0, x, h)
-            x += 40
-        y = 58
-        while y < h:
-            p.drawLine(0, y, w, y)
-            y += 60
+        for ln in self._grid_lines(w, h):
+            p.drawLine(*ln)
+
+        # 4b. Loading glow on those same grid lines (additive, behind the title labels)
+        if self._g_state != 'off':
+            v = self.glow_intensity()
+            if v > 0.001:
+                core, halo = self._glow_layers()
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+                p.setOpacity(HERO_GLOW['peak_alpha'] * v * HERO_GLOW['halo_gain'])
+                p.drawPixmap(0, 0, halo)
+                p.setOpacity(HERO_GLOW['peak_alpha'] * v)
+                p.drawPixmap(0, 0, core)
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+                p.setOpacity(1.0)
 
         # 5. Bottom border
         p.setPen(QColor(255, 255, 255, 15))
@@ -5835,6 +5990,7 @@ class MainWindow(QMainWindow):
             disp = min(disp + 0.04, 99.0)
         self._progress_displayed = disp
         self._progress.setValue(round(disp * 100))
+        self._hero.set_glow_progress(disp / 100)
 
         self._shimmer_phase = (self._shimmer_phase + 0.017) % 1.0
         # peak sweeps -0.25 → 1.25 so shimmer fully enters and exits
@@ -5860,11 +6016,11 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, msg):
         self._after_reload_status = None  # a failed post-save reload must not leak its text into the next load
-        self._set_busy(False)
+        self._set_busy(False, failed=True)
         QMessageBox.critical(self, 'Error', msg)
         self._status.showMessage(f'Error: {msg}')
 
-    def _set_busy(self, busy, msg=''):
+    def _set_busy(self, busy, msg='', failed=False):
         self._busy = bool(busy)
         if busy:
             self._progress.setValue(0)
@@ -5879,6 +6035,8 @@ class MainWindow(QMainWindow):
             self._veil_word = 'Saving' if msg == 'Saving' else ('Reloading' if self._ui_snap is not None else None)
             self._busy_veil.set_text(self._veil_word or '', 1)
             self._dot_timer.start()
+            if self._veil_word is None:
+                self._hero.glow_start()   # first load only (reload / save use the veil); no-op off the Welcome page
             self._load_btn.setText('Loading')
             for k, btn in self._nav_btns.items():
                 btn.setEnabled(False)
@@ -5890,6 +6048,7 @@ class MainWindow(QMainWindow):
             self._fwd_btn.setEnabled(False)
         else:
             self._shimmer_timer.stop()
+            self._hero.glow_finish(flash=not failed)
             self._progress.setStyleSheet(
                 f"QProgressBar {{ background:{COLORS['elevated']}; border:none; }}"
                 f"QProgressBar::chunk {{ background:{COLORS['accent']}; }}"
