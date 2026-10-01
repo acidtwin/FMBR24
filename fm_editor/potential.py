@@ -45,7 +45,7 @@ def availability(ca, pa, age):
     if pa is None or ca is None or pa <= ca:
         return False, 'Already at potential.'
     if age >= 30:
-        return False, 'Decline phase: potential not applicable.'
+        return False, 'Age 30+: potential is unlikely to be reached.'
     if age >= 26:
         return True, 'PA is rarely reached after 26.'
     return True, ''

@@ -963,16 +963,13 @@ class PlayerWindow(QDialog):
         rh.setSpacing(8)
         self._note = _lab('', 'pwNote')
         rh.addWidget(self._note)
-        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'At potential')
+        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'Potential')
         self._seg_group = seg._grp
         p = self._person
-        enabled, tip = _pot.availability(p.get('ca'), p.get('pa'), person_age(p))
-        self._pot_note = tip if enabled else ''
-        self._seg_pot.setEnabled(enabled)
+        _enabled, tip = _pot.availability(p.get('ca'), p.get('pa'), person_age(p))
+        self._pot_note = tip  # always selectable; the note explains when potential is moot
         if tip:
             self._seg_pot.setToolTip(tip)
-        if not enabled:
-            seg.setToolTip(tip)
         self._seg_cur.clicked.connect(lambda checked=False: self._set_pot(False))
         self._seg_pot.clicked.connect(lambda checked=False: self._set_pot(True))
         rh.addWidget(seg)
@@ -1084,7 +1081,7 @@ class PlayerWindow(QDialog):
         return w
 
     def _rec_panel(self):
-        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | At potential
+        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | Potential
         toggle. Owned traits are ticked; a quiet line when nothing reaches the Settings threshold."""
         thr = _settings.load()['trait_threshold']
         raw = self._person.get('raw_attrs') or []

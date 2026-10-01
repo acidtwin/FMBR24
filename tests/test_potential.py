@@ -63,7 +63,7 @@ raw = [95] * 54; pr = pt.project_attrs(raw, 100, 160, 20, pos)
 assert pr.saturated and pr.reaches(100) < 160
 # availability rules
 assert pt.availability(150, 150, 20) == (False, 'Already at potential.')
-assert pt.availability(120, 160, 30)[0] is False and 'Decline' in pt.availability(120, 160, 30)[1]
+assert pt.availability(120, 160, 30)[0] is False and '30+' in pt.availability(120, 160, 30)[1]
 assert pt.availability(120, 160, 27) == (True, 'PA is rarely reached after 26.')
 assert pt.availability(120, 160, 20) == (True, '')
 
