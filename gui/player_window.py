@@ -13,7 +13,7 @@ import calendar
 import math
 
 
-from PyQt6.QtCore import Qt, QPointF, QRect, QRectF
+from PyQt6.QtCore import Qt, QPointF, QRect, QRectF, QSize
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
@@ -98,13 +98,47 @@ TABS = [
     ('positions', 'Positions', '_page_positions', '_slot_positions'),
     ('general', 'General Rating', None, '_slot_profile'),
     ('role', 'Role Rating', None, '_slot_profile'),
+    ('training', 'Training', None, '_slot_profile'),
     ('history', 'History', '_page_history', '_slot_history'),
 ]
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
     'role': 'Suitability for each tactical role.',
+    'training': 'Training focus, schedules and development notes will live here.',
     'history': 'Career stats by season and club.',
 }
+# 16x16 line icons for the tab strip (mirror of ICONS in mockups/player-window.html); {c} = stroke colour
+_TAB_SVG = {
+    'profile': '<circle cx="8" cy="5.5" r="2.7"/><path d="M2.5 14c0-3 2.5-4.7 5.5-4.7s5.5 1.7 5.5 4.7"/>',
+    'contract': '<path d="M4 1.8h5.5L12.5 5v9.2H4z"/><path d="M9.5 1.8V5h3M6 8h4.5M6 10.6h4.5"/>',
+    'positions': '<rect x="1.8" y="2.5" width="12.4" height="11" rx="1"/><path d="M8 2.5v11"/><circle cx="8" cy="8" r="2"/>',
+    'general': '<path d="M3 13.5V8M8 13.5V3M13 13.5V6"/>',
+    'role': '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/>',
+    'training': '<path d="M9 1.5 3.5 9h4L7 14.5 12.5 7h-4z"/>',
+    'history': '<circle cx="8" cy="8" r="5.7"/><path d="M8 4.7V8l2.3 1.5"/>',
+}
+_TAB_SEP_BEFORE = ('general', 'training')     # hairline before these: player | ratings | development
+
+
+def _tab_icon(key):
+    from PyQt6.QtGui import QIcon
+    from PyQt6.QtSvg import QSvgRenderer
+    ic = QIcon()
+    # Normal/Off dim, Active (hover) white, On (selected) accent2
+    for mode, state, col in ((QIcon.Mode.Normal, QIcon.State.Off, '#6E7787'), (QIcon.Mode.Active, QIcon.State.Off, '#FFFFFF'),
+                             (QIcon.Mode.Normal, QIcon.State.On, '#735CE4'), (QIcon.Mode.Active, QIcon.State.On, '#735CE4')):
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="{col}" stroke-width="1.5" '
+               f'stroke-linecap="round" stroke-linejoin="round">{_TAB_SVG[key]}</svg>')
+        px = QPixmap(32, 32)
+        px.fill(Qt.GlobalColor.transparent)
+        p = QPainter(px)
+        QSvgRenderer(svg.encode()).render(p)
+        p.end()
+        px.setDevicePixelRatio(2)
+        ic.addPixmap(px, mode, state)
+    return ic
+
+
 _LAST_TAB = 'profile'     # last opened tab, remembered for the session
 
 CAPTION = 'Projection from CA weights; real growth depends on training, playing time and personality.'
@@ -154,7 +188,8 @@ QDialog#playerWindow QFrame#pwRowNat {{ background:{c['selection_bg']}; }}
 QDialog#playerWindow QFrame#pwRow {{ background:transparent; }}
 QDialog#playerWindow QFrame#pwTabs {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwTab {{ background:transparent; border:none; border-left:3px solid transparent;
-    color:{c['text_secondary']}; text-align:left; padding:0 2px 0 8px; font-size:12px; font-weight:600; border-radius:0; }}
+    color:{c['text_secondary']}; text-align:left; padding:0 2px 0 9px; font-size:12px; font-weight:600; border-radius:0; }}
+QDialog#playerWindow QFrame#pwTabSep {{ background:{c['border']}; border:none; margin:0 6px; }}
 QDialog#playerWindow QPushButton#pwTab:hover {{ background:{c['elevated']}; color:{c['text_primary']};
     border-left:3px solid {c['border_bright']}; }}
 QDialog#playerWindow QPushButton#pwTab:checked {{ background:{c['selection_bg']}; color:{c['text_primary']};
@@ -375,8 +410,8 @@ class PlayerWindow(QDialog):
         super().__init__(parent)
         self.setObjectName('playerWindow')
         self.setWindowTitle(person['name'])
-        self.setMinimumSize(1040, 640)
-        self.resize(1100, 760)
+        self.setMinimumSize(1062, 640)
+        self.resize(1122, 760)
         self.setStyleSheet(_dlg_qss())
         self._ability_stars = _settings.ability_as_stars()  # read once when the window opens
         self._person = person
@@ -439,7 +474,7 @@ class PlayerWindow(QDialog):
         main.setSpacing(12)
         strip = QFrame()
         strip.setObjectName('pwTabs')
-        strip.setFixedWidth(150)
+        strip.setFixedWidth(172)
         sv = QVBoxLayout(strip)
         sv.setContentsMargins(6, 6, 6, 6)
         sv.setSpacing(2)
@@ -450,9 +485,18 @@ class PlayerWindow(QDialog):
         grp.setExclusive(True)
         self._tab_group = grp
         for key, label, builder, _slot in TABS:
+            if key in _TAB_SEP_BEFORE:
+                sep = QFrame()
+                sep.setObjectName('pwTabSep')
+                sep.setFixedHeight(1)
+                sv.addSpacing(2)
+                sv.addWidget(sep)
+                sv.addSpacing(2)
             btn = QPushButton(label.replace('&', '&&'))
             btn.setObjectName('pwTab')
-            btn.setFixedHeight(34)
+            btn.setFixedHeight(40)
+            btn.setIcon(_tab_icon(key))
+            btn.setIconSize(QSize(16, 16))
             btn.setCheckable(True)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -534,14 +578,9 @@ class PlayerWindow(QDialog):
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(12)
         cv.addWidget(self._contract_panel())
-        tag = _spaced(_lab('COMING', 'pwSoonTag', Qt.AlignmentFlag.AlignCenter, 20))
-        panel, v = self._panel('Bonuses & clauses', tag)
-        note = _lab('Bonuses, clauses and release terms will be added here.', 'pwNote')
-        note.setWordWrap(True)
-        note.setContentsMargins(12, 0, 12, 14)
-        v.addWidget(note)
-        cv.addWidget(panel)
-        cv.addWidget(self._transfer_panel())
+        tp = self._transfer_panel()
+        if tp is not None:
+            cv.addWidget(tp)
         cv.addStretch()
         col.setFixedWidth(360)
         return self._page(col)
@@ -1119,7 +1158,7 @@ class PlayerWindow(QDialog):
         rh.setSpacing(8)
         self._note = _lab('', 'pwNote')
         rh.addWidget(self._note)
-        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'Potential')
+        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'Full Potential')
         self._seg_group = seg._grp
         p = self._person
         _enabled, tip = _pot.availability(p.get('ca'), p.get('pa'), person_age(p))
@@ -1214,7 +1253,7 @@ class PlayerWindow(QDialog):
             layout.addWidget(row)
 
     def _tile(self, cur, new, lower_better):
-        # "At potential" replaces the current value with the projected one (toggle back to compare)
+        # "Full Potential" replaces the current value with the projected one (toggle back to compare)
         v = new if self._pot_on else cur
         return self._tile_label(v, tier(21 - v if lower_better else v))
 
@@ -1237,7 +1276,7 @@ class PlayerWindow(QDialog):
         return w
 
     def _rec_panel(self):
-        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | Potential
+        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | Full Potential
         toggle. Owned traits are ticked; a quiet line when nothing reaches the Settings threshold."""
         thr = _settings.load()['trait_threshold']
         raw = self._person.get('raw_attrs') or []
@@ -1285,6 +1324,9 @@ class PlayerWindow(QDialog):
         panel, v = self._panel('Contract')
         until = self._contract_until()
         rows = [('Until', until if until else _lab('-', 'pwKvR'), False)]
+        start = self._contract_date('contract_start')
+        if start:
+            rows.append(('Start', start, False))
         for label, key in (('Wage', 'wage'), ('Value', 'value')):
             val = d.get(key)
             rows.append((label, val if val else self._pend_chip(), not val))
@@ -1294,7 +1336,10 @@ class PlayerWindow(QDialog):
         return panel
 
     def _transfer_panel(self):
+        """None when no row would be visible (nothing stored and PENDING markers off): the panel is not shown at all."""
         d = self._data
+        if not self._show_pending() and not any(d.get(k) for k in ('value', 'asking_price', 'transfer_status')):
+            return None
         panel, v = self._panel('Transfer')
         rows = []
         for label, key in (('Market value', 'value'), ('Asking price', 'asking_price'),
@@ -1307,7 +1352,10 @@ class PlayerWindow(QDialog):
         return panel
 
     def _contract_until(self):
-        ce = self._person.get('contract_end')
+        return self._contract_date('contract_end')
+
+    def _contract_date(self, key):
+        ce = self._person.get(key)
         try:
             y, m = ce.split('-')[:2]
             return f'{calendar.month_abbr[int(m)]} {int(y)}'

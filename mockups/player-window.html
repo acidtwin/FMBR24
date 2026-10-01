@@ -11,8 +11,8 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 =====================================================================================================================
 
 HOW TO USE
-  Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #history
-  State flags after '+':   pot (Profile: "At potential")   future (Positions: "Future")   gk (goalkeeper sample)
+  Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
+  State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
     nums (CA/PA/Dev Rate as numbers instead of stars)
@@ -21,7 +21,7 @@ HOW TO USE
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
 WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
-  tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabHistory  -> registry TABS (section 4)
+  tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
   Persistent parts (section 3): header(), tabStrip(), actionStrip().   Data (section 1) is FICTIONAL sample data.
 
 TOKENS (gui/theme.py COLORS, literal)
@@ -38,12 +38,12 @@ TOKENS (gui/theme.py COLORS, literal)
 
 METRICS (px)
   Window client 1100x760 (min 1040x640).  OS title bar is the real one (no custom topbar).
-  Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 150 | 12 | content 912 | 12.
+  Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 172 | 12 | content 912 | 12 (window 1062 wide).
   Panel QFrame#pwPanel: bg surface, 1px border, radius 3.  Panel header 36, pad 0 12, 11/700 UPPERCASE text_secondary (QFont letter-spacing).
   Header panel 80: pad 0 16, avatar 48, name 20/700, row2 12 secondary, row3 chips h20 (pills r10), CA/PA boxes 104x52 (label, 20/700 value,
     6px bar), tab slot 172 wide behind a 1px border divider (label 10/700 caps, value 20/700, sub 11 secondary).
-  Tab strip QFrame panel 150: rows 34, inset 6; selected = selection_bg + 3px accent left border + white 700; hover = elevated.
-  Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | At potential).
+  Tab strip QFrame panel 172: rows 40, inset 6, 16px line icon + 10 gap; selected = selection_bg + 3px accent left border + white 700 + icon #735CE4; hover = elevated + white icon; hairline before General Rating and Training.
+  Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | Full Potential).
   Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  Fonts: Noto Sans fallback; 10/11/12, headings 20, numerals 20-36.
 
 QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hover and tooltip bubbles here are review aids only
@@ -51,7 +51,7 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
   Profile: Dev Rate N | Contract & Transfer: "Until Jun 2031" + club | Positions: best position + rating
-  (switches to "Best at potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
+  (switches to "Best at full potential" in Future) | History: Apps / Goals (PENDING) | General / Role / Training: Dev Rate (default).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
@@ -136,7 +136,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .b2{background:var(--surface);border-color:var(--border2);color:#fff}.b2:hover{background:var(--elev)}
 .b2.on{border-color:var(--acc2);color:var(--pot);background:var(--sel)}
 .b2[disabled],.b2[disabled]:hover{color:var(--tx3);border-color:var(--border);background:var(--elev)}
-/* segmented control (Current | At potential, Current | Future) */
+/* segmented control (Current | Full Potential, Current | Future) */
 .sg{display:inline-flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden;background:var(--bg)}
 .sg button{white-space:nowrap;height:22px;padding:0 12px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
 .sg button.on{background:var(--acc);color:#fff}
@@ -168,10 +168,14 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .slot .s{font-size:11px;color:var(--tx2);height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- persistent tab strip ---- */
-.tabs{width:150px;flex:none;padding:6px;display:flex;flex-direction:column;gap:2px}
-.tab{height:34px;padding:0 10px 0 9px;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--tx2);text-align:left;border-left:3px solid transparent;border-radius:0}
+.tabs{width:172px;flex:none;padding:6px;display:flex;flex-direction:column;gap:2px}
+.tab{height:40px;padding:0 8px 0 9px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--tx2);text-align:left;border-left:3px solid transparent;border-radius:0}
+.tab svg{width:16px;height:16px;flex:none;stroke:#6E7787;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .tab:hover{background:var(--elev);color:#fff;border-left-color:var(--border2)}
+.tab:hover svg{stroke:#fff}
 .tab.on,.tab.on:hover{background:var(--sel);color:#fff;font-weight:700;border-left-color:var(--acc)}
+.tab.on svg,.tab.on:hover svg{stroke:var(--acc2)}
+.tabsep{height:1px;background:var(--border);margin:4px 6px;flex:none}
 
 /* ---- persistent action strip ---- */
 .strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;flex:none}
@@ -251,7 +255,7 @@ const SLOTS={
 // attribute tuple: [name, current, at-potential, lowerIsBetter]
 const OUT={
  name:'Micky van de Ven',pos:'DC',nat:'Dutch',age:26,born:'12 Apr 2000',club:'Tottenham',ca:149,pa:160,dev:15,inj:0,
- until:'Jun 2031',wage:'£100K p/w',value:'£88M – £97M',height:'193 cm',weight:'81 kg',apps:'212 apps · 14 goals',
+ until:'Jun 2031',start:'Jul 2024',wage:'£100K p/w',value:'£88M – £97M',height:'193 cm',weight:'81 kg',apps:'212 apps · 14 goals',
  potNote:'PA is rarely reached after 26.',
  traits:['Tries Long Range Passes','Brings Ball Out Of Defence','Trait #12'],
  pers:[['Adaptability',13],['Ambition',17],['Loyalty',9],['Pressure',14],['Professionalism',15],['Sportsmanship',12],['Temperament',14]],persLabel:'Ambitious',
@@ -266,7 +270,7 @@ const OUT={
   foot:[['Left Foot',20,20],['Right Foot',12,13]]}};
 const GKP={
  name:'Guglielmo Vicario',pos:'GK',nat:'Italian',age:28,born:'7 Oct 1996',club:'Tottenham',ca:138,pa:142,dev:13,inj:0,
- until:'Jun 2029',wage:'£85K p/w',value:'£30M – £38M',height:'194 cm',weight:'89 kg',apps:'301 apps · 0 goals',
+ until:'Jun 2029',start:'Aug 2022',wage:'£85K p/w',value:'£30M – £38M',height:'194 cm',weight:'89 kg',apps:'301 apps · 0 goals',
  potNote:'PA is rarely reached after 26.',
  traits:['Comes For Crosses','Trait #25'],
  pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],persLabel:'Professional',
@@ -345,8 +349,19 @@ function header(slotHTML){
 const star=(v,div=40)=>{const n=Math.max(.5,Math.min(5,Math.round(v/div*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v}_${div})"/></svg>`}return s};
 const slot=(label,valueHTML,sub)=>`<small>${label}</small><span class="v">${valueHTML}</span><span class="s">${sub||'&nbsp;'}</span>`;
 
+/* 16x16 line icons, stroke 1.5 (mirrored 1:1 in gui/player_window.py _TAB_SVG). A hairline sits before General Rating
+   and Training: player | ratings | development. */
+const ICONS={
+ profile:'<circle cx="8" cy="5.5" r="2.7"/><path d="M2.5 14c0-3 2.5-4.7 5.5-4.7s5.5 1.7 5.5 4.7"/>',
+ contract:'<path d="M4 1.8h5.5L12.5 5v9.2H4z"/><path d="M9.5 1.8V5h3M6 8h4.5M6 10.6h4.5"/>',
+ positions:'<rect x="1.8" y="2.5" width="12.4" height="11" rx="1"/><path d="M8 2.5v11"/><circle cx="8" cy="8" r="2"/>',
+ general:'<path d="M3 13.5V8M8 13.5V3M13 13.5V6"/>',
+ role:'<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/>',
+ training:'<path d="M9 1.5 3.5 9h4L7 14.5 12.5 7h-4z"/>',
+ history:'<circle cx="8" cy="8" r="5.7"/><path d="M8 4.7V8l2.3 1.5"/>'};
+const SEP_BEFORE=['general','training'];
 function tabStrip(){
-  return `<div class="pn tabs">${TABS.map(t=>`<button class="tab ${S.tab===t.key?'on':''}" data-tab="${t.key}">${t.label}</button>`).join('')}</div>`;
+  return `<div class="pn tabs">${TABS.map(t=>`${SEP_BEFORE.includes(t.key)?'<div class="tabsep"></div>':''}<button class="tab ${S.tab===t.key?'on':''}" data-tab="${t.key}"><svg viewBox="0 0 16 16">${ICONS[t.key]}</svg>${t.label}</button>`).join('')}</div>`;
 }
 
 function actionStrip(){
@@ -368,12 +383,12 @@ function tabProfile(){
   const d=D(),g=d.g;
   const cols=isGK()?[['Goalkeeping',g.gk,['Footedness',g.foot]],['Mental',g.ment],['Physical',g.phys,['Hidden',g.hid]],['Technical',g.tech]]
                    :[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys,['Footedness',g.foot]],['Hidden',g.hid]];
-  // "At potential" shows ONLY the projected value in the tile (no "current / potential" pair)
+  // "Full Potential" shows ONLY the projected value in the tile (no "current / potential" pair)
   const grp=(t,l)=>`<div class="ch">${t.toUpperCase()}</div>`+l.map(a=>{const v=S.pot?a[2]:a[1],t=tier(a[3]?21-v:v);
     return `<div class="tr2"><span class="an">${a[0]}</span><span class="tile k${t} c${t}">${v}</span></div>`}).join('');
   const grid=cols.map(([t,l,x])=>`<div class="col">${grp(t,l)}${x?'<div style="height:10px"></div>'+grp(x[0],x[1]):''}</div>`).join('');
   const note=S.pot&&d.potNote?`<span class="pnote">${d.potNote}</span>`:'';
-  const attrs=`<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','At potential']],S.pot?'pot':'cur'))}
+  const attrs=`<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}
     <div class="p-cols" style="padding-top:2px">${grid}</div>
     ${S.pot?'<div class="cp">Projection from CA weights; real growth depends on training, playing time and personality.</div>':''}</div>`;
   const pers=d.pers.map(([n,v])=>`<div class="prs"><span class="an">${n}</span><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span><b class="c${tier(v)}">${v}</b></div>`).join('');
@@ -390,10 +405,12 @@ function tabProfile(){
 function slotContract(){const d=D();return slot('Contract until',d.until,d.club)}
 const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span><span class="chip soon">COMING SOON</span><span class="d">${text}</span></div>`;
 function tabContract(){
-  const d=D();
-  return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}</div></div>
-    <div class="pn">${ph('Bonuses &amp; clauses','<span class="chip soon">COMING</span>')}<div class="note" style="padding-top:0">Bonuses, clauses and release terms will be added here.</div></div>
-    <div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${kv('Market value',pv(d.value))}${kv('Asking price',pend)}${kv('Transfer / loan status',pend)}</div></div></div>`;
+  /* Rows with no stored value show PENDING here (the app hides them when Settings > Show PENDING markers is off;
+     Start only when the save has it; the Transfer panel disappears when none of its rows are visible). No Bonuses panel. */
+  const d=D(),row=(l,v)=>v?kv(l,v):kv(l,pend);
+  const tr=[row('Market value',S.data?d.value:''),row('Asking price',''),row('Transfer / loan status','')].join('');
+  return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',d.wage)}${row('Value',S.data?d.value:'')}</div></div>
+    ${tr?`<div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${tr}</div></div>`:''}</div>`;
 }
 
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
@@ -401,7 +418,7 @@ function tabContract(){
    from the projected attributes (potential.project_attrs) - `posf` is hand-made sample data here. */
 function slotPositions(){
   const d=D(),R=S.future?d.posf:d.posr,b=bestPos(R),v=R[b];
-  return slot(S.future?'Best at potential':'Best position',`${badge(b,1)}<span class="c${tier(v)}">${v}</span>`,word(v));
+  return slot(S.future?'Best at full potential':'Best position',`${badge(b,1)}<span class="c${tier(v)}">${v}</span>`,word(v));
 }
 function pitchSVG(R,W,H,M){
   const g={boxW:238,boxD:88,sixW:108,sixD:29,circR:54,spotD:58,goalW:43,goalD:6};
@@ -446,6 +463,7 @@ function tabRole(){return soonPage('Role Rating','Suitability for each tactical 
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
 function slotHistory(){const d=D();return S.data?slot('Apps · Goals',d.apps,'Career'):slot('Apps · Goals',pend,'Not in the save yet')}
+function tabTraining(){return soonPage('Training','Training focus, schedules and development notes will live here.')}
 function tabHistory(){return soonPage('History','Career stats by season and club.')}
 
 /* ---------- registry: order = tab strip order ---------- */
@@ -455,6 +473,7 @@ const TABS=[
  {key:'positions',label:'Positions',page:tabPositions,slot:slotPositions},
  {key:'general',label:'General Rating',page:tabGeneral,slot:slotDev},
  {key:'role',label:'Role Rating',page:tabRole,slot:slotDev},
+ {key:'training',label:'Training',page:tabTraining,slot:slotDev},
  {key:'history',label:'History',page:tabHistory,slot:slotHistory}];
 
 /* =====================================================================================================================
