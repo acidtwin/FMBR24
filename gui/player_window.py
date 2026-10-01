@@ -1094,7 +1094,7 @@ class PlayerWindow(QDialog):
             attrs = ([_pot.display_value(x) for x in self._projection().proj] if self._pot_on
                      else _tr.attrs_from_raw(raw))
             have = trait_ids(self._person.get('trait_mask') or 0)
-            recs = [r for r in _tr.recommend(attrs, thr, have) if r.met or r.has][:5]
+            recs = [r for r in _tr.recommend(attrs, thr, have) if r.met and not r.has][:5]
             if not recs:
                 note = f'No trait reaches an average of {thr}.'
         for i, r in enumerate(recs):
@@ -1103,9 +1103,9 @@ class PlayerWindow(QDialog):
             h = QHBoxLayout(row)
             h.setContentsMargins(12, 2, 12, 2)
             h.setSpacing(6)
-            n = _lab(('\u2713 ' if r.has else '') + r.name, 'pwKvL' if r.has else 'pwTrait')
+            n = _lab(r.name, 'pwTrait')
             n.setWordWrap(True)
-            tip = r.desc + ('\nPlayer already has this trait.' if r.has else '')
+            tip = r.desc
             if r.missing:
                 tip += '\nBelow ' + str(thr) + ': ' + ', '.join(f'{a} {x}' for a, x in r.missing)
             n.setToolTip(tip)
