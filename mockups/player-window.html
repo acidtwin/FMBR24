@@ -13,11 +13,14 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 HOW TO USE
   Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
   State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
-    low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
-    inj (injured)   hgp / hgc (homegrown set)   unk (HGC status unknown: 'HGC?' + Make HGC disabled)
+    low (low-rated 19yo sample)   scout (opened from Scouting: HGP/HGC pills display-only, tip 'Open from Squads to patch')   short (already on shortlist)
+    inj (injured)   hgp / hgc (homegrown SET in the save = lit pill)   qhgp / qhgc (change QUEUED = yellow pill)   (neither = not set)
+    unk (HGC status unknown: bare 'HGC?', display-only; HGP stays clickable)
+    qx1 / qx3 (1 / 3 changes queued ELSEWHERE in the save session, added to the 'Changes queued' count)
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
-    nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your squad': no Make HGP/HGC buttons at all)
-    tips (pin the tooltips so they show in a screenshot)
+    nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
+    tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip)
+  The review bar has segmented controls HGP / HGC (none | set | queued) and 'queued elsewhere' (0 | 1 | 3) for these states. Click a pill in the window to toggle queued.
   Screenshot mode: ?bare before the # hides the review bar + OS title bar so the window starts at 0,0 (1122x760).
   Profile = layout C 'Dossier' only (chosen; A/B and ?profile removed); ?full (with ?bare) lets the window grow for screenshots.
   Recommended traits now live on the Training tab.
@@ -25,9 +28,11 @@ HOW TO USE
   e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
-WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
+WHERE TO EDIT (every tab is ONE function in section 4; the header is the same on every tab - there are NO per-tab header slots any more)
   tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
-  Persistent parts (section 3): header(), tabStrip(), actionStrip().   Data (section 1) is FICTIONAL sample data.
+  Persistent parts (section 3): header() (+ hgPill() = the HGP/HGC pills, queueSlot() = 'Changes queued'), tabStrip(), actionStrip().
+  Homegrown state (section 2): S.hgp/S.hgc = set in the save, S.qhgp/S.qhgc = queued, canPatch(k), pillState(k), queuedHere(), queuedTotal().
+  Data (section 1) is FICTIONAL sample data.
 
 TOKENS (gui/theme.py COLORS, literal)
   window_bg #14151A  surface #1A2226  elevated #292B32  border #343740  border_bright #454A58
@@ -47,23 +52,35 @@ METRICS (px)
   Window client 1122x760 (min 1062x640; PlayerWindow.resize(1122,760)).  OS title bar is the real one (no custom topbar).
   Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 172 | 12 | content 914 | 12 (window 1122 wide).
   Panel QFrame#pwPanel: bg surface, 1px border, radius 3.  Panel header 36, pad 0 12, 11/700 UPPERCASE text_secondary (QFont letter-spacing).
-  Header panel 80: pad 0 16, avatar 48, name 20/700, row2 12 secondary, row3 chips h20 (pills r10; unknown HGC = bare 'HGC?' 10/700 secondary),
-    height/weight 11 secondary after the chips ('193 cm \u00b7 81 kg', or 'Height / weight' + PENDING chip).
-    NUMBERS mode: CA/PA boxes 104x52 (label, 20/700 value, 6px bar), slot 172x56 centred (label 10/700 caps, value 20/700, sub 11 secondary).
-    STARS mode (default, Settings > Ability display): ONE grid shared by CA box, PA box and slot (_HG_*): top pad 8 | label 14 | gap 4 | value row 24 |
-      gap 4 | caption 14 = 68px high; CA/PA boxes 116x68 (pad 8 10 0 12, 5 stars 15px gap 2, caption 'Current ability' / 'Potential ability' 11 secondary);
-      slot 172x68 with 16px left pad; Dev Rate = 5 stars + 'How fast they develop'.  Tooltip 'CA 149' on the box.
+  Header panel 80 (identical on every tab): pad 0 16, gap 14: avatar 48 | identity (flex) | CA box 136 | PA box 136 | DEV RATE box 136 | queue widget 160.
+    Identity: name 20/700 + position badge + HGP/HGC pills (right end, variant A), row2 12 secondary.  Pills h18 r9 10/700 (see HGP / HGC PILLS below).
+    CA / PA / DEV RATE boxes = ONE grid (stars AND numbers mode), 136x56: pad 6 8 0 10 | label 10/700 caps 14 | gap 4 | value row 24 (5 stars 15px gap 2, or 20/700 number + 6px bar).
+      No captions.  Labels CURRENT ABILITY / POTENTIAL ABILITY / DEVELOPMENT RATE.  Tooltips 'CA 149' / 'PA 160' / 'Dev Rate 16 out of 20'.  Dev Rate stars = value/4 (CA, PA = value/40).
+      Dev Rate number + bar use the tier colour of the value (bar = value x 5 %).
+    Queue widget (.slot, was the per-tab slot 172) 160x56, hairline on the left, 15 left pad: label CHANGES QUEUED 10/700 caps | value row 24: count 20/700
+      (tier-5 yellow when > 0, secondary when 0) | sub 11 secondary: 'Save to take effect' (> 0) / 'Nothing queued' (0).  Tooltip = breakdown (this window / elsewhere).
+      The count is for the WHOLE save session (every player's queued HGP/HGC), not just this window.
+    Identity gets 378 px at 1122 wide (was 488): the long-name case ellipsises, the pills never wrap.
   Tab strip QFrame panel 172: rows 40, inset 6, 16px line icon + 10 gap; selected = selection_bg + 3px accent left border + white 700 + icon #735CE4; hover = elevated + white icon; hairline before General Rating and Training.
   Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | Full Potential).
-  Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  Fonts: Noto Sans fallback; 10/11/12, headings 20, numerals 20-36.
+  Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  ORDER: [stretch] Add to Shortlist | Close (Close always last).  No Make HGP / Make HGC buttons.
+  Fonts: Noto Sans fallback; 10/11/12, headings 20, numerals 20-36.
 
 QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hover and tooltip bubbles here are review aids only
   (real app: QToolTip / :hover pseudo-states).  Radius <= half height.  Letter-spacing through QFont.
 
-HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
-  Profile: Dev Rate | Contract & Transfer: "Contract until" Jun 2031 + club | Positions: "Best position" badge + rating + word
-  (design-only Future: "Best at full potential") | History: "Apps \u00b7 Goals" 122 \u00b7 7 + 'career, league' (no rows: PENDING chip + 'No history found' /
-  'FM install database not found') | General / Role / Training: Dev Rate (default).
+HGP / HGC PILLS = THE CONTROLS (no dialogs, no confirmations; changes are QUEUED and written when the user saves)
+  Pill = h18, r9, 10/700, pad 0 8.  Four looks:
+    SET (in the save)       blue lit pill (border + text #5AA0D1, fill rgba(90,160,209,.14)); not clickable.
+    NOT SET, patchable      muted (border border_bright, text secondary) with a DASHED border = 'can be added'; hover: border secondary, text white, faint white fill, pointer;
+                            tooltip 'Click to make HGP' / 'Click to make HGC'.  Click -> QUEUED.
+    QUEUED                  YELLOW placeholder: border + text tier-5 #EAD95C, fill rgba(234,217,92,.14), '+' before the label; hover = fill .24;
+                            tooltip 'Queued - click to undo'.  Click -> not set again.  HGC can be queued without HGP (no auto-queue).
+    NOT SET, not patchable  plain muted pill (solid hairline), display-only.  Tooltips: 'Not your club' (+other) | 'Open from Squads to patch' (+scout).
+                            +unk: HGC shows as bare 'HGC?' (tip 'HGC unknown - club unknown for this player.'), only HGC is locked; HGP stays clickable.
+  Patchable = the player is in the user's club AND the club is known (HGC) AND the window was opened from Squads.  Yellow vs set-blue never collide (different hue, '+', fill).
+  Pill tooltips drop BELOW the pill (the header is at the top edge of the window).
+  Keyboard: pills are real buttons (focus ring accent_hover, aria-pressed).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
@@ -186,19 +203,28 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .hdr .pills.end{margin-left:auto}
 .hdr .pill{height:18px;padding:0 8px;font-size:10px;line-height:1}   /* calm: small, hairline border, only lit when set */
 .hdr .pill.unk{padding:0 2px}
-/* variant C: slim meta column between identity and the ability boxes (hairline like the Dev Rate slot) */
+/* HGP / HGC pills are the controls. set = .on (blue, above) | patchable-not-set = .go (dashed, hover) | queued = .q (yellow) | else plain muted, display-only */
+.hdr button.pill{cursor:pointer}
+.hdr .pill.go{border-style:dashed}
+.hdr .pill.go:hover{color:#fff;border-color:var(--tx2);background:rgba(255,255,255,0.06)}
+.hdr .pill.q{color:var(--c5);border-color:var(--c5);background:var(--k5)}
+.hdr .pill.q:hover{background:rgba(234,217,92,0.24)}
+.hdr .pill:focus-visible{outline:1px solid var(--acc2);outline-offset:2px}
+.hdr .pill[data-tip]::after,.hdr .slot[data-tip]::after{bottom:auto;top:calc(100% + 6px);left:auto;right:0;transform:none}   /* tips drop below: the header is at the window's top edge */
+/* variant C: slim meta column between identity and the ability boxes (hairline like the queue widget) */
 .hmeta{width:136px;height:56px;flex:none;border-left:1px solid var(--border);padding-left:14px;display:flex;flex-direction:column;justify-content:center;gap:4px;color:var(--tx2);font-size:11px;white-space:nowrap}
 .hmeta>div{height:16px;display:flex;align-items:center;gap:6px}
 .hmeta>div:last-child{height:18px}
-/* ONE grid shared by the CA box, PA box and slot (stars AND numbers mode): 56 high, 6 top pad | label 14 | gap 4 | value row 24 | 6 */
-.cab{width:150px;height:56px;padding:6px 10px 0 12px;display:flex;flex-direction:column;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
+/* ONE grid shared by the CA, PA and DEV RATE boxes and the queue slot (stars AND numbers mode): 56 high, 6 top pad | label 14 | gap 4 | value row 24 | 6 */
+.cab{width:136px;height:56px;padding:6px 8px 0 10px;display:flex;flex-direction:column;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
 .cab small,.slot small{display:block;height:14px;line-height:14px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);white-space:nowrap}
 .cab .stars,.slot .stars{height:24px;display:flex;align-items:center;gap:2px}
 .cab .nv{height:24px;display:flex;align-items:center;gap:8px}
 .cab .nv b{font-size:20px;line-height:24px;font-weight:700}
 .cab .bar{flex:1}
-.slot{width:172px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:15px;display:flex;flex-direction:column;justify-content:center}
-.slot small{margin-bottom:4px}   /* label 14 + 4 + value 24 (+ sub 14 on the other tabs = 56) */
+.slot{width:160px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:15px;display:flex;flex-direction:column;justify-content:center}
+.slot small{margin-bottom:4px}   /* label 14 + 4 + value 24 + sub 14 = 56 (the 'Changes queued' widget) */
+.slot .v .mu{color:var(--tx2)}
 .slot .v{font-size:20px;font-weight:700;line-height:24px;height:24px;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .slot .v .u{font-size:11px;font-weight:400;color:var(--tx2)}
 .slot .s{font-size:11px;color:var(--tx2);height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -328,6 +354,9 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
   <span class="lab">header</span><div class="rseg" id="hdrSeg"></div>
   <span class="lab">theme</span><div class="rseg" id="texSeg"></div>
+  <span class="lab">HGP</span><div class="rseg" id="hgpSeg"></div>
+  <span class="lab">HGC</span><div class="rseg" id="hgcSeg"></div>
+  <span class="lab">queued elsewhere</span><div class="rseg" id="qxSeg"></div>
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
@@ -433,7 +462,7 @@ Object.entries(SAMPLES).forEach(([k,d])=>{for(const g in d.g)d.g[g].forEach(a=>{
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,unk:false,nopend:false,data:false,tips:false,other:false};
+const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -507,17 +536,20 @@ const injured=()=>S.inj||D().inj>0;
 const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16',5],['17–20',6]];
 
 /* =====================================================================================================================
-   3. PERSISTENT SHELL: header (core never moves; `slot` is per tab), tab strip, action strip
+   3. PERSISTENT SHELL: header (never changes per tab; pills + queue widget), tab strip, action strip
    ===================================================================================================================== */
 const NATFLAG={Netherlands:'\u{1F1F3}\u{1F1F1}',Italy:'\u{1F1EE}\u{1F1F9}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};   // in the app: the same flag emoji font as the tables
-/* HEADER VARIANTS (?hdr=a|b|c). Injury information is NOT in the header (Fitness card). Height / weight are NOT in the header for A and B: Position card 'Physique' row (hidden when absent).
+/* The header is identical on every tab (no per-tab slot): identity + HGP/HGC pills | CA | PA | DEV RATE | Changes queued.
+   HEADER VARIANTS (?hdr=a|b|c). Injury information is NOT in the header (Fitness card). Height / weight are NOT in the header for A and B: Position card 'Physique' row (hidden when absent).
    A calm  : line 1 = name + position badge ...... HGP HGC (small, right end) | line 2 = flag nation · club · age (birth date in the age tooltip)
    B inline: line 1 = name + badge + HGP HGC (inline) | line 2 = same meta | no third line
    C split : identity (name + badge / flag nation · club) | hairline | meta column: age · born / height · weight / HGP HGC | then the ability boxes */
-function header(slotHTML){
+function header(){
   const d=D(),v=S.hdr;
   const cab=(l,code,v,c)=>S.nums?`<div class="cab" title="${code} ${v}"><small>${l}</small><div class="nv"><b style="color:${c}">${v}</b><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div></div>`:`<div class="cab" title="${code} ${v}"><small>${l}</small><div class="stars">${star(v)}</div></div>`;
-  const pills=cls=>`<span class="pills ${cls}"><span class="pill ${S.hgp?'on':''}">HGP</span>${S.unk&&!S.hgc?'<span class="pill unk" data-tip="Homegrown status at this club could not be determined">HGC?</span>':`<span class="pill ${S.hgc?'on':''}">HGC</span>`}</span>`;
+  const cabDev=()=>{const v=d.dev,c=HEX[tier(v)],t=`Dev Rate ${v} out of 20`;   // stars = value/4, numbers = value + bar (x5 %), tier colour
+    return S.nums?`<div class="cab" title="${t}"><small>Development rate</small><div class="nv"><b style="color:${c}">${v}</b><div class="bar"><i style="width:${v*5}%;background:${c}"></i></div></div></div>`:`<div class="cab" title="${t}"><small>Development rate</small><div class="stars">${star(v,4)}</div></div>`};
+  const pills=cls=>`<span class="pills ${cls}">${hgPill('hgp','HGP')}${hgPill('hgc','HGC')}</span>`;
   const dot='<span class="sep">·</span>';
   const fl=`<span class="fl">${NATFLAG[d.nat]||''}</span><span>${d.nat}</span>${dot}<span>${d.club}</span>`;
   const hw=S.data?`${d.height} · ${d.weight}`:S.nopend?'':'Height / weight '+pend;
@@ -526,11 +558,29 @@ function header(slotHTML){
     <div class="hmeta"><div>${d.age} years ${dot} ${d.born}</div>${hw?`<div>${hw}</div>`:''}<div>${pills('')}</div></div>`;
   else id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}${pills(v==='a'?'end':'')}</div><div class="r2">${fl}${dot}<span class="age" data-tip="Born ${d.born}">${d.age} years</span></div></div>`;
   return `<div class="pn hdr"><div class="avatar">${person}</div>${id}
-    ${cab('Current ability','CA',d.ca,'#735CE4')}${cab('Potential ability','PA',d.pa,'#9A8AF5')}
-    <div class="slot">${slotHTML}</div></div>`;
+    ${cab('Current ability','CA',d.ca,'#735CE4')}${cab('Potential ability','PA',d.pa,'#9A8AF5')}${cabDev()}
+    ${queueSlot()}</div>`;
 }
 /* Ability display: stars = value/div (CA/PA div 40, Dev Rate div 4) to nearest .5, clamp .5..5 */
 const star=(v,div=40)=>{const n=Math.max(.5,Math.min(5,Math.round(v/div*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v}_${div})"/></svg>`}return s};
+/* ---- HOMEGROWN QUEUE (mockup of the app behaviour: pills queue a change, the window never patches; the user saves from the main window) ----
+   S.hgp/S.hgc = set in the save | S.qhgp/S.qhgc = queued in this window | S.qx = changes queued for OTHER players (fake here; real = the session-wide queue). */
+const canPatch=k=>!S.other&&!S.scout&&!(k==='hgc'&&S.unk);                              // own club + opened from Squads (+ club known for HGC)
+const pillState=k=>S[k]?'set':S['q'+k]&&canPatch(k)?'queued':'none';
+const queuedHere=()=>['hgp','hgc'].filter(k=>pillState(k)==='queued').length;
+const queuedTotal=()=>S.qx+queuedHere();
+function hgPill(k,L){
+  const st=pillState(k);
+  if(k==='hgc'&&S.unk&&!S.hgc)return `<span class="pill unk" data-tip="HGC unknown - club unknown for this player.">HGC?</span>`;
+  if(st==='set')return `<span class="pill on">${L}</span>`;
+  if(st==='queued')return `<button class="pill q" data-act="q" data-v="${k}" aria-pressed="true" data-tip="Queued - click to undo">+ ${L}</button>`;
+  if(canPatch(k))return `<button class="pill go ${k==='hgp'&&S.tips?'pin':''}" data-act="q" data-v="${k}" aria-pressed="false" data-tip="Click to make ${L}">${L}</button>`;
+  const why=S.other?'Not your club':'Open from Squads to patch';
+  return `<span class="pill ${k==='hgp'&&S.tips?'pin':''}" data-tip="${why}">${L}</span>`;
+}
+function queueSlot(){const n=queuedTotal(),h=queuedHere();
+  const tip=n?`${h} in this window${S.qx?`, ${S.qx} elsewhere`:''} - written when you save`:'Click HGP / HGC on a player you can patch to queue a change';
+  return `<div class="slot" data-tip="${tip}">${slot('Changes queued',`<span class="${n?'c5':'mu'}">${n}</span>`,n?'Save to take effect':'Nothing queued')}</div>`}
 const slot=(label,valueHTML,sub)=>`<small>${label}</small><span class="v">${valueHTML}</span>${sub?`<span class="s">${sub}</span>`:''}`;
 
 /* 16x16 line icons, stroke 1.5 (mirrored 1:1 in gui/player_window.py _TAB_SVG). A hairline sits before General Rating
@@ -549,26 +599,16 @@ function tabStrip(){
 }
 
 function actionStrip(){
-  const tip='Open from Squads to patch';
-  const mk=(k,l)=>S[k]?`<button class="btn b2" disabled>${l} set</button>`
-    :S.scout?`<button class="btn b2 ${k==='hgp'&&(S.scout||S.tips)?'pin':''}" disabled data-tip="${tip}">Make ${l}</button>`
-    :k==='hgc'&&S.unk?`<button class="btn b2 ${S.tips?'pin':''}" disabled data-tip="Club unknown for this player.">Make ${l}</button>`
-    :`<button class="btn b2" data-act="mk" data-v="${k}">Make ${l}</button>`;
-  /* 'Make both' = HGP in place, then HGC, in one action. Enabled only while neither flag is set (a single Make button covers the other case);
-     disabled with the same tips as Make HGC when the club is unknown / opened from Scouting. */
-  const bothSet=S.hgp&&S.hgc,bothOff=S.scout||S.unk||S.hgp||S.hgc;
-  const both=bothSet?`<button class="btn b2" disabled>HGP + HGC set</button>`
-    :`<button class="btn b2" ${bothOff?'disabled':'data-act="mk" data-v="both"'} ${S.unk&&!S.scout?'data-tip="Club unknown for this player."':S.scout?`data-tip="${tip}"`:''}>Make both</button>`;
-  return `<div class="strip"><span class="sp"></span>${S.other?'':mk('hgp','HGP')+mk('hgc','HGC')+both}
-    <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button><button class="btn b2" data-act="close">Close</button></div>`;  /* Close is ALWAYS last (far right), also in the 'other' state */
+  /* No Make buttons: the header HGP / HGC pills queue those changes. Close is ALWAYS last (far right), also in the 'other' state. */
+  return `<div class="strip"><span class="sp"></span>
+    <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button><button class="btn b2" data-act="close">Close</button></div>`;
 }
 
 /* =====================================================================================================================
-   4. TABS. One function (+ header slot) per tab. Registry at the bottom of this section.
+   4. TABS. One function per tab (page body only). Registry at the bottom of this section.
    ===================================================================================================================== */
 
 /* ---------- 4.1 PROFILE (approved option B content, tighter) -------------------------------------------------------- */
-function slotProfile(){const d=D();return S.nums?slot('Development rate',`<span class="c${tier(d.dev)}">${d.dev}</span><span class="u">/ 20</span>`):slot('Development rate',`<span class="stars" title="Dev Rate ${d.dev} out of 20">${star(d.dev,4)}</span>`)}
 /* PROFILE has THREE candidate layouts (?profile=a|b|c, review-bar 'profile'); the user picks one, then it is built in gui/player_window.py.
    Recommended traits moved to the Training tab. Every element below is fed by real per-player data only (see HANDOVER 'Profile layouts');
    sections with no data are hidden (season stats, career) or PENDING (contract values), never invented. */
@@ -658,8 +698,7 @@ function profC(){const d=D(),R=d.posr,b=bestPos(R),oth=bestPositions(4).filter(p
 function tabProfile(){return profC()}
 
 
-/* ---------- 4.2 CONTRACT & TRANSFER ---------------------------------------------------------------------------------- */
-function slotContract(){const d=D();return slot('Contract until',d.until,d.club)}
+/* ---------- 4.2 CONTRACT & TRANSFER (page body only) ---------------------------------- */
 const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span><span class="chip soon">COMING SOON</span><span class="d">${text}</span></div>`;
 function tabContract(){
   /* Rows with no stored value show PENDING here (the app hides them when Settings > Show PENDING markers is off;
@@ -673,10 +712,6 @@ function tabContract(){
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
    Future = position ratings at full potential. DESIGN ONLY: the real implementation must recompute the 15 position ratings
    from the projected attributes (potential.project_attrs) - `posf` is hand-made sample data here. */
-function slotPositions(){
-  const d=D(),R=S.future?d.posf:d.posr,b=bestPos(R),v=R[b];
-  return slot(S.future?'Best at full potential':'Best position',`${badge(b,1)}<span class="c${tier(v)}">${v}</span>`,word(v));
-}
 function pitchSVG(R,W,H,M){
   const g={boxW:238,boxD:88,sixW:108,sixD:29,circR:54,spotD:58,goalW:43,goalD:6};
   const LN='rgba(255,255,255,0.42)',x0=M,y0=M,w=W-2*M,h=H-2*M,cx=x0+w/2,cy=y0+h/2,y1=y0+h;
@@ -715,14 +750,10 @@ function tabPositions(){
 }
 
 /* ---------- 4.5 GENERAL RATING / 4.6 POSITIONAL RATING / 4.7 ROLE RATING (coming soon) ------------------------------ */
-const slotDev=slotProfile;
 function tabGeneral(){return soonPage('General Rating','Overall rating and a summary of the role ratings.')}
 function tabRole(){return soonPage('Role Rating','Suitability for each tactical role.')}
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
-function slotHistory(){
-  if(!S.data)return slot('Apps · Goals',pendV(),'FM install database not found');
-  const a=HIST.reduce((n,r)=>n+(r.a||0),0),g=HIST.reduce((n,r)=>n+(r.g||0),0);return slot('Apps · Goals',`${a} · ${g}`,'career, league')}
 /* Training: Recommended traits (moved here from the Profile rail; follows Current | Full Potential, owned traits ticked) + a coming-soon block. No training data is invented. */
 function tabTraining(){const d=D(),rl=S.pot&&d.recP?d.recP:d.rec;
   const rec=(rl||[]).map(([n,sc,has])=>`<div class="rec${has?' has':''}"><span class="n">${has?'\u2713 ':''}${n}</span><b class="c${tier(Math.round(sc))}">${sc.toFixed(1)}</b></div>`).join('')+(d.recNote?`<div class="rnote">${d.recNote}</div>`:'');
@@ -736,25 +767,25 @@ function tabHistory(){
   return `<div class="pn hpn">${ph('Career history')}<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="ha">Apps</span><span class="hg">Goals</span><span class="hf">Fee</span></div>${rows}
     <div class="hnote">League appearances and goals per season. Rows up to the last season of the FM install database come from it; later seasons come from this save. Fee = transfer fee paid for the move at the end of that row.</div></div>`}
 
-/* ---------- registry: order = tab strip order ---------- */
+/* ---------- registry: order = tab strip order (page = tab body; the header is shared) ---------- */
 const TABS=[
- {key:'profile',label:'Profile',page:tabProfile,slot:slotProfile},
- {key:'contract',label:'Contract & Transfer',page:tabContract,slot:slotContract},
- {key:'positions',label:'Positions',page:tabPositions,slot:slotPositions},
- {key:'general',label:'General Rating',page:tabGeneral,slot:slotDev},
- {key:'role',label:'Role Rating',page:tabRole,slot:slotDev},
- {key:'training',label:'Training',page:tabTraining,slot:slotDev},
- {key:'history',label:'History',page:tabHistory,slot:slotHistory}];
+ {key:'profile',label:'Profile',page:tabProfile},
+ {key:'contract',label:'Contract & Transfer',page:tabContract},
+ {key:'positions',label:'Positions',page:tabPositions},
+ {key:'general',label:'General Rating',page:tabGeneral},
+ {key:'role',label:'Role Rating',page:tabRole},
+ {key:'training',label:'Training',page:tabTraining},
+ {key:'history',label:'History',page:tabHistory}];
 
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['other','nums','pot','future','scout','short','inj','hgp','hgc','unk','nopend','data','tips'];
-const TOGGLES=[['other','Not your squad'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
-  document.getElementById('frame').innerHTML=`<div class="os"><span>${D().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header(t.slot())}
+  document.getElementById('frame').innerHTML=`<div class="os"><span>${D().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}
     <div class="main">${tabStrip()}<div class="content">${t.page()}</div></div></div>${actionStrip()}</div>`;
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
@@ -765,7 +796,11 @@ function render(){
   HDRS.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.hdr===k)b.className='on';b.onclick=()=>{S.hdr=k;render()};hs.appendChild(b)});
   const tg=document.getElementById('tgs');tg.innerHTML='';
   TOGGLES.forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
-  const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f])].filter(Boolean);
+  /* homegrown demo states: HGP / HGC = none | set | queued, 'queued elsewhere' = 0 | 1 | 3 (fake count for the rest of the save session) */
+  const seg=(id,items,cur,pick)=>{const e=document.getElementById(id);e.innerHTML='';items.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(cur===k)b.className='on';b.onclick=()=>{pick(k);render()};e.appendChild(b)})};
+  [['hgp','hgpSeg'],['hgc','hgcSeg']].forEach(([k,id])=>seg(id,[['none','Not set'],['set','Set'],['queued','Queued']],S[k]?'set':S['q'+k]?'queued':'none',v=>{S[k]=v==='set';S['q'+k]=v==='queued'}));
+  seg('qxSeg',[[0,'0'],[1,'1'],[3,'3']],S.qx,v=>{S.qx=v});
+  const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null].filter(Boolean);
   const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // cosmetic hover link: list row -> pitch dot
@@ -780,14 +815,14 @@ document.addEventListener('click',e=>{
   if(t.dataset.tab){S.tab=t.dataset.tab;return render()}
   const a=t.dataset.act,v=t.dataset.v;
   if(a==='pot')S.pot=v==='pot';else if(a==='future')S.future=v==='future';else if(a==='short')S.short=!S.short;
-  else if(a==='mk'){if(v==='both')S.hgp=S.hgc=true;else S[v]=true}else return;      // Make HGP/HGC: the real button patches and closes; here it just shows "set"
+  else if(a==='q')S['q'+v]=!S['q'+v];else return;      // HGP/HGC pill: toggles queued <-> not queued (nothing is written until the user saves)
   render();
 });
 function fromHash(){
   const h=location.hash.replace('#','').split('+');
   if(TABS.some(t=>t.key===h[0]))S.tab=h[0];
-  FLAGS.forEach(f=>S[f]=false);S.smp='out';
-  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f});
+  FLAGS.forEach(f=>S[f]=false);S.smp='out';S.qx=0;
+  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f;const m=/^qx(\d+)$/.exec(f);if(m)S.qx=+m[1]});
   render();
 }
 window.addEventListener('hashchange',()=>{const cur=location.hash;fromHash()});
