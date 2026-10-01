@@ -140,7 +140,7 @@
   },
   {
    "name": "Likes to Switch Ball to Other Flank",
-   "id": null,
+   "id": 47,
    "category": "Passing",
    "attrs": [
     "anticipation",
@@ -276,7 +276,7 @@
   },
   {
    "name": "Tries to Play Way Out of Trouble",
-   "id": null,
+   "id": 32,
    "category": "Dribbling",
    "attrs": [
     "dribbling",
