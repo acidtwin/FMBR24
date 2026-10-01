@@ -1,23 +1,25 @@
 """FM Backroom 24 - main window."""
 import os
-import shutil
 from datetime import date
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
-    QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
+    QComboBox, QStyledItemDelegate, QSpinBox,
     QInputDialog, QGridLayout, QBoxLayout, QTableView,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
+from PyQt6.QtCore import Qt, QTimer, QSize, QRectF
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
-from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
+from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget
-from fm_editor.cache import load_cache, save_cache, clear_cache
+from fm_editor.nations import nation_name as _nation_name_long
+from fm_editor.cache import clear_cache
+from gui.workers import ParseWorker, SaveWorker
+from gui.search_suggest import _SearchSuggest, _SuggestDelegate, _SG_MAX  # noqa: F401 (re-exported)
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
 from gui.about_dialog import AboutDialog
@@ -241,41 +243,6 @@ class _SidebarFrame(QFrame):
         p.end()
 
 
-class _HoverTable(QTableWidget):
-    """QTableWidget that highlights the full hovered row."""
-    _HOVER_COLOR = QColor(105, 51, 189, 26)
-    _SEL_HOVER_COLOR = QColor(105, 51, 189, 64)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._hovered_row = -1
-        self.viewport().setMouseTracking(True)
-        self.viewport().installEventFilter(self)
-
-    def eventFilter(self, obj, event):
-        if obj is self.viewport():
-            if event.type() == event.Type.MouseMove:
-                idx = self.indexAt(event.pos())
-                row = idx.row() if idx.isValid() else -1
-                if row != self._hovered_row:
-                    self._hovered_row = row
-                    self.viewport().update()
-            elif event.type() in (event.Type.Leave, event.Type.HoverLeave):
-                self._hovered_row = -1
-                self.viewport().update()
-        return super().eventFilter(obj, event)
-
-    def drawRow(self, painter, option, index):
-        super().drawRow(painter, option, index)
-        if index.row() == self._hovered_row:
-            color = (self._SEL_HOVER_COLOR
-                     if self.selectionModel().isRowSelected(index.row())
-                     else self._HOVER_COLOR)
-            painter.save()
-            painter.fillRect(option.rect, color)
-            painter.restore()
-
-
 def _primary_pos(positions):
     return POSITIONS[positions.index(max(positions))]
 
@@ -342,7 +309,7 @@ def _contract_expiry_counts(squad, today):
 
 
 def _club_badge(text, bg, fg, font_size=11, padding='2px 6px'):
-    lbl = QLabel(text)
+    lbl = QLabel(text.upper())
     lbl.setStyleSheet(
         f"background:{bg}; color:{fg}; font-weight:bold; font-size:{font_size}px;"
         f" letter-spacing:0.06em; text-transform:uppercase; padding:{padding};"
@@ -397,7 +364,7 @@ def _ordinal(n):
 
 
 def _club_sec_hdr(text, sub=False):
-    lbl = QLabel(text)
+    lbl = QLabel(text.upper())  # QSS text-transform is not honoured
     margin = "margin-top:16px; " if sub else ""
     lbl.setStyleSheet(
         f"{margin}color:#4a5f73; font-size:12px; font-weight:bold;"
@@ -741,206 +708,6 @@ def _progress_rate(person):
 
 # -- Background workers --------------------------------------------------------
 
-class ParseWorker(QThread):
-    progress = pyqtSignal(str)
-    pct = pyqtSignal(int)
-    done = pyqtSignal(dict)
-    error = pyqtSignal(str)
-
-    def __init__(self, save_path, use_cache=False):
-        super().__init__()
-        self.save_path = save_path
-        self.use_cache = use_cache
-
-    def _emit(self, msg, p):
-        self.progress.emit(msg)
-        self.pct.emit(p)
-
-    def _club_extras(self, b, members, clubs, get_member):
-        """Reputation, stadium, league position (fm_editor/clubextra.py); best effort per member."""
-        import re
-        from fm_editor import clubextra as X
-        self._emit("Reading club reputation, stadiums and tables...", 58)
-        X.add_club_status(b, clubs)
-        by_name = {m['name']: m for m in members}
-        fm = by_name.get('rgman/fix_man.dat')
-        if fm:
-            X.add_club_stadiums(b, clubs, get_member(self.save_path, fm))
-        tables = []
-        for n, m in by_name.items():
-            if re.fullmatch(r'rgman/comp_\d+\.dat', n):
-                tables.append(X.parse_comp_table(get_member(self.save_path, m)))
-        X.add_league_positions(clubs, tables)
-
-    def run(self):
-        try:
-            from fm_editor.archive import parse_archive, get_member
-            from fm_editor.gamedb import (find_names, find_clubs, add_club_finance, find_squads,
-                                          find_people, match_identities, find_abilities,
-                                          find_employment, find_contracts, find_club_staff,
-                                          find_coaching_attrs, find_injuries,
-                                          find_staff_extras)
-            from fm_editor.patch import is_homegrown
-
-            self._emit("Parsing archive...", 3)
-            header, members, index_marker, archive_name, subdir_count, subdirs = \
-                parse_archive(self.save_path)
-            gdb_m_ref = next((m for m in members if m['name'] == 'game_db.dat'), None)
-
-            if not gdb_m_ref:
-                self.error.emit("game_db.dat not found in archive.")
-                return
-
-            self._emit(f"Extracting game_db.dat ({gdb_m_ref['p'] // 1024 // 1024} MB)...", 5)
-            b = get_member(self.save_path, gdb_m_ref)
-
-            cached = load_cache(self.save_path) if self.use_cache else None
-            if cached and all(k in cached for k in ('clubs', 'squads', 'sub_squads', 'people')):
-                self.pct.emit(100)  # fast path: parsed data from cache; b/header/members still needed to patch+save
-                self.done.emit({
-                    'clubs': cached['clubs'], 'squads': cached['squads'],
-                    'sub_squads': cached['sub_squads'], 'people': cached['people'],
-                    'employment': cached.get('employment', {}), 'club_staff': cached.get('club_staff', {}),
-                    'save_info': cached.get('save_info', {}),
-                    'b': b, 'header': header, 'members': members,
-                    'index_marker': index_marker, 'archive_name': archive_name,
-                    'subdir_count': subdir_count, 'subdirs': subdirs,
-                })
-                return
-
-            self._emit("Finding name tables...", 45)
-            first_names, last_names, names_start, names_end = find_names(b)
-
-            self._emit("Finding clubs...", 55)
-            clubs = find_clubs(b, names_start)
-            add_club_finance(b, clubs, names_start)
-            try:
-                self._club_extras(b, members, clubs, get_member)
-            except Exception:
-                import traceback
-                traceback.print_exc()  # reputation/stadium/table are optional: Club page shows PENDING
-
-            self._emit("Finding people and matching identities...", 65)
-            people = find_people(b, first_names, last_names, names_end)
-            match_identities(b, people, names_end)
-
-            self._emit("Finding squad memberships...", 72)
-            squads, sub_squads = find_squads(b, clubs, names_start, people)
-
-            self._emit("Checking homegrown status...", 82)
-            for p in people:
-                p['hgp'] = is_homegrown(b, p)
-
-            self._emit("Scanning abilities (CA/PA)...", 88)
-            abilities = find_abilities(b, names_end)
-            for p in people:
-                ab = abilities.get(p.get('id', -1))
-                if ab:
-                    p['ca'] = ab['ca']
-                    p['pa'] = ab['pa']
-                    p['positions'] = ab['positions']
-                    p['raw_attrs'] = ab['raw_attrs']
-                    p['height_cm'] = ab['height_cm']
-                    p['weight_kg'] = ab['weight_kg']
-
-            self._emit("Scanning employment records...", 91)
-            employment = find_employment(b, people)
-
-            self._emit("Scanning contract dates...", 92)
-            from fm_editor.gamedb import find_contract_blocks
-            contracts = find_contract_blocks(b, people)  # real block (old 0x6a record = last evaluation month)
-            for p in people:
-                c = contracts.get(p.get('id', -1))
-                if c:
-                    p.update(c)
-
-            self._emit("Scanning club staff arrays...", 93)
-            club_staff = find_club_staff(b, clubs, people, abilities, names_start)
-
-            player_ids = set(abilities.keys())
-            self._emit("Parsing coaching attributes...", 94)
-            find_coaching_attrs(b, people, player_ids)
-            self._emit("Scanning injuries...", 95)
-            find_injuries(b, people, player_ids)
-            self._emit("Parsing staff ability (CA/PA)...", 96)
-            find_staff_extras(b, people, player_ids)
-
-            self._emit("Reading season stats...", 96)
-            try:
-                from fm_editor.playerstats import parse_player_stats
-                ps_m = next((m for m in members if m['name'] == 'rgman/player_stats.dat'), None)
-                if ps_m:
-                    stats = parse_player_stats(get_member(self.save_path, ps_m),
-                                              {p['id'] for p in people if p.get('id', -1) != -1})
-                    for p in people:
-                        if p.get('id') in stats:
-                            p['stats'] = stats[p['id']]
-            except Exception:
-                import traceback
-                traceback.print_exc()  # season stats are optional: the Club page falls back to CA
-
-            self._emit("Reading save info...", 97)
-            try:
-                from fm_editor.saveinfo import parse_save_info
-                save_info = parse_save_info(self.save_path, members, archive_name,
-                                            gdb=b, clubs=clubs, people=people)
-            except Exception:
-                import traceback
-                traceback.print_exc()  # untrusted bytes: a bad metadata block must not abort the load
-                save_info = {}
-
-            try:  # scouting budget: only the human-managed club carries it
-                from fm_editor.clubextra import find_human_scouting_budget
-                sb, hc = find_human_scouting_budget(b), (save_info or {}).get('manager_club_id')
-                hc_club = next((c for c in clubs if c['id'] == hc), None) if sb else None
-                if hc_club is not None:
-                    hc_club.setdefault('fin', {})['scouting_budget'] = sb[0]
-            except Exception:
-                pass
-
-            self._emit("Caching results...", 98)
-            save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
-                       save_info)
-
-            self.pct.emit(100)
-            result = {
-                'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
-                'employment': employment, 'club_staff': club_staff, 'save_info': save_info,
-                'b': b, 'header': header, 'members': members,
-                'index_marker': index_marker, 'archive_name': archive_name,
-                'subdir_count': subdir_count, 'subdirs': subdirs,
-            }
-            self.done.emit(result)
-
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class SaveWorker(QThread):
-    """Save Changes: verified temp file, 2 rotating backups, atomic replace (fm_editor/savefile.py)."""
-    progress = pyqtSignal(str)
-    pct = pyqtSignal(int)
-    done = pyqtSignal(dict)
-    error = pyqtSignal(str)
-
-    def __init__(self, save_data, path):
-        super().__init__()
-        self.save_data = save_data
-        self.path = path
-
-    def run(self):
-        try:
-            from fm_editor.savefile import save_in_place
-
-            def _cb(msg, p):
-                self.progress.emit(msg)
-                self.pct.emit(p)
-
-            self.done.emit(save_in_place(self.save_data, self.path, _cb))
-        except Exception as e:
-            self.error.emit(str(e))
-
-
 # -- Player detail modal -------------------------------------------------------
 
 def _attr_val_color(v: int) -> str:
@@ -968,6 +735,11 @@ _NATION_FLAG = {
     167: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 170: '🇪🇸', 171: '🇸🇪',
     172: '🇨🇭', 173: '🇹🇷', 175: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
 }
+
+def _nation_cell(nid, default=''):
+    """Flag emoji, else a short name, else the verified long name from fm_editor.nations, else default."""
+    return _NATION_FLAG.get(nid) or NATIONS.get(nid) or _nation_name_long(nid) or default
+
 
 _STAFF_COL_TOOLTIPS = {
     'Age': 'Age', 'Club': 'Club',
@@ -1124,8 +896,9 @@ class StaffDetailDialog(QDialog):
         # Top bar
         topbar = QFrame()
         topbar.setFixedHeight(40)
+        topbar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         topbar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         tb_row = QHBoxLayout(topbar)
         tb_row.setContentsMargins(14, 0, 10, 0)
         tb_row.setSpacing(8)
@@ -1173,8 +946,9 @@ class StaffDetailDialog(QDialog):
 
         photo = QFrame()
         photo.setFixedSize(190, 120)
+        photo.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         photo.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         photo_inner = QVBoxLayout(photo)
         photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         photo_icon = QLabel()
@@ -1184,8 +958,9 @@ class StaffDetailDialog(QDialog):
         left_vbox.addWidget(photo)
 
         info_frame = QFrame()
+        info_frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         info_frame.setStyleSheet(
-            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
+            f"QFrame#qfStrip {{ border-bottom:1px solid {COLORS['border']}; background:transparent; }}")
         info_vbox = QVBoxLayout(info_frame)
         info_vbox.setContentsMargins(12, 8, 12, 8)
         info_vbox.setSpacing(0)
@@ -1328,8 +1103,9 @@ class StaffDetailDialog(QDialog):
 
         # Action strip
         action_frame = QFrame()
+        action_frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         action_frame.setStyleSheet(
-            f"border-top:1px solid {COLORS['border']}; background:transparent;")
+            f"QFrame#qfStrip {{ border-top:1px solid {COLORS['border']}; background:transparent; }}")
         action_row = QHBoxLayout(action_frame)
         action_row.setContentsMargins(0, 8, 0, 4)
         action_row.addStretch()
@@ -1691,165 +1467,6 @@ class _HeaderHeroWidget(QWidget):
 
 # -- Search autocomplete -------------------------------------------------------
 
-from PyQt6.QtWidgets import QApplication, QStyle, QListWidget, QListWidgetItem  # noqa: E402
-
-_SUGGEST_KINDS = ('Club', 'Staff', 'Player')  # kind index -> tag text
-_SG_MAX = 12  # max suggestion rows
-
-
-class _SuggestDelegate(QStyledItemDelegate):
-    """Row = name (left), muted club (after name), muted type tag (right-aligned)."""
-
-    def sizeHint(self, option, index):
-        return QSize(option.rect.width(), _SearchSuggest.ROW_H)
-
-    def paint(self, p, option, index):
-        r = option.rect
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        sel = bool(option.state & QStyle.StateFlag.State_Selected)
-        if sel:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(COLORS['selection_bg']))
-            p.drawRoundedRect(QRectF(r).adjusted(1, 0, -1, 0), 3, 3)
-        name = index.data(Qt.ItemDataRole.UserRole + 1) or ''
-        sub = index.data(Qt.ItemDataRole.UserRole + 2) or ''
-        kind = index.data(Qt.ItemDataRole.UserRole)[0]
-        pad = 10
-        f = QFont(option.font)
-        f.setPixelSize(12)
-        p.setFont(f)
-        tag_f = QFont(f)
-        tag_f.setPixelSize(11)
-        tag = _SUGGEST_KINDS[kind]
-        tag_w = QFontMetrics(tag_f).horizontalAdvance(tag)
-        # type tag, right-aligned in a fixed column
-        p.setFont(tag_f)
-        p.setPen(QColor(COLORS['text_secondary']))
-        p.drawText(r.adjusted(0, 0, -pad, 0),
-                   int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), tag)
-        # name, then optional club
-        p.setFont(f)
-        fm = QFontMetrics(f)
-        avail = r.width() - 2 * pad - tag_w - 12
-        nm = fm.elidedText(name, Qt.TextElideMode.ElideRight, avail)
-        p.setPen(QColor(COLORS['text_primary']))
-        p.drawText(r.adjusted(pad, 0, 0, 0),
-                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), nm)
-        rest = avail - fm.horizontalAdvance(nm) - 10
-        if sub and rest > 40:
-            p.setPen(QColor(COLORS['text_dim']))
-            x = pad + fm.horizontalAdvance(nm) + 10
-            p.drawText(r.adjusted(x, 0, 0, 0),
-                       int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
-                       fm.elidedText(sub, Qt.TextElideMode.ElideRight, rest))
-        p.restore()
-
-
-class _SearchSuggest(QFrame):
-    """Autocomplete dropdown under the top search box.
-
-    A plain child widget of the main window (not a Popup window), so it never steals
-    keyboard focus and positions reliably on X11 and Wayland. Key handling is done by
-    filtering the search box; clicks outside close it via an application event filter.
-    """
-    ROW_H = 28
-
-    def __init__(self, window, box, on_pick, flush=None):
-        super().__init__(window)
-        self._win, self._box, self._on_pick, self._flush = window, box, on_pick, flush
-        self.setObjectName('searchDropdown')
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setStyleSheet(
-            f"QFrame#searchDropdown {{ background:{COLORS['elevated']};"
-            f" border:1px solid {COLORS['border_bright']}; border-radius:4px; }}"
-            "QListWidget#searchList { background:transparent; border:none; outline:none; }")
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(3, 3, 3, 3)
-        self._list = QListWidget()
-        self._list.setObjectName('searchList')
-        self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._list.setItemDelegate(_SuggestDelegate(self._list))
-        self._list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setMouseTracking(True)
-        self._list.itemEntered.connect(lambda it: self._list.setCurrentItem(it))
-        self._list.itemClicked.connect(self._clicked)
-        lay.addWidget(self._list)
-        box.installEventFilter(self)
-        self.hide()
-
-    def set_rows(self, rows):
-        """rows: [(kind, obj, name, sub)]. Shows below the box, or hides if empty."""
-        self._list.clear()
-        if not rows:
-            self._close()
-            return
-        for kind, obj, name, sub in rows:
-            it = QListWidgetItem()
-            it.setData(Qt.ItemDataRole.UserRole, (kind, obj))
-            it.setData(Qt.ItemDataRole.UserRole + 1, name)
-            it.setData(Qt.ItemDataRole.UserRole + 2, sub)
-            self._list.addItem(it)
-        self._list.setCurrentRow(0)
-        b = self._box
-        pos = b.mapTo(self._win, QPoint(0, b.height() + 2))
-        self.setGeometry(pos.x(), pos.y(), max(280, b.width()),
-                         len(rows) * self.ROW_H + 8)
-        self.raise_()
-        if not self.isVisible():
-            self.show()
-            QApplication.instance().installEventFilter(self)
-
-    def _close(self):
-        if self.isVisible():
-            QApplication.instance().removeEventFilter(self)
-            self.hide()
-
-    def close_popup(self):
-        self._close()
-
-    def _clicked(self, item):
-        kind, obj = item.data(Qt.ItemDataRole.UserRole)
-        self._close()
-        self._on_pick(kind, obj, item.data(Qt.ItemDataRole.UserRole + 1))
-
-    def _move(self, step):
-        n = self._list.count()
-        if n:
-            self._list.setCurrentRow((self._list.currentRow() + step) % n)
-
-    def eventFilter(self, obj, ev):
-        t = ev.type()
-        if obj is self._box:
-            if t == ev.Type.FocusOut:
-                self._close()
-            elif t == ev.Type.KeyPress:
-                k = ev.key()
-                if k == Qt.Key.Key_Escape and self.isVisible():
-                    self._close()
-                    return True
-                if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                    if self._flush:
-                        self._flush()  # apply a pending debounced query first
-                    if self.isVisible() and self._list.currentItem():
-                        self._clicked(self._list.currentItem())
-                        return True
-                elif k in (Qt.Key.Key_Down, Qt.Key.Key_Up) and self.isVisible():
-                    self._move(1 if k == Qt.Key.Key_Down else -1)
-                    return True
-            return False
-        # application-level: click outside / window change closes
-        if t == ev.Type.MouseButtonPress:
-            gp = ev.globalPosition().toPoint()
-            if not self.rect().contains(self.mapFromGlobal(gp)) \
-                    and not self._box.rect().contains(self._box.mapFromGlobal(gp)):
-                self._close()
-        elif t in (ev.Type.WindowDeactivate, ev.Type.Resize) and obj is self._win:
-            self._close()
-        return False
-
-
 # -- Main window ---------------------------------------------------------------
 
 class MainWindow(QMainWindow):
@@ -2086,6 +1703,10 @@ class MainWindow(QMainWindow):
         nav_row.addWidget(self._search_box, 1)
         # autocomplete: >=3 chars, debounced; index built lazily per loaded save
         self._sg_idx = None
+        self._report_timer = QTimer(self)
+        self._report_timer.setSingleShot(True)
+        self._report_timer.setInterval(150)
+        self._report_timer.timeout.connect(self._apply_report_filters)
         self._sg_timer = QTimer(self)
         self._sg_timer.setSingleShot(True)
         self._sg_timer.setInterval(130)
@@ -2093,15 +1714,6 @@ class MainWindow(QMainWindow):
         self._sg_popup = _SearchSuggest(self, self._search_box, self._sg_pick, self._sg_flush)
         self._search_box.textChanged.connect(self._sg_text_changed)
 
-        _tbtn_ss = (
-            "QPushButton { background: rgba(8,14,24,0.70); color: rgba(255,255,255,0.78);"
-            " border: 1px solid rgba(255,255,255,0.18); border-radius: 2px;"
-            " padding: 3px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: rgba(20,32,50,0.85); color: #fff;"
-            " border-color: rgba(255,255,255,0.32); }"
-            "QPushButton:disabled { background: rgba(8,14,24,0.45); color: rgba(255,255,255,0.18);"
-            " border-color: rgba(255,255,255,0.06); }"
-        )
         _tbtn_accent_ss = (
             "QPushButton { background: #2b6cb0; color: #fff;"
             " border: none; border-radius: 2px;"
@@ -2307,30 +1919,6 @@ class MainWindow(QMainWindow):
         for i in range(5):
             row.addWidget(_StarWidget(max(0.0, min(1.0, stars - i))))
         outer.addWidget(row_widget, 0, Qt.AlignmentFlag.AlignRight)
-        return w
-
-    def _make_header_pill_widget(self, pairs: list) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        row = QHBoxLayout(w)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        _pill_ss = (
-            "background: rgba(0,255,135,0.08);"
-            " border: 1px solid rgba(0,255,135,0.15);"
-            " border-radius: 4px;"
-            " padding: 2px 8px;"
-            " font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
-            " font-size: 12px;"
-        )
-        for label, value in pairs:
-            pill = QLabel(
-                f"<span style='color:#8892A0'>{label}</span>"
-                f" <span style='color:#00FF87'>{value}</span>"
-            )
-            pill.setTextFormat(Qt.TextFormat.RichText)
-            pill.setStyleSheet(_pill_ss)
-            row.addWidget(pill)
         return w
 
     def _update_header_for_view(self, key: str):
@@ -3191,8 +2779,9 @@ class MainWindow(QMainWindow):
         self._squad_header_bar = QFrame()
         header_bar = self._squad_header_bar  # keep alive — children referenced as instance attrs
         header_bar.setFixedHeight(44)
+        header_bar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         header_bar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         header_row = QHBoxLayout(header_bar)
         header_row.setContentsMargins(16, 0, 16, 0)
         header_row.setSpacing(12)
@@ -3210,8 +2799,9 @@ class MainWindow(QMainWindow):
         # Squad tab row — shows "First Team" + sub-squads when loaded
         tab_bar = QFrame()
         tab_bar.setFixedHeight(40)
+        tab_bar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         tab_bar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         tab_row = QHBoxLayout(tab_bar)
         tab_row.setContentsMargins(12, 3, 12, 0)
         tab_row.setSpacing(0)
@@ -3233,7 +2823,6 @@ class MainWindow(QMainWindow):
         """
         self._squad_tab_ss_str = _squad_tab_ss
         self._squad_tab_bar = tab_row   # keep reference to add dynamic tabs later
-        self._squad_tab_frame = tab_bar
         self._squad_tab_btns = []
         self._squad_tab_dynamic_btns = []
 
@@ -3258,13 +2847,6 @@ class MainWindow(QMainWindow):
             f"QPushButton:disabled {{ background:{COLORS['surface']}; color:{COLORS['text_dim']};"
             f" border:1px solid {COLORS['border']}; }}"
         )
-        _clear_ss = (
-            f"QPushButton {{ background:transparent; color:{COLORS['text_secondary']};"
-            f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:3px 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ color:{COLORS['text_primary']}; border-color:{COLORS['border_bright']}; }}"
-            f"QPushButton:disabled {{ color:{COLORS['text_dim']}; }}"
-        )
         self._patch_hgp_btn = QPushButton('Make HGP')
         self._patch_hgp_btn.setStyleSheet(_accent_ss)
         self._patch_hgp_btn.setFixedHeight(28)
@@ -3286,7 +2868,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(tab_bar)
 
         # Table
-        self._table = _HoverTable()
+        self._table = QTableWidget()
         self._table.setColumnCount(9)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -3313,8 +2895,9 @@ class MainWindow(QMainWindow):
         """Elevated 'Quick Filters' strip (caption row above, filter row below).
         Mirrors the Players view; returns (frame, filter_row_layout)."""
         frame = QFrame()
+        frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         frame.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         frame_vbox = QVBoxLayout(frame)
         frame_vbox.setContentsMargins(0, 0, 0, 0)
         frame_vbox.setSpacing(0)
@@ -3418,14 +3001,14 @@ class MainWindow(QMainWindow):
         nid = p.get('nation', 0)
         coaching = p.get('coaching', {})
         pers = p.get('personality', [])
-        return (p.get('name', ''), club_name, _NATION_FLAG.get(nid, NATIONS.get(nid, '')),
+        return (p.get('name', ''), club_name, _nation_cell(nid, ''),
                 _age(p),
                 *[coaching.get(_STAFF_COACHING_MAP.get(c, c)) for c in _STAFF_COACHING_COLS],
                 *[pers[i] if i < len(pers) else None for i in range(8)])
 
     def _make_staff_table(self):
         """Staff table (name/club/nation/age + coaching + personality); shared by Staff and Staff Shortlist."""
-        tbl = _HoverTable()
+        tbl = QTableWidget()
         tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         tbl.setAlternatingRowColors(True)
@@ -3483,7 +3066,7 @@ class MainWindow(QMainWindow):
                 entity_id = employment.get(pid)
                 club_name = club_by_entity.get(entity_id, '') if entity_id else ''
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
@@ -3648,7 +3231,7 @@ class MainWindow(QMainWindow):
 
         vbox.addWidget(qf_bar)
 
-        self._club_staff_table = _HoverTable()
+        self._club_staff_table = QTableWidget()
         self._club_staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._club_staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._club_staff_table.setAlternatingRowColors(True)
@@ -3731,7 +3314,7 @@ class MainWindow(QMainWindow):
             pid = p.get('id', -1)
             name = p.get('name', '')
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
@@ -3772,8 +3355,9 @@ class MainWindow(QMainWindow):
 
         # Filter bar — same structure as Players' Quick Filters
         filter_hdr = QFrame()
+        filter_hdr.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         filter_hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         filter_vbox = QVBoxLayout(filter_hdr)
         filter_vbox.setContentsMargins(0, 0, 0, 0)
         filter_vbox.setSpacing(0)
@@ -3873,7 +3457,7 @@ class MainWindow(QMainWindow):
         filter_vbox.addLayout(sl_filter_row)
         vbox.addWidget(filter_hdr)
 
-        self._shortlist_table = _HoverTable()
+        self._shortlist_table = QTableWidget()
         self._shortlist_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._shortlist_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._shortlist_table.setAlternatingRowColors(True)
@@ -3975,7 +3559,7 @@ class MainWindow(QMainWindow):
             ca = str(p.get('ca', '-')) if is_player else '-'
             pa = str(p.get('pa', '-')) if is_player else '-'
             age = _age(p)
-            nation = NATIONS.get(p.get('nation', 0), '')
+            nation = _nation_cell(p.get('nation', 0))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
             row_items = [
@@ -4250,7 +3834,7 @@ class MainWindow(QMainWindow):
         self._report_clear_btn.clicked.connect(self._clear_report_filter)
         filter_row2.addWidget(self._report_clear_btn)
 
-        self._reports_table = _HoverTable()
+        self._reports_table = QTableWidget()
         self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._reports_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._reports_table.setAlternatingRowColors(True)
@@ -4373,7 +3957,7 @@ class MainWindow(QMainWindow):
             col4_val = ratings.get(p.get('id'), None) if is_role else _progress_rate(p)
             age = _age(p)
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             club_id = squads.get(p.get('id'))
             club_name = club_by_id.get(club_id, '') if club_id else ''
             injured = p.get('injured', False)
@@ -4412,7 +3996,8 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
                     f.setPointSize(14)
-                    item.setFont(f)
+                    if not item.text()[:1].isalpha():  # big font is for emoji flags only
+                        item.setFont(f)
                 elif col == 8:
                     text_dim = COLORS.get('text_dim', COLORS.get('text_secondary', '#888'))
                     item.setForeground(QColor('#4caf50') if hgp else QColor(text_dim))
@@ -4444,7 +4029,11 @@ class MainWindow(QMainWindow):
             players = self._get_report_players('best_role', role_name=role)
             self._populate_reports_table(players)
 
-    def _on_report_age_changed(self):
+    def _on_report_age_changed(self, *_):
+        # debounce: Best-by-Role rates all ~130k people (0.25-0.36 s) so spin ticks must coalesce
+        self._report_timer.start()
+
+    def _apply_report_filters(self):
         # Despite the name, this re-derives the report for every quick-filter
         # field (name/CA/PA/age/dev), not just age — kept as-is to avoid
         # touching every connect() call site.
@@ -4480,7 +4069,8 @@ class MainWindow(QMainWindow):
         self._report_age_min.blockSignals(False)
         self._report_age_max.blockSignals(False)
         self._report_dev_filter.blockSignals(False)
-        self._on_report_age_changed()
+        self._report_timer.stop()
+        self._apply_report_filters()
 
     def _on_reports_table_dblclick(self, index):
         item = self._reports_table.item(index.row(), 0)
@@ -4495,8 +4085,9 @@ class MainWindow(QMainWindow):
 
         # Header / filter strip
         hdr = QFrame()
+        hdr.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         hdr_vbox = QVBoxLayout(hdr)
         hdr_vbox.setContentsMargins(0, 0, 0, 0)
         hdr_vbox.setSpacing(0)
@@ -4652,7 +4243,7 @@ class MainWindow(QMainWindow):
         cid = squads.get(p.get('id'))
         return (p.get('name', ''), bool(p.get('injured', False)), pos, p.get('ca'), p.get('pa'),
                 _progress_rate(p), _age(p),
-                _NATION_FLAG.get(nid, NATIONS.get(nid, '')), bool(p.get('hgp', False)),
+                _nation_cell(nid, ''), bool(p.get('hgp', False)),
                 club_by_id.get(cid, '') if cid else '', p.get('contract_end', ''))
 
     def _open_players_view(self, players=None, highlight_name=None):
@@ -4876,36 +4467,19 @@ class MainWindow(QMainWindow):
         _TT = _COL_TT | {
             'Age': 'Age on the save\'s in-game date',
         }
-        if mode == 'squad':
-            cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
-                    'CtrE'] + _ATTR_ABBREV
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
-                            9: 45, 10: 65}  # 1=INJ, 10=CtrE
-            for i, cw in fixed_widths.items():
-                self._table.setColumnWidth(i, cw)
-            # Attr columns: 35px each
-            for i in range(11, len(cols)):
-                self._table.setColumnWidth(i, 35)
-        elif mode == 'scout':
-            cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {0: 150, 1: 160, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40}.items():
-                self._table.setColumnWidth(i, cw)
-        else:  # player
-            cols = ['Name', 'Club', 'Nation', 'Born', 'HGP']
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {0: 150, 1: 160, 2: 50, 3: 50, 4: 45}.items():
-                self._table.setColumnWidth(i, cw)
+        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
+                'CtrE'] + _ATTR_ABBREV
+        self._table.setColumnCount(len(cols))
+        self._table.setHorizontalHeaderLabels(cols)
+        for i in range(len(cols)):
+            hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
+                        9: 45, 10: 65}  # 1=INJ, 10=CtrE
+        for i, cw in fixed_widths.items():
+            self._table.setColumnWidth(i, cw)
+        # Attr columns: 35px each
+        for i in range(11, len(cols)):
+            self._table.setColumnWidth(i, 35)
         for i, col in enumerate(cols):
             if col in _TT:
                 hdr_item = self._table.horizontalHeaderItem(i)
@@ -4918,9 +4492,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         w = getattr(self, '_worker', None)
-        if isinstance(w, SaveWorker) and w.isRunning():
+        if isinstance(w, (SaveWorker, ParseWorker)) and w.isRunning():
             event.ignore()
-            self._status.showMessage('Saving: wait until the save finishes before closing.')
+            self._status.showMessage('Working: wait until the current load/save finishes before closing.')
             return
         if self._dirty:
             B = QMessageBox.StandardButton
@@ -4935,8 +4509,6 @@ class MainWindow(QMainWindow):
                 if r == B.Save:
                     self._do_save(after=self.close, confirm=False)  # closes again once saved
                 return
-        if self._save_path:
-            clear_cache(self._save_path)
         super().closeEvent(event)
 
     # -- State helpers --------------------------------------------------------
@@ -5022,8 +4594,6 @@ class MainWindow(QMainWindow):
             self._load_sig = None
         self._set_busy(True, 'Parsing save file')
         self._preload_gen = getattr(self, '_preload_gen', 0) + 1  # cancels any preload in flight
-        self._players_model.clear()  # drop the previous save's rows now, not at first visit
-        self._staff_model.clear()
         self._worker = ParseWorker(self._save_path, use_cache)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
@@ -5130,8 +4700,39 @@ class MainWindow(QMainWindow):
                 yield 93 + 7 * c // tv.model().columnCount() // 2
         yield 100
 
+    def _reset_session_state(self, result):
+        """Drop everything that still points at the previous parse's person/club dicts (stale offsets
+        would be patched into the new bytes). Shortlists survive a Reload of the same file, re-resolved by id."""
+        same_file = getattr(self, '_loaded_path', None) == self._save_path
+        self._loaded_path = self._save_path
+        self._prev_club_id = (self._current_club or {}).get('id') if same_file else None
+        by_id = {p.get('id'): p for p in result.get('people', []) if p.get('id', -1) != -1}
+        for lst in (self._shortlist, self._staff_shortlist):
+            lst[:] = [by_id[p.get('id')] for p in lst if same_file and p.get('id') in by_id]
+        self._squad = []
+        self._club_first_team = []
+        self._club_entity_id = None
+        self._current_club = None
+        self._report_ratings = {}
+        self._nav_history = []
+        self._nav_pos = -1
+        self._back_btn.setEnabled(False)
+        self._fwd_btn.setEnabled(False)
+        self._table.setRowCount(0)
+        self._squad_info.setText('')
+        for btn in self._squad_tab_dynamic_btns:
+            self._squad_tab_bar.removeWidget(btn)
+            btn.deleteLater()
+        self._squad_tab_dynamic_btns = []
+        self._squad_tab_btns = self._squad_tab_btns[:1]
+        self._club_staff_table.setRowCount(0)
+        self._populate_reports_table([])
+        self._populate_shortlist()
+        self._apply_staff_shortlist_filter()
+
     def _finish_load(self, result):
         self._save_data = result
+        self._reset_session_state(result)
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
@@ -5398,7 +4999,7 @@ class MainWindow(QMainWindow):
 
         for row, p in enumerate(squad):
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, '?'))
+            flag = _nation_cell(nation_id, '?')
             hgp = p.get('hgp', False)
             hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
             pos = _primary_pos(p['positions']) if p.get('positions') else '?'
@@ -5446,7 +5047,8 @@ class MainWindow(QMainWindow):
                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
                     f.setPointSize(14)
-                    item.setFont(f)
+                    if not item.text()[:1].isalpha():  # big font is for emoji flags only
+                        item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 if col == 8:
@@ -5507,32 +5109,7 @@ class MainWindow(QMainWindow):
                 sel.select(m.index(r, 0), sel.SelectionFlag.Select | sel.SelectionFlag.Rows)
 
     def _on_row_double_clicked(self, index):
-        if self._table_mode == 'squad':
-            self._open_player_detail(index.row())
-            return
-        if self._table_mode not in ('player', 'scout'):
-            return
-        item = self._table.item(index.row(), 0)
-        if not item:
-            return
-        pid = item.data(Qt.ItemDataRole.UserRole)
-        player_results = getattr(self, '_player_results', {})
-        if not isinstance(player_results, dict):
-            return
-        p = player_results.get(pid)
-        if not p:
-            return
-        squads = self._save_data.get('squads', {})
-        clubs = self._save_data.get('clubs', [])
-        club_id = squads.get(p['id'])
-        if not club_id:
-            self._status.showMessage(f"{p['name']} has no club.")
-            return
-        club = next((c for c in clubs if c['id'] == club_id), None)
-        if not club:
-            self._status.showMessage(f"{p['name']}'s club not found.")
-            return
-        self._show_squad(club)
+        self._open_player_detail(index.row())
 
     def _open_player_detail(self, row: int):
         item = self._table.item(row, 0)
@@ -5630,7 +5207,8 @@ class MainWindow(QMainWindow):
             return  # don't yank the user off the Settings page
         page = _settings_mod.load()['landing_page']
         sd = self._save_data or {}
-        club_id = (self._current_club or {}).get('id', (sd.get('save_info') or {}).get('manager_club_id'))
+        club_id = self._prev_club_id if getattr(self, '_prev_club_id', None) is not None else (sd.get('save_info') or {}).get('manager_club_id')
+        self._prev_club_id = None
         club = next((c for c in sd.get('clubs', []) if c.get('id') == club_id), None)
         if page == 'club' and club:
             self._show_squad(club)
@@ -5710,32 +5288,6 @@ class MainWindow(QMainWindow):
         self._patch_hgp_btn.setEnabled(has_squad and has_sel and not all_hgp)
         self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
                                         and self._club_entity_id is not None and not all_hgc)
-
-    def _select_all_non_hgp(self):
-        id_to_hgp = {p.get('id', -1): p.get('hgp', False) for p in self._squad}
-        self._table.clearSelection()
-        for row in range(self._table.rowCount()):
-            item = self._table.item(row, 0)
-            if item and not id_to_hgp.get(item.data(Qt.ItemDataRole.UserRole), True):
-                self._table.selectRow(row)
-
-    def _select_all_non_hgc(self):
-        b = self._save_data.get('b') if self._save_data else None
-        if b is None or not self._club_entity_id:
-            return
-        from fm_editor.patch import is_hgc
-        id_to_person = {p.get('id', -1): p for p in self._squad}
-        self._table.clearSelection()
-        for row in range(self._table.rowCount()):
-            item = self._table.item(row, 0)
-            if not item:
-                continue
-            pid = item.data(Qt.ItemDataRole.UserRole)
-            person = id_to_person.get(pid)
-            if person and not is_hgc(b, person, self._club_entity_id):
-                self._table.selectRow(row)
-
-    # -- Patch ----------------------------------------------------------------
 
     def _get_selected_persons(self):
         pid_map = {p.get('id', -1): p for p in self._squad}

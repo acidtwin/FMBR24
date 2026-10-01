@@ -12,8 +12,16 @@ try:
     sys.stdout = _log_file
 except Exception:
     faulthandler.enable()
+
+
+def _excepthook(t, v, tb):
+    # PyQt6 aborts the process on an unhandled exception in a slot unless a hook is installed
+    import traceback
+    traceback.print_exception(t, v, tb)
+
+
+sys.excepthook = _excepthook
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QIcon
 from gui.theme import QSS
 from gui.main_window import MainWindow
 from gui.icon import make_app_icon

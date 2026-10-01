@@ -24,6 +24,36 @@ NATION_NAMES = {
     247: 'Montenegro',
 }
 
+# Added from the 5 biggest clubs per id (same method; local club names identify the nation).
+NATION_NAMES.update({
+    0: 'Algeria', 1: 'Angola', 2: 'Benin', 3: 'Botswana', 4: 'Burkina Faso', 5: 'Burundi',
+    6: 'Cameroon', 7: 'Cape Verde', 8: 'Central African Republic', 9: 'Chad', 10: 'Djibouti',
+    12: 'Equatorial Guinea', 13: 'Ethiopia', 14: 'Gabon', 15: 'Gambia', 16: 'Ghana', 17: 'Guinea',
+    18: 'Guinea-Bissau', 19: 'Ivory Coast', 20: 'Kenya', 21: 'Lesotho', 22: 'Liberia',
+    23: 'Libya', 24: 'Madagascar', 25: 'Malawi', 26: 'Mali', 27: 'Mauritania', 28: 'Mauritius',
+    30: 'Mozambique', 31: 'Namibia', 32: 'Niger', 34: 'Rwanda', 35: 'Sao Tome and Principe',
+    36: 'Senegal', 38: 'Sierra Leone', 39: 'Somalia', 40: 'South Africa', 41: 'Sudan',
+    42: 'Eswatini', 43: 'Tanzania', 44: 'Congo', 45: 'Togo', 46: 'Tunisia', 47: 'Uganda',
+    48: 'DR Congo', 49: 'Zambia', 50: 'Zimbabwe', 51: 'Afghanistan', 52: 'Bahrain', 54: 'Brunei',
+    55: 'China', 56: 'Hong Kong', 57: 'India', 58: 'Indonesia', 59: 'Iran', 60: 'Iraq',
+    62: 'Jordan', 63: 'Cambodia', 65: 'Kuwait', 66: 'Kyrgyzstan', 67: 'Laos', 68: 'Lebanon',
+    69: 'Macau', 70: 'Malaysia', 71: 'Maldives', 73: 'Nepal', 74: 'North Korea', 75: 'Oman',
+    76: 'Pakistan', 79: 'Singapore', 81: 'Sri Lanka', 82: 'Syria', 83: 'Taiwan', 84: 'Tajikistan',
+    85: 'Thailand', 86: 'Philippines', 87: 'Turkmenistan', 89: 'Uzbekistan', 90: 'Vietnam',
+    91: 'Yemen', 92: 'Antigua and Barbuda', 93: 'Aruba', 94: 'Barbados', 95: 'Belize',
+    96: 'Bermuda', 98: 'Cayman Islands', 100: 'Cuba', 105: 'Guyana', 106: 'Haiti', 110: 'Curacao',
+    113: 'Puerto Rico', 116: 'St Vincent and the Grenadines', 117: 'Suriname', 118: 'Bahamas',
+    127: 'Andorra', 151: 'Latvia', 154: 'Luxembourg', 156: 'Malta', 166: 'San Marino',
+    178: 'Cook Islands', 179: 'Fiji', 180: 'New Zealand', 181: 'Papua New Guinea',
+    182: 'Solomon Islands', 183: 'Tahiti', 184: 'Tonga', 185: 'Vanuatu', 186: 'Samoa',
+    197: 'Palestine', 202: 'Mongolia', 204: 'Eritrea', 206: 'British Virgin Islands',
+    207: 'Montserrat', 208: 'US Virgin Islands', 209: 'Turks and Caicos', 211: 'Bhutan',
+    212: 'Dominican Republic', 215: 'Kiribati', 234: 'Comoros', 236: 'Timor-Leste',
+    240: 'South Sudan',
+    205: 'Anguilla', 225: 'French Guiana', 226: 'Guadeloupe', 227: 'Martinique', 230: 'Reunion',
+    231: 'Mayotte',
+})
+
 
 def nation_name(nation_id):
     return NATION_NAMES.get(nation_id)
