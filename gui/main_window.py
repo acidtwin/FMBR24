@@ -2500,12 +2500,6 @@ class MainWindow(QMainWindow):
         vbox.addWidget(staff_rpt_btn)
 
         vbox.addStretch()
-        # Settings pinned to the bottom (mockups/settings-page-design-a.html: hl, 6px, nav, 10px)
-        vbox.addWidget(self._make_hline())
-        vbox.addSpacing(6)
-        self._nav_btns['settings'] = self._make_nav_btn(
-            _SVG_COG, 'Settings', lambda checked: self._nav_to('settings'))
-        vbox.addWidget(self._nav_btns['settings'])
         vbox.addSpacing(10)
         import os as _os
         _sb_img_path = _os.path.join(_os.path.dirname(__file__), 'assets', 'sidebar.webp')
@@ -5996,7 +5990,7 @@ class MainWindow(QMainWindow):
             self._dot_timer.start()
             self._load_btn.setText('Loading')
             for k, btn in self._nav_btns.items():
-                btn.setEnabled(k == 'settings')  # Settings is safe to open while loading
+                btn.setEnabled(False)
             self._players_nav_btn.setEnabled(False)
             self._scouting_staff_nav_btn.setEnabled(False)
             self._welcome_load_btn.setEnabled(False)
