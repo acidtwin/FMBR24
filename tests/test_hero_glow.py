@@ -31,41 +31,46 @@ assert img.pixelColor(58, 90).alpha() == 0, 'between lines must stay empty'
 assert halo.toImage().pixelColor(42, 100).alpha() > 0, 'halo reaches beside the line'
 assert (h._glow_layers()[0] is core), 'cached per size'
 
-# first load: glow starts, timer runs, pulse varies with phase, starts and returns to a trough
+# first load: glow starts, timer runs, smooth pulse between floor and floor+depth, eases in from 0
 w._ui_snap = None
 w._set_busy(True, 'Parsing save file')
 assert h.glow_active() and h._g_timer.isActive()
-vals = []
-for t in range(0, 2401, 300):
-    h._g_t = float(t)
-    vals.append(h.glow_intensity())
-assert vals[0] == 0.0, vals                         # eases in from 0
-h._g_t = 3000.0                                     # past the fade-in
-quarter, trough = [], []
-for t in (1200 + 2400, 0 + 2400):                   # top / bottom of the pulse (period 2400)
-    h._g_t = float(t)
-    (quarter if t == 3600 else trough).append(h.glow_intensity())
-assert quarter[0] - trough[0] > HERO_GLOW['pulse_depth'] * 0.9, (quarter, trough)
-# glow rises with progress
+h._g_t = 0.0
+assert h.glow_intensity() == 0.0                    # eases in from 0
+period = HERO_GLOW['period_ms']
+h._g_t = 4 * period                                 # past the fade-in, bottom of a pulse
+trough = h.glow_intensity()
+h._g_t = 4.5 * period                               # top of the pulse
+top = h.glow_intensity()
+assert abs(trough - HERO_GLOW['floor']) < 1e-6 and abs(top - (HERO_GLOW['floor'] + HERO_GLOW['depth'])) < 1e-6, (trough, top)
+assert HERO_GLOW['peak_alpha'] <= 0.2, 'the pulse is meant to be subtle'
+# smooth: no jump between neighbouring frames (60 fps step) anywhere in one period
+step = HERO_GLOW['fps_ms']
+prev = None
+for k in range(int(period / step) + 1):
+    h._g_t = 4 * period + k * step
+    v = h.glow_intensity()
+    assert prev is None or abs(v - prev) < 0.02, (k, prev, v)
+    prev = v
+# not tied to the loading bar's value: the bar's progress does not change the glow
 h._g_t = 4800.0
-h.set_glow_progress(0.0); lo = h.glow_intensity()
-h.set_glow_progress(1.0); hi = h.glow_intensity()
-assert hi > lo + HERO_GLOW['progress_gain'] * 0.9, (lo, hi)
-w._tick_shimmer()  # wires the bar's progress into the glow
-assert 0.0 <= h._g_prog <= 1.0
+lo = h.glow_intensity()
+w._progress_displayed = 90.0
+w._tick_shimmer()
+assert h.glow_intensity() == lo
 h.update(); app.processEvents(); h.grab()           # paints without error while active
 
-# finish: continuous (no jump), brighter flash, fades to 0, then the timer is stopped
+# finish (bar done): continuous (no jump, no flash), fades to 0, then the timer is stopped
 before = h.glow_intensity()
 w._set_busy(False)
 assert h._g_state == 'end'
 assert abs(h.glow_intensity() - before) < 1e-6, 'finish must not jump'
-h.glow_step(HERO_GLOW['flash_ms'])
-assert h.glow_intensity() >= max(before, 0.99 * HERO_GLOW['flash'])
+h.glow_step(HERO_GLOW['fade_ms'] / 2)
+assert h.glow_intensity() < before
 h.glow_step(HERO_GLOW['fade_ms'])
 assert not h.glow_active() and not h._g_timer.isActive() and h.glow_intensity() == 0.0
 
-# error: no flash, fades from the current level, stops
+# error: same fade, stops
 w._set_busy(True, 'Parsing save file')
 h._g_t = 5000.0
 cur = h.glow_intensity()
@@ -99,4 +104,4 @@ for key in ('club', 'squad', 'settings', 'save_info'):
     assert not h.glow_active() and not h._g_timer.isActive(), key
     w._set_busy(False)
 h.set_page('welcome')
-print('OK: hero glow (grid mask, pulse, progress tie, first-load only, timer stops)')
+print('OK: hero glow (grid mask, subtle smooth pulse, ends with the load, first-load only, timer stops)')
