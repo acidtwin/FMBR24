@@ -838,6 +838,7 @@ _POS_SORT_ORDER = {
     'AMC': 13, 'ST': 14,
 }
 
+_REPORT_ICONS = {'prospects': 'best_prospects', 'wonderkids': 'wonderkids', 'best_pos': 'best_in_position', 'best_role': 'best_by_role'}
 _REPORT_LABELS = {
     'prospects': 'Best Prospects (PA 160+)',
     'wonderkids': 'Wonderkids (U21, PA 150+)',
@@ -2282,16 +2283,16 @@ class MainWindow(QMainWindow):
             n = len(getattr(self, '_squad', []))
             self._set_header('Squads', f"{club_name} · {n} players", icon='squads')
         elif key == 'staff':
-            self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'))
+            self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'), icon='staff')
         elif key == 'reports':
             label = _REPORT_LABELS.get(self._current_report_key, '')
             n = self._reports_table.rowCount() if hasattr(self, '_reports_table') else 0
             tot = getattr(self, '_report_total', n)
             cnt = '' if not n else f'{n:,} players' if tot <= n else f'top {n:,} of {tot:,} players'
             parts = [p for p in (label, cnt) if p]
-            self._set_header('Player Reports', ' · '.join(parts))
+            self._set_header('Player Reports', ' · '.join(parts), icon=_REPORT_ICONS.get(self._current_report_key))
         elif key == 'players':
-            self._set_header('All Players', self._scouting_count_text(self._players_model, 'players'))
+            self._set_header('All Players', self._scouting_count_text(self._players_model, 'players'), icon='players')
         elif key == 'shortlist':
             n = len(self._shortlist)
             self._set_header('Player Shortlist', f"{n} players", icon='player_shortlist')
