@@ -98,11 +98,13 @@ TABS = [
     ('positions', 'Positions', '_page_positions', '_slot_positions'),
     ('general', 'General Rating', None, '_slot_profile'),
     ('role', 'Role Rating', None, '_slot_profile'),
+    ('training', 'Training', None, '_slot_profile'),
     ('history', 'History', '_page_history', '_slot_history'),
 ]
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
     'role': 'Suitability for each tactical role.',
+    'training': 'Training focus, schedules and development notes will live here.',
     'history': 'Career stats by season and club.',
 }
 _LAST_TAB = 'profile'     # last opened tab, remembered for the session

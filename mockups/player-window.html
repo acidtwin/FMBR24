@@ -11,7 +11,7 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 =====================================================================================================================
 
 HOW TO USE
-  Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #history
+  Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
   State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
@@ -21,7 +21,7 @@ HOW TO USE
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
 WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
-  tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabHistory  -> registry TABS (section 4)
+  tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
   Persistent parts (section 3): header(), tabStrip(), actionStrip().   Data (section 1) is FICTIONAL sample data.
 
 TOKENS (gui/theme.py COLORS, literal)
@@ -51,7 +51,7 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
   Profile: Dev Rate N | Contract & Transfer: "Until Jun 2031" + club | Positions: best position + rating
-  (switches to "Best at full potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
+  (switches to "Best at full potential" in Future) | History: Apps / Goals (PENDING) | General / Role / Training: Dev Rate (default).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
@@ -446,6 +446,7 @@ function tabRole(){return soonPage('Role Rating','Suitability for each tactical 
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
 function slotHistory(){const d=D();return S.data?slot('Apps · Goals',d.apps,'Career'):slot('Apps · Goals',pend,'Not in the save yet')}
+function tabTraining(){return soonPage('Training','Training focus, schedules and development notes will live here.')}
 function tabHistory(){return soonPage('History','Career stats by season and club.')}
 
 /* ---------- registry: order = tab strip order ---------- */
@@ -455,6 +456,7 @@ const TABS=[
  {key:'positions',label:'Positions',page:tabPositions,slot:slotPositions},
  {key:'general',label:'General Rating',page:tabGeneral,slot:slotDev},
  {key:'role',label:'Role Rating',page:tabRole,slot:slotDev},
+ {key:'training',label:'Training',page:tabTraining,slot:slotDev},
  {key:'history',label:'History',page:tabHistory,slot:slotHistory}];
 
 /* =====================================================================================================================
