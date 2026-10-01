@@ -2,9 +2,23 @@
 import re
 import struct
 
+import numpy as np
+
 
 def _u16(b, p): return struct.unpack_from('<H', b, p)[0]
 def _u32(b, p): return struct.unpack_from('<I', b, p)[0]
+
+
+def _zero_candidates(b, lo, hi, *offs):
+    """Positions s in [lo, hi) with b[s + o] == 0 for every o in offs (numpy prefilter)."""
+    n = hi - lo
+    if n <= 0:
+        return np.empty(0, np.int64)
+    a = np.frombuffer(b, np.uint8)
+    m = a[lo + offs[0]:lo + offs[0] + n] == 0
+    for o in offs[1:]:
+        m &= a[lo + o:lo + o + n] == 0
+    return np.flatnonzero(m) + lo
 
 
 # -- Name pools ----------------------------------------------------------------
@@ -190,11 +204,14 @@ def find_squads(b, clubs, names_start, people=None):
     """
     club_by_id = {c['id']: c for c in clubs}
     anchors = []  # (offset, owner, kind, club or None); kind 100 + club = first-team record
-    p = 4
-    while p + 70 < names_start:
-        at = p; p += 1
+    # anchors need ten zero bytes at at+4..at+13: jump between zero runs at C speed
+    search = 8
+    while True:
+        z = b.find(b'\x00' * 10, search, names_start - 57)
+        if z < 0:
+            break
+        at = z - 4; search = z + 1
         if b[at + 26] not in (10, 11): continue
-        if b[at + 4:at + 14] != b'\x00' * 10: continue
         owner = _u32(b, at); ordinal = _u32(b, at + 14); uid = _u32(b, at + 18)
         if owner > 100000 or ordinal > 500000 or uid == 0: continue
         typed = b[at - 4] == 1 and b[at - 2] == 0xFF
@@ -262,10 +279,8 @@ def find_squads(b, clubs, names_start, people=None):
 def find_people(b, first_names, last_names, names_end):
     """Return list of person dicts with offset/end/name/nation/birth_year/id."""
     people = []; p = names_end
-    while p < len(b) - 100:
-        start = p; p += 1
-        if b[start + 4] or b[start + 9] or b[start + 14] or b[start + 17] or b[start + 18]:
-            continue
+    for start in _zero_candidates(b, names_end, len(b) - 100, 4, 9, 14, 17, 18).tolist():
+        if start < p: continue  # inside the previous record (p = end + 25)
         f = _u32(b, start); l = _u32(b, start + 5); n = _u32(b, start + 15)
         if (f != 0xFFFFFFFF and f >= len(first_names)) or \
            (l != 0xFFFFFFFF and l >= len(last_names)) or n > 200: continue
@@ -300,14 +315,17 @@ def find_abilities(b, names_end):
     abilities = {}
     blen = len(b)
     p = names_end + 57
-    while p < blen - 90:
-        at = p
-        p += 1
-        if b[at - 37] != 0 or b[at - 35] != 0:
-            continue
+    s0 = p
+    a = np.frombuffer(b, np.uint8)
+    n = blen - 90 - s0
+    cand = np.empty(0, np.int64)
+    if n > 0:
+        m = (a[s0 - 37:s0 - 37 + n] == 0) & (a[s0 - 35:s0 - 35 + n] == 0)
+        m &= ((a[s0 - 38:s0 - 38 + n] - 1) < 200) & ((a[s0 - 36:s0 - 36 + n] - 1) < 200)  # uint8 wrap: 0 fails
+        cand = np.flatnonzero(m) + s0
+    for at in cand.tolist():
+        if at < p: continue  # inside the previous block (p = at + 54)
         ca = b[at - 38]; pa = b[at - 36]
-        if not (1 <= ca <= 200) or not (1 <= pa <= 200):
-            continue
         positions = list(b[at - 15:at])
         if not all(1 <= v <= 20 for v in positions) or 20 not in positions:
             continue
@@ -535,17 +553,19 @@ def match_identities(b, people, names_end):
     identities = []
     blen = len(b)
     # bytearray.find to jump to positions where b[p-3:p] == 0x000000 (was byte-by-byte)
-    search = names_end + 4  # b[p-3] starts at names_end+4 → p = names_end+7
-    while True:
-        z = b.find(b'\x00\x00\x00', search, blen - 15)
-        if z < 0:
-            break
-        p = z + 3  # b[p-3]=b[p-2]=b[p-1]=0
-        search = z + 1
-        if p < names_end + 7 or p >= blen - 12:
-            continue
-        if (b[p - 7] & 7) > 2 or b[p - 4] not in (0, 1, 4, 5):
-            continue
+    # candidates z: b[z:z+3] == 0 (z = p-3, p >= names_end+7), (b[p-7] & 7) <= 2, b[p-4] in (0,1,4,5)
+    s0 = names_end + 4
+    n = blen - 17 - s0
+    a = np.frombuffer(b, np.uint8)
+    cand = np.empty(0, np.int64)
+    if n > 0:
+        m = (a[s0:s0 + n] == 0) & (a[s0 + 1:s0 + 1 + n] == 0) & (a[s0 + 2:s0 + 2 + n] == 0)
+        m &= (a[s0 - 4:s0 - 4 + n] & 7) <= 2
+        c = a[s0 - 1:s0 - 1 + n]
+        m &= (c <= 1) | (c == 4) | (c == 5)
+        cand = np.flatnonzero(m) + s0
+    for z in cand.tolist():
+        p = z + 3
         pid = _u32(b, p); uid = _u32(b, p + 4)
         if pid >= max_id or uid == 0 or uid == 0xFFFFFFFF: continue
         if uid != _u32(b, p + 8):
