@@ -40,7 +40,7 @@ def is_homegrown(b, person):
     end = person['end']
     if end + 35 > len(b): return False
     count = b[end + 34]
-    for k in range(min(count, 40)):
+    for k in range(count):
         roff = end + 35 + k * 16
         if roff + 16 > len(b): break
         if (b[roff:roff + 4] == b'\x8b\x00\x00\x00'
@@ -56,7 +56,7 @@ def patch_to_homegrown(b, person):
     if end + 35 > len(b): return False
     count = b[end + 34]
     patched = False
-    for k in range(min(count, 40)):
+    for k in range(count):
         roff = end + 35 + k * 16
         if roff + 16 > len(b): break
         b10, b11 = b[roff + 10], b[roff + 11]
@@ -94,7 +94,7 @@ def find_club_entity_id(b, squad):
         if end + 35 > len(b): continue
         count = b[end + 34]
         seen = set()
-        for k in range(min(count, 40)):
+        for k in range(count):
             roff = end + 35 + k * 16
             if roff + 16 > len(b): break
             if b[roff + 10] == 0x01 and b[roff + 11] == 0x6a:
@@ -110,7 +110,7 @@ def is_hgc(b, person, club_entity_id):
     end = person['end']
     if end + 35 > len(b): return False
     count = b[end + 34]
-    for k in range(min(count, 40)):
+    for k in range(count):
         roff = end + 35 + k * 16
         if roff + 16 > len(b): break
         if b[roff + 10] == 0x01 and b[roff + 11] == 0x48:
@@ -134,7 +134,7 @@ def patch_to_hgc(b, persons_desc, club_entity_id):
         rec_count = b[end + 34]
         first_48_roff = None
         already = False
-        for k in range(min(rec_count, 40)):
+        for k in range(rec_count):
             roff = end + 35 + k * 16
             if roff + 16 > len(b): break
             if b[roff + 10] == 0x01 and b[roff + 11] == 0x48:
@@ -163,7 +163,7 @@ def hgp_in_place(b, people):
     """HGP for each person, in place (offsets stay valid). Returns the list of persons whose bytes changed."""
     def recs(p):
         e = p['end']
-        return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
+        return bytes(b[e + 35:e + 35 + 16 * b[e + 34]])
     out = []
     for p in people:
         before = recs(p)

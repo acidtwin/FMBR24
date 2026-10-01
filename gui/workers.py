@@ -84,6 +84,7 @@ class ParseWorker(QThread):
                     'b': b, 'header': header, 'members': members,
                     'index_marker': index_marker, 'archive_name': archive_name,
                     'subdir_count': subdir_count, 'subdirs': subdirs,
+                    'disk_sig': (sig[1], sig[0]),  # savefile.file_signature order: (size, mtime_ns)
                 })
                 return
 
@@ -203,6 +204,7 @@ class ParseWorker(QThread):
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
+                'disk_sig': (sig[1], sig[0]),  # taken before the first read; Save refuses if the file differs
             }
             self.done.emit(result)
 

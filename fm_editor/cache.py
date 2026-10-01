@@ -59,7 +59,7 @@ def clear_cache(save_path):
     """Delete the cache file for a save, if it exists."""
     try:
         os.remove(_cache_path(save_path))
-    except FileNotFoundError:
+    except OSError:  # missing, read-only, permission: a stale cache entry is harmless (keyed by mtime + size)
         pass
 
 
