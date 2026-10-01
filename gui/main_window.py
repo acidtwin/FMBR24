@@ -389,6 +389,10 @@ def _club_money(v, per_week=False):
     return f'{sign}£{txt}' + (' p/w' if per_week else '')
 
 
+def _ordinal(n):
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
 def _club_sec_hdr(text, sub=False):
     lbl = QLabel(text)
     margin = "margin-top:16px; " if sub else ""
@@ -740,13 +744,30 @@ class ParseWorker(QThread):
     done = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, save_path):
+    def __init__(self, save_path, use_cache=False):
         super().__init__()
         self.save_path = save_path
+        self.use_cache = use_cache
 
     def _emit(self, msg, p):
         self.progress.emit(msg)
         self.pct.emit(p)
+
+    def _club_extras(self, b, members, clubs, get_member):
+        """Reputation, stadium, league position (fm_editor/clubextra.py); best effort per member."""
+        import re
+        from fm_editor import clubextra as X
+        self._emit("Reading club reputation, stadiums and tables...", 58)
+        X.add_club_status(b, clubs)
+        by_name = {m['name']: m for m in members}
+        fm = by_name.get('rgman/fix_man.dat')
+        if fm:
+            X.add_club_stadiums(b, clubs, get_member(self.save_path, fm))
+        tables = []
+        for n, m in by_name.items():
+            if re.fullmatch(r'rgman/comp_\d+\.dat', n):
+                tables.append(X.parse_comp_table(get_member(self.save_path, m)))
+        X.add_league_positions(clubs, tables)
 
     def run(self):
         try:
@@ -770,12 +791,31 @@ class ParseWorker(QThread):
             self._emit(f"Extracting game_db.dat ({gdb_m_ref['p'] // 1024 // 1024} MB)...", 5)
             b = get_member(self.save_path, gdb_m_ref)
 
+            cached = load_cache(self.save_path) if self.use_cache else None
+            if cached and all(k in cached for k in ('clubs', 'squads', 'sub_squads', 'people')):
+                self.pct.emit(100)  # fast path: parsed data from cache; b/header/members still needed to patch+save
+                self.done.emit({
+                    'clubs': cached['clubs'], 'squads': cached['squads'],
+                    'sub_squads': cached['sub_squads'], 'people': cached['people'],
+                    'employment': cached.get('employment', {}), 'club_staff': cached.get('club_staff', {}),
+                    'save_info': cached.get('save_info', {}),
+                    'b': b, 'header': header, 'members': members,
+                    'index_marker': index_marker, 'archive_name': archive_name,
+                    'subdir_count': subdir_count, 'subdirs': subdirs,
+                })
+                return
+
             self._emit("Finding name tables...", 45)
             first_names, last_names, names_start, names_end = find_names(b)
 
             self._emit("Finding clubs...", 55)
             clubs = find_clubs(b, names_start)
             add_club_finance(b, clubs, names_start)
+            try:
+                self._club_extras(b, members, clubs, get_member)
+            except Exception:
+                import traceback
+                traceback.print_exc()  # reputation/stadium/table are optional: Club page shows PENDING
 
             self._emit("Finding people and matching identities...", 65)
             people = find_people(b, first_names, last_names, names_end)
@@ -842,6 +882,15 @@ class ParseWorker(QThread):
                 import traceback
                 traceback.print_exc()  # untrusted bytes: a bad metadata block must not abort the load
                 save_info = {}
+
+            try:  # scouting budget: only the human-managed club carries it
+                from fm_editor.clubextra import find_human_scouting_budget
+                sb, hc = find_human_scouting_budget(b), (save_info or {}).get('manager_club_id')
+                hc_club = next((c for c in clubs if c['id'] == hc), None) if sb else None
+                if hc_club is not None:
+                    hc_club.setdefault('fin', {})['scouting_budget'] = sb[0]
+            except Exception:
+                pass
 
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
@@ -2228,15 +2277,16 @@ class MainWindow(QMainWindow):
         else:
             self._header_right_slot.hide()
 
-    def _make_header_rep_widget(self, stars: int) -> QWidget:
-        # stars=0 renders all-empty — used until reputation is actually parsed
+    def _make_header_rep_widget(self, stars: int, rep=None) -> QWidget:
+        # stars=0 renders all-empty: the rep -> star mapping is unconfirmed, so never fabricate it;
+        # `rep` (raw 1-10000, verified) is shown as a number instead
         w = QWidget()
         w.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(w)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(3)
 
-        caption = QLabel('CLUB REPUTATION')
+        caption = QLabel(f'CLUB REPUTATION · {rep:,}' if rep else 'CLUB REPUTATION')
         caption.setAlignment(Qt.AlignmentFlag.AlignRight)
         caption.setStyleSheet(
             f"color:{COLORS['text_secondary']}; font-size:10px; font-weight:600;"
@@ -2292,11 +2342,14 @@ class MainWindow(QMainWindow):
         if key == 'club':
             from fm_editor.nations import nation_name
             country = nation_name(club.get('nation')) if club else None
+            lg = (club or {}).get('league')
+            pos = f"{_ordinal(lg['pos'])} of {lg['of']}" if lg else None
             if _SHOW_PENDING:
-                club_sub = f"Division pending · {country or 'Country pending'} · Position pending"
+                club_sub = f"Division pending · {country or 'Country pending'} · {pos or 'Position pending'}"
             else:
-                club_sub = country or ''
-            self._set_header(club_name or 'Club', club_sub, self._make_header_rep_widget(3))
+                club_sub = ' · '.join(x for x in (country, pos) if x)
+            self._set_header(club_name or 'Club', club_sub,
+                             self._make_header_rep_widget(0, (club or {}).get('rep')))
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
             self._set_header('Squads', f"{club_name} · {n} players")
@@ -2629,9 +2682,11 @@ class MainWindow(QMainWindow):
         col2, col2_l = _col()
         col2_l.addWidget(_club_sec_hdr('Club Info'))
         self._club_status_val = _club_pending_chip()
-        for label in ('Region', 'Founded', 'Status', 'Reputation'):
-            col2_l.addWidget(_club_kv_row(
-                label, self._club_status_val if label == 'Status' else _club_pending_chip()))
+        self._club_info_vals = {}
+        for label in ('Region', 'Founded', 'Status', 'Reputation', 'Stadium', 'League position'):
+            self._club_info_vals[label] = (self._club_status_val if label == 'Status'
+                                           else _club_pending_chip())
+            col2_l.addWidget(_club_kv_row(label, self._club_info_vals[label]))
         col2_l.addWidget(_club_sec_hdr('Facilities', sub=True))
         for label in ('Training', 'Youth', 'Junior coaching', 'Youth recruitment'):
             col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
@@ -3059,9 +3114,27 @@ class MainWindow(QMainWindow):
             _club_set_value(self._club_status_val, st)
         else:
             _club_set_pending(self._club_status_val)
+        iv = self._club_info_vals
+        rep = club.get('rep')  # raw 1-10000 (verified); the 0-5 star mapping is NOT known yet
+        if rep:
+            _club_set_value(iv['Reputation'], f'{rep:,} / 10,000')
+        else:
+            _club_set_pending(iv['Reputation'])
+        sd = club.get('stadium')
+        if sd:
+            _club_set_value(iv['Stadium'], f"{sd['capacity']:,} · built {sd['built']}")
+        else:
+            _club_set_pending(iv['Stadium'])
+        lg = club.get('league')
+        if lg:
+            _club_set_value(iv['League position'],
+                            f"{_ordinal(lg['pos'])} of {lg['of']} · {lg['PTS']} pts from {lg['P']}")
+        else:
+            _club_set_pending(iv['League position'])
         fin = club.get('fin') or {}
         for label, key, pw in (('Transfer budget', 'transfer_budget', False),
                                ('Wage budget', 'wage_budget', True),
+                               ('Scouting budget', 'scouting_budget', False),
                                ('Balance', 'balance', False)):
             lbl = self._club_fin_vals[label]
             if key in fin:
@@ -4933,9 +5006,9 @@ class MainWindow(QMainWindow):
         self._status_ready_lbl.setText(
             f'<span style="color:{COLORS["text_dim"]};">&#9679;</span> Loading...')
         self._update_ui_state()
-        self._reload_save()
+        self._reload_save(use_cache=_settings_mod.load()['use_cache'])  # Load may use the cache; Reload never
 
-    def _reload_save(self):
+    def _reload_save(self, use_cache=False):
         if not self._save_path:
             return
         try:
@@ -4947,7 +5020,7 @@ class MainWindow(QMainWindow):
         self._preload_gen = getattr(self, '_preload_gen', 0) + 1  # cancels any preload in flight
         self._players_model.clear()  # drop the previous save's rows now, not at first visit
         self._staff_model.clear()
-        self._worker = ParseWorker(self._save_path)
+        self._worker = ParseWorker(self._save_path, use_cache)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_parse_done)
