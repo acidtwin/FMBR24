@@ -84,6 +84,7 @@ class RadarWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(self.W, self.H)
+        self.setMouseTracking(True)  # custom ToolTip events only fire on a widget that receives hover moves
         self._ax = []          # [(label, value 1-20 float, QColor, tooltip)]
         self._rects = []
 
