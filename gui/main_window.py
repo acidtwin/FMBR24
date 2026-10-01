@@ -6065,6 +6065,8 @@ class MainWindow(QMainWindow):
                 btn.setEnabled(False)
             self._players_nav_btn.setEnabled(False)
             self._scouting_staff_nav_btn.setEnabled(False)
+            for btn in self._report_btns.values():   # Player Reports buttons too
+                btn.setEnabled(False)
             self._welcome_load_btn.setEnabled(False)
             self._welcome_load_btn.setText('Loading Save')
             self._back_btn.setEnabled(False)

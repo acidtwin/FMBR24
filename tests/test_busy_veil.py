@@ -30,8 +30,13 @@ assert not v.isVisible() and w._main_stack.isEnabled() and w._veil_word is None
 w._set_busy(False)
 
 # saving
+for b in w._report_btns.values():
+    b.setEnabled(True)               # as when a save with abilities is loaded
 w._set_busy(True, 'Saving')
 app.processEvents()
+assert w._report_btns and not any(b.isEnabled() for b in w._report_btns.values()), 'report buttons locked while busy'
+w._update_ui_state()
+assert not any(b.isEnabled() for b in w._report_btns.values()), 'update_ui_state must not re-enable them while busy'
 assert v.isVisible() and not w._main_stack.isEnabled() and v._base == 'Saving' and v._dots == 1
 assert v.geometry() == w._main_stack.rect(), (v.geometry(), w._main_stack.rect())
 seen = []
