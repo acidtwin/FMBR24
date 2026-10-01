@@ -1588,6 +1588,7 @@ class MainWindow(QMainWindow):
         self._last_applied = (0, 0)  # (HGP, HGC) edits the last Save Changes actually wrote
         self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
         self._after_reload_status = None  # one-shot status text shown once the post-save reload finishes
+        self._ui_snap = None  # _capture_ui_state() taken when a reload starts, applied once it finishes
         self._squad = []
         self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
         self._club_entity_id = None
@@ -4705,6 +4706,7 @@ class MainWindow(QMainWindow):
     def _reload_save(self, use_cache=False):
         if not self._save_path:
             return
+        self._ui_snap = self._capture_ui_state() if self._save_data else None  # None: first load / another file
         try:
             from fm_editor.savefile import file_signature
             self._load_sig = file_signature(self._save_path)  # Save Changes refuses if the file changes after this
@@ -4880,7 +4882,9 @@ class MainWindow(QMainWindow):
         self._club_pos_frame.setVisible(False)
         self._club_top_frame.setVisible(False)
         self._update_ui_state()
-        self._land_after_load()  # Settings > Landing page (default Save Info)
+        snap, self._ui_snap = self._ui_snap, None
+        if not self._apply_ui_state(snap):  # reload of the same save: back where the user was
+            self._land_after_load()  # else Settings > Landing page (default Save Info)
         msg, self._after_reload_status = self._after_reload_status, None
         if msg:
             self._status.showMessage(msg)
@@ -5335,6 +5339,155 @@ class MainWindow(QMainWindow):
             self._open_players_view()
         else:
             self._nav_to('save_info')
+
+    # -- Reload: put the user back where they were (state kept by stable ids, never row indices/objects) --
+
+    _SNAP_FILTERS = {  # view -> quick-filter widgets (QLineEdit text / QComboBox text / QSpinBox value)
+        'players': ('_players_name_filter', '_players_pos_filter', '_players_ca_filter', '_players_pa_filter',
+                    '_players_age_min', '_players_age_max', '_players_dev_filter'),
+        'staff': ('_staff_age_min', '_staff_age_max'),
+        'reports': ('_report_pos_combo', '_report_role_combo', '_report_name_filter', '_report_ca_filter',
+                    '_report_pa_filter', '_report_age_min', '_report_age_max', '_report_dev_filter'),
+        'shortlist': ('_shortlist_name_filter', '_shortlist_pos_filter', '_shortlist_ca_filter',
+                      '_shortlist_pa_filter', '_shortlist_age_min', '_shortlist_age_max', '_shortlist_dev_filter'),
+        'staff_shortlist': ('_staff_sl_age_min', '_staff_sl_age_max'),
+        'club_staff': ('_club_staff_age_min', '_club_staff_age_max'),
+    }
+
+    def _snap_table(self, view):
+        return {'squad': self._table, 'players': self._players_table, 'staff': self._staff_table,
+                'reports': self._reports_table, 'shortlist': self._shortlist_table,
+                'staff_shortlist': self._staff_shortlist_table, 'club_staff': self._club_staff_table}.get(view)
+
+    @staticmethod
+    def _pid_rows(tbl):
+        """person id -> row for a list table (PeopleModel view or QTableWidget with the id in col 0 UserRole)."""
+        m = tbl.model()
+        if isinstance(m, PeopleModel):
+            return {m.src[i].get('id', -1): r for r, i in enumerate(m.view)}
+        out = {}
+        for r in range(tbl.rowCount()):
+            it = tbl.item(r, 0)
+            if it is not None:
+                out[it.data(Qt.ItemDataRole.UserRole)] = r
+        return out
+
+    @staticmethod
+    def _set_quiet(w, val):
+        """Set a filter widget without firing its change signal."""
+        w.blockSignals(True)
+        if isinstance(w, QLineEdit):
+            w.setText(val)
+        elif isinstance(w, QComboBox):
+            w.setCurrentIndex(max(0, w.findText(val)))
+        else:
+            w.setValue(val)
+        w.blockSignals(False)
+
+    def _capture_ui_state(self):
+        """Snapshot of what the user is looking at, taken just before a reload re-parses the save."""
+        sd = self._save_data or {}
+        view = next((k for k, v in self._VIEW_INDEX.items() if v == self._main_stack.currentIndex()), None)
+        snap = {'path': self._save_path, 'view': view, 'search': self._search_box.text(),
+                'club': (self._current_club or {}).get('id'), 'report': self._current_report_key,
+                'tab': next((b.text() for b in self._squad_tab_btns if b.isChecked()), None),
+                'subset': None if self._players_subset is None else [p.get('id') for p in self._players_subset],
+                'filters': {},
+                'history': [(i, c['club'].get('id') if 'club' in c else None) for i, c in self._nav_history],
+                'pos': self._nav_pos}
+        for v, names in self._SNAP_FILTERS.items():
+            snap['filters'][v] = {n: (w.text() if isinstance(w, QLineEdit) else w.currentText()
+                                      if isinstance(w, QComboBox) else w.value())
+                                  for n in names for w in (getattr(self, n),)}
+        tbl = self._snap_table(view)  # sort / scroll / selection of the list being looked at
+        if tbl is not None:
+            hdr = tbl.horizontalHeader()
+            row_pid = {r: pid for pid, r in self._pid_rows(tbl).items()}
+            sel = tbl.selectionModel().selectedRows()
+            snap['table'] = {
+                'sort': (hdr.sortIndicatorSection(), hdr.sortIndicatorOrder().value),
+                'top': row_pid.get(tbl.rowAt(0)),  # first visible row = scroll position
+                'sel': [row_pid[i.row()] for i in sel if i.row() in row_pid]}
+        return snap
+
+    def _apply_ui_state(self, snap):
+        """Restore a _capture_ui_state() snapshot silently once the new parse is in. False = nothing usable
+        (different file, view/club gone, error): the caller falls back to the landing page."""
+        if not snap or snap.get('path') != self._save_path or not self._save_data:
+            return False
+        view = snap['view']
+        if view in (None, 'welcome', 'settings'):
+            return False
+        sd = self._save_data
+        club = next((c for c in sd.get('clubs', []) if c.get('id') == snap['club']), None)
+        if view in ('club', 'squad', 'club_staff') and club is None:
+            return False
+        try:
+            self._apply_ui_prefs()
+            self._prev_club_id = None
+            by_id = {p.get('id'): p for p in sd.get('people', [])}
+            self._search_box.blockSignals(True)
+            self._search_box.setText(snap['search'])
+            self._search_box.blockSignals(False)
+            if club is not None:  # also keeps the Club / Club Staff buttons alive when the view is elsewhere
+                self._show_squad(club)
+                tab = next((i for i, b in enumerate(self._squad_tab_btns) if b.text() == snap['tab']), 0)
+                if tab:
+                    self._squad_tab_btns[tab].click()
+            set_filters = lambda vals: [self._set_quiet(getattr(self, n), val) for n, val in vals.items()]
+            for vals in snap['filters'].values():
+                set_filters(vals)
+            if view == 'squad':
+                self._nav_to_squad_view()
+            elif view == 'players':
+                self._open_players_view()
+                sub = [by_id[i] for i in snap['subset'] or [] if i in by_id]
+                self._players_subset = sub or None
+                set_filters(snap['filters']['players'])  # _open_players_view cleared them
+                self._apply_players_filter()
+            elif view == 'staff':
+                self._nav_to('staff')
+                self._populate_staff_table()
+            elif view == 'reports':
+                self._run_report(snap['report'])
+            elif view == 'shortlist':
+                self._nav_to('shortlist')
+                self._apply_shortlist_filter()
+            elif view != 'club':  # staff_shortlist / club_staff apply their own filters on entry; club is shown
+                self._nav_to(view)
+            tbl = self._snap_table(view)
+            if tbl is not None:
+                st = snap['table']
+                if st['sort'][0] >= 0:
+                    tbl.sortByColumn(st['sort'][0], Qt.SortOrder(st['sort'][1]))
+                rows = self._pid_rows(tbl)
+                sm, m = tbl.selectionModel(), tbl.model()
+                sm.clearSelection()
+                for pid in st['sel']:
+                    if pid in rows:
+                        sm.select(m.index(rows[pid], 0), sm.SelectionFlag.Select | sm.SelectionFlag.Rows)
+                if st['top'] in rows:
+                    tbl.scrollTo(m.index(rows[st['top']], 0), QAbstractItemView.ScrollHint.PositionAtTop)
+            # Back/Forward: same entries, clubs re-resolved by id (entries whose club is gone are dropped)
+            clubs = {c.get('id'): c for c in sd.get('clubs', [])}
+            hist, pos = [], -1
+            for n, (i, cid) in enumerate(snap['history']):
+                if cid is None:
+                    hist.append((i, {}))
+                elif cid in clubs:
+                    hist.append((i, {'club': clubs[cid]}))
+                else:
+                    continue
+                if n <= snap['pos']:
+                    pos = len(hist) - 1
+            if hist:
+                self._nav_history, self._nav_pos = hist, max(pos, 0)
+                self._nav_back_btn_update()
+            return True
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return False
 
     def _run_report(self, key: str):
         try:
