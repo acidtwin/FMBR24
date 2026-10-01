@@ -4,7 +4,7 @@
 
 ## Platform
 
-web
+Linux desktop (a Windows .exe build is planned for 1.0)
 
 ## Stack
 
@@ -27,7 +27,7 @@ The free, open, Linux-native FM24 save browser: look first, then decide. No need
 - FM24 runs via Steam/Proton on Linux; saves are large binary archives (~180-220 MB), zstd members
 - A full parse takes roughly 15 s (reported, not re-timed); the parse cache (path + mtime + size) makes a normal Load about 2 s, Reload always re-parses
 - Flow: load a save, land on Save Info, search a club/player/staff name, review, optionally queue HGP/HGC, then Save Changes (two rolling backups, verified temp file, atomic replace), after which the save reloads and the view is restored
-- Roadmap: 1.0 polish, then Flatpak and Windows builds
+- Roadmap: 1.0 polish, then a Flatpak build and a Windows .exe (1.0)
 
 ## What exists now
 
