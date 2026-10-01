@@ -36,7 +36,7 @@ def run_stages(save=SAVE, timings=None):
         if timings is not None: timings[name] = time.perf_counter() - s
         return r
 
-    _, members, _, _, _, _ = parse_archive(save)
+    _, members, _, aname, _, _ = parse_archive(save)
     b = get_member(save, next(m for m in members if m['name'] == 'game_db.dat'))
     fn, ln, ns, ne = G.find_names(b)
     clubs = G.find_clubs(b, ns)
@@ -61,7 +61,11 @@ def run_stages(save=SAVE, timings=None):
     staff = G.find_club_staff(b, clubs, people, abil, ns)
     pids = set(abil)
     G.find_coaching_attrs(b, people, pids)
-    G.find_injuries(b, people, pids)
+    import datetime
+    from fm_editor.saveinfo import parse_save_info
+    im = next((m for m in members if m['name'] == 'injury_manager.dat'), None)
+    today = datetime.date.fromisoformat(str(parse_save_info(save, members, aname)['in_game_date']))
+    G.find_injuries(b, people, pids, G.parse_injury_manager(get_member(save, im)) if im else None, today)
     G.find_staff_extras(b, people, pids)
     ps = next((m for m in members if m['name'] == 'rgman/player_stats.dat'), None)
     stats = parse_player_stats(get_member(save, ps), {p['id'] for p in people if p['id'] != -1}) if ps else {}

@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 27  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 29  # bump when schema changes to auto-invalidate old caches
 
 
 def file_signature(save_path):
@@ -86,6 +86,7 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
             entry['raw_attrs'] = p['raw_attrs']
             entry['height_cm'] = p.get('height_cm')
             entry['weight_kg'] = p.get('weight_kg')
+            entry['value_est'] = p.get('value_est')
             entry['injured'] = p.get('injured', False)
             entry['injury_days'] = p.get('injury_days', 0)
             if 'stats' in p:
