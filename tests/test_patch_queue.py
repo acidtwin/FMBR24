@@ -282,9 +282,9 @@ for tip in ('Not your club', 'Open from Squads to patch'):
     pill(win, 'hgp').click()
     assert w.queue_count() == 0
     win.close()
-# club unknown: bare 'HGC?' (display-only), HGP stays clickable
+# club unknown: the HGC pill is hidden (no '?'), HGP stays clickable
 win = pw(people[0], ent=0)
-assert pill(win, 'hgc').text() == 'HGC?' and pill(win, 'hgc').property('state') == 'unk' and pill(win, 'hgc').toolTip().startswith('HGC unknown')
+assert pill(win, 'hgc').property('state') == 'unk' and pill(win, 'hgc').isHidden() and '?' not in pill(win, 'hgc').text()
 pill(win, 'hgc').click()
 assert w.queue_count() == 0
 pill(win, 'hgp').click()

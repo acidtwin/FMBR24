@@ -829,7 +829,7 @@ class PlayerWindow(QDialog):
         return f
 
     # HGP / HGC pill states (mockup hgPill): set (lit, not clickable) | go (not set + patchable: dashed, click queues) |
-    # queued (yellow '+ HGP', click undoes) | plain (display-only, tooltip = why) | unk (bare 'HGC?', display-only)
+    # queued (yellow '+ HGP', click undoes) | plain (display-only, tooltip = why) | unk (club unknown: HGC pill hidden)
     def _pill_state(self, kind):
         is_set = self._hgp if kind == 'hgp' else self._hgc
         if kind == 'hgc' and self._hgc is None:
@@ -852,8 +852,9 @@ class PlayerWindow(QDialog):
 
     def _apply_pill(self, kind):
         btn, st, lab = self._pill_btns[kind], self._pill_state(kind), kind.upper()
-        btn.setText({'unk': lab + '?', 'queued': '+ ' + lab}.get(st, lab))
-        btn.setToolTip({'unk': 'HGC unknown - club unknown for this player.', 'queued': 'Queued - click to undo',
+        btn.setVisible(st != 'unk')  # club unknown (e.g. a player with no club): HGC is meaningless, so no pill at all
+        btn.setText({'queued': '+ ' + lab}.get(st, lab))
+        btn.setToolTip({'queued': 'Queued - click to undo',
                         'go': f'Click to make {lab}', 'plain': self._patch_tip}.get(st, ''))
         btn.setProperty('state', st)
         btn.setCursor(Qt.CursorShape.PointingHandCursor if st in ('go', 'queued') else Qt.CursorShape.ArrowCursor)
