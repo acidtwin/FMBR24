@@ -1471,10 +1471,13 @@ class MainWindow(QMainWindow):
         self.resize(1200, 780)
 
         self._save_data = None
-        self._dirty = False  # in-memory patches not yet written back with Save Changes
+        self._dirty = False  # queued changes not yet written with Save Changes (== bool(self._queue))
         self._pending = []  # human-readable list of unsaved edits (for the Save / discard prompts)
+        self._queue = {}  # queued homegrown changes: (person id, 'hgp'|'hgc') -> person dict; NEVER touches game_db bytes
+        self._pw_open = None  # the open player window (told when the queue changes)
+        self._last_applied = (0, 0)  # (HGP, HGC) edits the last Save Changes actually wrote
         self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
-        self._after_reload_msg = None  # one-shot text shown once the next load finishes (stale-offsets flow)
+        self._after_reload_status = None  # one-shot status text shown once the post-save reload finishes
         self._squad = []
         self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
         self._club_entity_id = None
@@ -2840,28 +2843,19 @@ class MainWindow(QMainWindow):
         self._patch_hgp_btn.setStyleSheet(_accent_ss)
         self._patch_hgp_btn.setFixedHeight(28)
         self._patch_hgp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._patch_hgp_btn.setToolTip('Set selected players as Homegrown Player')
-        self._patch_hgp_btn.clicked.connect(self._do_patch_hgp)
+        self._patch_hgp_btn.setToolTip('Queue the selected players as Homegrown Player (written when you Save Changes)')
+        self._patch_hgp_btn.clicked.connect(lambda checked=False: self._queue_selected('hgp'))
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn = QPushButton('Make HGC')
         self._patch_hgc_btn.setStyleSheet(_accent_ss)
         self._patch_hgc_btn.setFixedHeight(28)
         self._patch_hgc_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._patch_hgc_btn.setToolTip('Set selected players as Homegrown at Club')
-        self._patch_hgc_btn.clicked.connect(self._do_patch_hgc)
+        self._patch_hgc_btn.setToolTip('Queue the selected players as Homegrown at Club (written when you Save Changes)')
+        self._patch_hgc_btn.clicked.connect(lambda checked=False: self._queue_selected('hgc'))
         self._patch_hgc_btn.setEnabled(False)
-        self._patch_both_btn = QPushButton('Make both')
-        self._patch_both_btn.setStyleSheet(_accent_ss)
-        self._patch_both_btn.setFixedHeight(28)
-        self._patch_both_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._patch_both_btn.setToolTip('Set selected players as Homegrown Player and Homegrown at Club (HGP first, then HGC)')
-        self._patch_both_btn.clicked.connect(self._do_patch_both)
-        self._patch_both_btn.setEnabled(False)
         tab_row.addWidget(self._patch_hgp_btn)
         tab_row.addSpacing(4)
         tab_row.addWidget(self._patch_hgc_btn)
-        tab_row.addSpacing(4)
-        tab_row.addWidget(self._patch_both_btn)
         tab_row.addSpacing(4)
         vbox.addWidget(tab_bar)
 
@@ -4554,7 +4548,6 @@ class MainWindow(QMainWindow):
         has_sel = has_squad and bool(self._table.selectedItems())
         self._patch_hgp_btn.setEnabled(has_sel)
         self._patch_hgc_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
-        self._patch_both_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
 
     # -- File loading ---------------------------------------------------------
 
@@ -4576,6 +4569,7 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
+        self._queue.clear()
         self._dirty = False
         self._pending = []
         self._status_ready_lbl.setText(
@@ -4732,6 +4726,7 @@ class MainWindow(QMainWindow):
     def _finish_load(self, result):
         self._save_data = result
         self._reset_session_state(result)
+        self._queue.clear()
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
@@ -4761,9 +4756,9 @@ class MainWindow(QMainWindow):
         self._club_top_frame.setVisible(False)
         self._update_ui_state()
         self._land_after_load()  # Settings > Landing page (default Save Info)
-        msg, self._after_reload_msg = self._after_reload_msg, None
+        msg, self._after_reload_status = self._after_reload_status, None
         if msg:
-            QMessageBox.information(self, 'Ready to patch', msg)
+            self._status.showMessage(msg)
 
     # -- Search ---------------------------------------------------------------
 
@@ -5012,7 +5007,8 @@ class MainWindow(QMainWindow):
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
-            hgc_text = ('HGC' if hgc else '-') if hgc is not None else '?'
+            hgp_text, hgp_col = self._squad_hg_cell('hgp', bool(hgp), self.queue_has(p, 'hgp'))
+            hgc_text, hgc_col = self._squad_hg_cell('hgc', hgc, self.queue_has(p, 'hgc'))
             injured = p.get('injured', False)
             injury_days = p.get('injury_days', 0)
 
@@ -5031,7 +5027,7 @@ class MainWindow(QMainWindow):
                 _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
                 _SortItem(str(age), age),
                 _SortItem(flag),
-                _SortItem('HGP' if hgp else '-'),
+                _SortItem(hgp_text),
                 _SortItem(hgc_text),
                 _SortItem(contract_end),
             ]
@@ -5054,11 +5050,9 @@ class MainWindow(QMainWindow):
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 if col == 8:
-                    item.setForeground(QColor(COLORS['hgp_green'] if hgp
-                                              else COLORS['text_dim']))
+                    item.setForeground(QColor(hgp_col))
                 elif col == 9:
-                    item.setForeground(QColor(COLORS['hgp_green'] if hgc
-                                              else COLORS['text_dim']))
+                    item.setForeground(QColor(hgc_col))
                 self._table.setItem(row, col, item)
 
         self._table.setSortingEnabled(True)
@@ -5124,23 +5118,25 @@ class MainWindow(QMainWindow):
         self._run_player_window(person)
 
     def _run_player_window(self, person, club_entity_id=None, in_squad=None):
-        """Show the player window; then run the shortlist / in-memory patch flow it asked for.
-        HGP / HGC are offered (visible) only for players of a human-managed club, from any page."""
+        """Show the player window; then run the shortlist flow it asked for. Its HGP / HGC pills queue
+        changes through this window (queue_*) only for players of a human-managed club, from any page."""
         pid = person.get('id')
         sd = self._save_data or {}
         club_id = sd.get('squads', {}).get(pid)
         can_patch = club_id is not None and club_id in sd.get('human_clubs', ())
         if club_id is not None:
             club_entity_id = club_id + 1  # club entity id = club id + 1 (memory fm24-binary-format)
+        why = 'Open from Squads to patch' if club_id is None else 'Not your club'
         dlg = PlayerWindow(person, sd, club_entity_id, self,
                            shortlisted=any(p.get('id') == pid for p in self._shortlist),
-                           can_patch=can_patch)
-        dlg.exec()
+                           can_patch=can_patch and 'b' in sd, queue=self, patch_tip=why)
+        self._pw_open = dlg
+        try:
+            dlg.exec()
+        finally:
+            self._pw_open = None
         if dlg._shortlist_added:
             self._add_to_shortlist(person)
-        if can_patch and dlg._patch_mode in ('hgp', 'hgc', 'both'):
-            {'hgp': self._do_patch_hgp, 'hgc': self._do_patch_hgc, 'both': self._do_patch_both}[
-                dlg._patch_mode]([person], club_entity_id)
 
     def _open_player_detail_by_pid(self, pid, person=None):
         """Open the player window for any player by ID (reports/players views)."""
@@ -5274,22 +5270,21 @@ class MainWindow(QMainWindow):
                 if self._table.item(idx.row(), 0)
             ]
             sel_persons = [id_to_person[pid] for pid in sel_pids if pid in id_to_person]
-            all_hgp = bool(sel_persons) and all(p.get('hgp', False) for p in sel_persons)
-            if has_b and self._club_entity_id and sel_persons:
-                from fm_editor.patch import is_hgc
-                b = self._save_data['b']
-                all_hgc = all(is_hgc(b, p, self._club_entity_id) for p in sel_persons)
-            else:
-                all_hgc = False
+            from fm_editor.patch import is_hgc
+            b = self._save_data['b'] if has_b else None
+            # nothing left to queue = every selected player already has the flag or has it queued
+            all_hgp = bool(sel_persons) and all(
+                p.get('hgp', False) or self.queue_has(p, 'hgp') for p in sel_persons)
+            all_hgc = bool(sel_persons) and has_b and all(
+                self.queue_has(p, 'hgc') or (self._entity_of(p) is not None and is_hgc(b, p, self._entity_of(p)))
+                for p in sel_persons)
         else:
             all_hgp = False
             all_hgc = False
 
-        self._patch_hgp_btn.setEnabled(has_squad and has_sel and not all_hgp)
+        self._patch_hgp_btn.setEnabled(has_squad and has_sel and has_b and not all_hgp)
         self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
-                                        and self._club_entity_id is not None and not all_hgc)
-        self._patch_both_btn.setEnabled(has_squad and has_sel and has_b and self._club_entity_id is not None
-                                        and not (all_hgp and all_hgc))
+                                       and self._club_entity_id is not None and not all_hgc)
 
     def _get_selected_persons(self):
         pid_map = {p.get('id', -1): p for p in self._squad}
@@ -5303,147 +5298,88 @@ class MainWindow(QMainWindow):
                 persons.append(person)
         return persons
 
-    def _patch_allowed(self):
-        if 'b' not in self._save_data:
-            QMessageBox.warning(self, 'Reload required', 'Click Reload before patching.')
-            return False
-        if self._save_data.get('offsets_stale'):
-            B = QMessageBox.StandardButton
-            box = QMessageBox(QMessageBox.Icon.Question, 'Save and reload first',
-                              'An earlier HGC patch moved data. Save now and reload, then repeat?',
-                              parent=self)
-            save_btn = box.addButton('Save and reload', QMessageBox.ButtonRole.AcceptRole)
-            box.addButton(B.Cancel)
-            box.setDefaultButton(save_btn)
-            box.exec()
-            if box.clickedButton() is save_btn:
-                self._after_reload_msg = ('Saved and reloaded. Click the patch button again to apply '
-                                          'your patch.')
-                # dirty -> existing save flow, then reload (not Reload's discard prompt: nothing to discard)
-                if self._dirty:
-                    self._do_save(after=self._reload_save, confirm=False)
-                else:
-                    self._reload_save()
-            return False
-        return True
+    # -- Homegrown queue (nothing touches game_db bytes until Save Changes) ---------
 
-    def _do_patch_hgp(self, persons=None, club_entity_id=None):
-        """persons: patch these (player window); default = the Squads table selection."""
-        if not self._save_data or (persons is None and not self._squad):
-            return
-        people_to_patch = [p for p in (self._get_selected_persons() if persons is None else persons)
-                           if not p.get('hgp', False)]
-        if not people_to_patch:
-            QMessageBox.information(self, 'Nothing to patch',
-                                    'All selected players are already HGP.')
-            return
-        if not self._patch_allowed() or not self._confirm_patch_dialog(people_to_patch, 'HGP'):
-            return
-        n = len(self._hgp_in_place(self._save_data['b'], people_to_patch))
-        self._after_patch('HGP', n, False)
+    def queue_has(self, person, kind):
+        return (person.get('id'), kind) in self._queue
 
-    def _do_patch_hgc(self, persons=None, club_entity_id=None):
-        club_entity_id = club_entity_id or self._club_entity_id
-        if not self._save_data or (persons is None and not self._squad) or not club_entity_id:
-            return
-        if 'b' not in self._save_data:
-            QMessageBox.warning(self, 'Reload required',
-                                'Click Reload before patching.')
-            return
-        from fm_editor.patch import is_hgc, patch_to_hgc
-        b = self._save_data['b']
-        people_to_patch = [p for p in (self._get_selected_persons() if persons is None else persons)
-                           if not is_hgc(b, p, club_entity_id)]
-        if not people_to_patch:
-            QMessageBox.information(self, 'Nothing to patch',
-                                    'All selected players are already HGC.')
-            return
-        if not self._patch_allowed() or not self._confirm_patch_dialog(people_to_patch, 'HGC'):
-            return
-        old_len = len(b)
-        ordered = sorted(people_to_patch, key=lambda p: p['end'], reverse=True)  # inserts shift later offsets
-        n = patch_to_hgc(b, ordered, club_entity_id)
-        self._after_patch('HGC', n, len(b) != old_len)
+    def queue_count(self):
+        return len(self._queue)
 
-    def _do_patch_both(self, persons=None, club_entity_id=None):
-        """HGP (in place) then HGC (inserts) in one confirm + one outcome. Players that already have a
-        part only get the missing one."""
-        club_entity_id = club_entity_id or self._club_entity_id
-        if not self._save_data or (persons is None and not self._squad) or not club_entity_id:
-            return
-        if 'b' not in self._save_data:
-            QMessageBox.warning(self, 'Reload required', 'Click Reload before patching.')
-            return
-        from fm_editor.patch import is_hgc, patch_to_hgc
-        b = self._save_data['b']
-        people = self._get_selected_persons() if persons is None else persons
-        need_hgp = [p for p in people if not p.get('hgp', False)]
-        need_hgc = [p for p in people if not is_hgc(b, p, club_entity_id)]
-        todo = [p for p in people if p in need_hgp or p in need_hgc]
-        if not todo:
-            QMessageBox.information(self, 'Nothing to patch',
-                                    'All selected players are already HGP and HGC.')
-            return
-        if not self._patch_allowed() or not self._confirm_patch_dialog(todo, 'HGP + HGC'):
-            return
-        changed = {id(p) for p in self._hgp_in_place(b, need_hgp)}  # first: in place, offsets stay valid
-        old_len = len(b)
-        for p in sorted(need_hgc, key=lambda p: p['end'], reverse=True):  # inserts shift later offsets
-            if patch_to_hgc(b, [p], club_entity_id):
-                changed.add(id(p))
-        self._after_patch('HGP + HGC', len(changed), len(b) != old_len)
-
-    def _hgp_in_place(self, b, people):
-        """Apply HGP to each person (in place); sets p['hgp']. Returns the list of changed players."""
-        from fm_editor.patch import patch_to_homegrown, is_homegrown
-
-        def _recs(p):  # the person's record block; HGP patching is in place so offsets stay valid
-            e = p['end']
-            return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
-        out = []
-        for p in people:
-            before = _recs(p)
-            patch_to_homegrown(b, p)
-            p['hgp'] = is_homegrown(b, p)
-            if before != _recs(p):
-                out.append(p)
-        return out
-
-    def _confirm_patch_dialog(self, people_to_patch, label):
-        names = ', '.join(p['name'] for p in people_to_patch[:5])
-        if len(people_to_patch) > 5:
-            names += f' ... (+{len(people_to_patch) - 5} more)'
-        msg = QMessageBox(self)
-        msg.setWindowTitle(f'Confirm {label} patch')
-        msg.setText(
-            f"Make {len(people_to_patch)} player(s) {label}?\n\n"
-            f"{names}\n\n"
-            "This changes the save in memory only. Nothing is written until you click "
-            "Save Changes, which first backs up the current file (bk1/bk2) and then "
-            "overwrites it in place.")
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        return msg.exec() == QMessageBox.StandardButton.Ok
-
-    def _after_patch(self, label, n, layout_changed):
-        """An in-memory patch finished: n players changed. Marks the save dirty (written by Save Changes)."""
-        if n:
-            self._dirty = True
-            self._pending.append(f'{label}: {n} player(s)')
-        name = os.path.basename(self._save_path)
-        if layout_changed:
-            self._save_data['offsets_stale'] = True  # HGC insert moved bytes; parsed offsets are now wrong
-            QMessageBox.information(
-                self, 'Patch applied',
-                f'{label} applied to {n} player(s) in memory.\n\n'
-                'This patch inserted data, so the lists on screen are out of date. '
-                'Click Save Changes, then Reload, before making further edits.')
+    def queue_toggle(self, person, kind):
+        """Player-window pill: queue / unqueue one change. Returns True when it is now queued."""
+        key = (person.get('id'), kind)
+        if key in self._queue:
+            del self._queue[key]
         else:
-            self._populate_squad_table(self._squad)
+            self._queue[key] = person
+        self._queue_changed()
+        return key in self._queue
+
+    def _queue_selected(self, kind):
+        """Squads toolbar Make HGP / Make HGC: queue the selected players that still lack that flag."""
+        if not self._save_data or 'b' not in self._save_data:
+            return
+        b = self._save_data['b']
+        from fm_editor.patch import is_hgc
+        n = 0
+        for p in self._get_selected_persons():
+            ent = self._entity_of(p)
+            have = p.get('hgp', False) if kind == 'hgp' else (ent is not None and is_hgc(b, p, ent))
+            if not have and (p.get('id'), kind) not in self._queue:
+                self._queue[(p.get('id'), kind)] = p
+                n += 1
+        self._queue_changed()
+        self._status.showMessage(f'{kind.upper()}: {n} player(s) queued. Click Save Changes to write them.'
+                                 if n else f'{kind.upper()}: nothing to queue.')
+
+    def _queue_changed(self):
+        """Queue edited anywhere: dirty flag, pending text, Squads cells, open player window."""
+        n = {k: sum(1 for _pid, kk in self._queue if kk == k) for k in ('hgp', 'hgc')}
+        self._dirty = bool(self._queue)
+        self._pending = [f'{k.upper()}: {v} player(s)' for k, v in n.items() if v]
         self._update_ui_state()
-        self._status.showMessage(
-            f'{label}: {n} player(s) changed in memory. Click Save Changes to write them to {name}.'
-            if n else f'{label}: nothing needed changing.')
+        self._refresh_queue_cells()
+        if self._pw_open is not None:
+            self._pw_open.refresh_queue()
+
+    @staticmethod
+    def _squad_hg_cell(kind, set_, queued):
+        """Squads table HGP/HGC cell: text + colour (queued = yellow tier-5 with a '+' marker)."""
+        label = kind.upper()
+        if set_:
+            return label, COLORS['hgp_green']
+        if queued:
+            return f'+ {label}', '#EAD95C'
+        return ('-' if set_ is not None else '?'), COLORS['text_dim']
+
+    def _refresh_queue_cells(self):
+        """Squads table: re-mark the HGP/HGC cells of queued players (cheap; no repopulate, selection kept)."""
+        t = self._table
+        if self._table_mode != 'squad' or not self._squad or not self._save_data:
+            return
+        from fm_editor.patch import is_hgc
+        b = self._save_data.get('b')
+        by_id = {p.get('id'): p for p in self._squad}
+        t.setSortingEnabled(False)
+        for row in range(t.rowCount()):
+            it = t.item(row, 0)
+            p = by_id.get(it.data(Qt.ItemDataRole.UserRole)) if it else None
+            if p is None:
+                continue
+            hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
+            for col, kind, set_ in ((8, 'hgp', bool(p.get('hgp', False))), (9, 'hgc', hgc)):
+                text, colour = self._squad_hg_cell(kind, set_, self.queue_has(p, kind))
+                cell = t.item(row, col)
+                cell.setText(text)
+                cell.setForeground(QColor(colour))
+        t.setSortingEnabled(True)
+        self._on_selection_changed()
+
+    def _entity_of(self, person):
+        """Club entity id of a player's club (club id + 1), or None."""
+        cid = (self._save_data or {}).get('squads', {}).get(person.get('id'))
+        return None if cid is None else cid + 1
 
     # -- Save / discard guards ------------------------------------------------
 
@@ -5500,17 +5436,40 @@ class MainWindow(QMainWindow):
             box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel)
             if box.exec() != QMessageBox.StandardButton.Save:
                 return
+        sd = self._apply_queue_copy()
+        if sd is None:
+            return
         self._after_save = after
         self._set_busy(True, 'Saving')
-        self._worker = SaveWorker(self._save_data, path)
+        self._worker = SaveWorker(sd, path)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
         self._worker.done.connect(self._on_save_done)
         self._worker.error.connect(self._on_save_error)
         self._worker.start()
 
+    def _apply_queue_copy(self):
+        """Apply the queued HGP/HGC changes (patch.apply_queue: HGP in place, then HGC inserts in descending
+        offset order) to a COPY of game_db. Returns the save_data to write (shallow copy holding the patched
+        buffer) or None after showing the error. Nothing in self._save_data / on disk changes either way."""
+        from fm_editor import patch as _patch
+        sd = dict(self._save_data)
+        by_id = {p.get('id'): p for p in sd.get('people', [])}
+        try:
+            nb = bytearray(sd['b'])
+            self._last_applied = _patch.apply_queue(
+                nb, [(by_id.get(pid, p), kind) for (pid, kind), p in self._queue.items()], self._entity_of)
+            sd['b'] = nb
+        except Exception as e:
+            self._on_save_error(f'could not apply the queued changes ({e}).')
+            return None
+        return sd
+
     def _on_save_done(self, info):
         self._worker.wait()  # run() returns right after emitting; lets close-after-save proceed
+        n_hgp, n_hgc = self._last_applied
+        asked = {k: sum(1 for _pid, kk in self._queue if kk == k) for k in ('hgp', 'hgc')}
+        self._queue.clear()
         self._dirty = False
         self._pending = []
         clear_cache(self._save_path)  # cache is keyed by path+mtime; drop the entry for the old layout
@@ -5518,12 +5477,16 @@ class MainWindow(QMainWindow):
         name = os.path.basename(self._save_path)
         msg = (f'Saved {name} \u00b7 original kept in both backups ({name}.bk1, {name}.bk2)'
                if info.get('first') else f'Saved {name} \u00b7 backups bk1, bk2 updated')
-        if self._save_data.get('offsets_stale'):
-            msg += ' \u00b7 click Reload to refresh the lists'
-        self._status.showMessage(msg)
+        msg += f' \u00b7 HGP {n_hgp}, HGC {n_hgc}'
+        if (n_hgp, n_hgc) != (asked['hgp'], asked['hgc']):
+            msg += f' ({asked["hgp"] - n_hgp + asked["hgc"] - n_hgc} queued change(s) needed no edit)'
         after, self._after_save = self._after_save, None
-        if after:
+        if after:  # load-another / close: no point reloading this save
+            self._status.showMessage(msg)
             after()
+        else:  # the in-memory lists and offsets are stale (HGC inserts): re-read the saved file
+            self._after_reload_status = msg
+            self._reload_save()
 
     def _on_save_error(self, msg):
         self._after_save = None
@@ -5617,7 +5580,6 @@ class MainWindow(QMainWindow):
         self._search_box.setEnabled(not busy and self._save_data is not None)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn.setEnabled(False)
-        self._patch_both_btn.setEnabled(False)
         if msg and not busy:
             self._status.showMessage(msg)
         if not busy:

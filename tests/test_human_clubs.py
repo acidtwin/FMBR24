@@ -1,5 +1,5 @@
 """human_club_ids / human_pids (fm_editor/saveinfo.py) on synthetic data, then the real save and the
-PlayerWindow HGP/HGC visibility (skipped if the save is absent). Plain script: python3 tests/test_human_clubs.py
+PlayerWindow HGP/HGC pill states (skipped if the save is absent). Plain script: python3 tests/test_human_clubs.py
 """
 import os
 import struct
@@ -60,12 +60,18 @@ def test_real_save():
     from PyQt6.QtWidgets import QApplication, QPushButton
     app = QApplication.instance() or QApplication([])
     from gui.player_window import PlayerWindow
+    class Host:  # minimal queue host
+        def queue_has(self, p, k): return False
+        def queue_count(self): return 0
+        def queue_toggle(self, p, k): pass
     for person, want in ((spurs, True), (other, False)):
         club = sd['squads'][person['id']]
-        w = PlayerWindow(person, sd, club + 1, None, can_patch=club in sd['human_clubs'])
+        w = PlayerWindow(person, sd, club + 1, None, can_patch=club in sd['human_clubs'], queue=Host())
         texts = {b.text() for b in w.findChildren(QPushButton)}
-        has = any(t.startswith('Make ') or t.endswith(' set') for t in texts)
-        assert has == want and 'Close' in texts and 'Add to Shortlist' in texts, texts
+        states = {w._pill_state('hgp'), w._pill_state('hgc')}
+        # human club: pills are controls (go / set); other clubs: display-only. No Make buttons anywhere.
+        assert (states <= {'go', 'set'}) == want and (not want or 'plain' not in states), states
+        assert not any(t.startswith('Make ') for t in texts) and 'Close' in texts and 'Add to Shortlist' in texts, texts
         app.processEvents()
         w.grab().save(os.path.join(tempfile.gettempdir(), f'pw_{"human" if want else "other"}.png'))
 

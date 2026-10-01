@@ -131,3 +131,38 @@ def patch_to_hgc(b, persons_desc, club_entity_id):
             b[end + 34] += 1
         changed += 1
     return changed
+
+
+def hgp_in_place(b, people):
+    """HGP for each person, in place (offsets stay valid). Returns the list of persons whose bytes changed."""
+    def recs(p):
+        e = p['end']
+        return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
+    out = []
+    for p in people:
+        before = recs(p)
+        patch_to_homegrown(b, p)
+        if before != recs(p):
+            out.append(p)
+    return out
+
+
+def apply_queue(b, queue, entity_of):
+    """Write queued homegrown changes into bytearray b in the SAFE order (offsets are the ones parsed at load).
+    queue: iterable of (person, 'hgp'|'hgc'); entity_of(person) -> club entity id or None.
+    1. every HGP in place (offsets stay valid), 2. HGC for persons sorted by record offset DESCENDING
+    (a 16-byte insert only shifts later bytes). Only the part a person is missing is added.
+    Returns (changed_hgp, changed_hgc). Raises on any failure: the caller keeps a pristine copy of b."""
+    hgp, hgc = {}, {}
+    for p, kind in queue:
+        (hgp if kind == 'hgp' else hgc)[id(p)] = p
+    n_hgp = len(hgp_in_place(b, [p for p in hgp.values() if not is_homegrown(b, p)]))
+    todo = []
+    for p in hgc.values():
+        ent = entity_of(p)
+        if ent is not None and not is_hgc(b, p, ent):
+            todo.append((p, ent))
+    n_hgc = 0
+    for p, ent in sorted(todo, key=lambda t: t[0]['end'], reverse=True):
+        n_hgc += patch_to_hgc(b, [p], ent)
+    return n_hgp, n_hgc

@@ -1,14 +1,18 @@
-"""Player window (master visual: mockups/player-window.html). Persistent header (QFrame#pwHeader: identity, HGP/HGC pills,
-CA/PA, per-tab slot) above a left tab strip (QFrame#pwTabStrip) + QStackedWidget, and a persistent action strip
-(QFrame#actionStrip: Make HGP / Make HGC / Make both / Add to Shortlist / Close - Close is ALWAYS last, also when the Make buttons
-are absent). Header, tab strip and action strip are separate widgets so a theme can paint each of them.
+"""Player window (master visual: mockups/player-window.html). Persistent header (QFrame#pwHeader: identity + HGP/HGC pills,
+CA / PA / Dev Rate boxes, 'Changes queued' widget - identical on every tab) above a left tab strip (QFrame#pwTabStrip) +
+QStackedWidget, and a persistent action strip (QFrame#actionStrip: Add to Shortlist / Close - Close is ALWAYS last).
+Header, tab strip and action strip are separate widgets so a theme can paint each of them.
 
-TABS rows = (key, label, page builder method name | None, header-slot method name). None = "Coming soon" placeholder
-described by SOON[key]. Add a real tab = write `_page_<key>` and name it in TABS; the slot method returns
-(label, [widgets], sub text). Profile = layout C (cards Position / This season / Fitness; attribute grid + Attribute
-groups radar + Footedness soles; Personality + Player traits); Training = Recommended traits + a coming-soon block;
-Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are stored in the save,
-not derived from attributes).
+HGP / HGC pills are the controls (no Make buttons, no dialogs): for a patchable player (human club, club known) a not-set
+pill is clickable and QUEUES the change (yellow '+ HGP'), clicking again undoes it. The window never patches: it asks the
+host (`queue`, the main window: queue_has / queue_toggle / queue_count) and the host calls refresh_queue() whenever the queue
+changes. The queue is written by the main window's Save Changes. The window stays open (no accept()).
+
+TABS rows = (key, label, page builder method name | None). None = "Coming soon" placeholder described by SOON[key].
+Add a real tab = write `_page_<key>` and name it in TABS. Profile = layout C (cards Position / This season / Fitness;
+attribute grid + Attribute groups radar + Footedness soles; Personality + Player traits); Training = Recommended traits +
+a coming-soon block; Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are
+stored in the save, not derived from attributes).
 
 Data the save does not give us yet is read from `data` (see `player_extra_data`) and shown as PENDING
 (respecting Settings > Show PENDING markers). Projected ("at potential") values are display only.
@@ -100,13 +104,13 @@ _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill
 
 # (key, label, builder method name or None = "Coming soon" placeholder described by SOON[key])
 TABS = [
-    ('profile', 'Profile', '_page_profile', '_slot_profile'),
-    ('contract', 'Contract & Transfer', '_page_contract', '_slot_contract'),
-    ('positions', 'Positions', '_page_positions', '_slot_positions'),
-    ('general', 'General Rating', None, '_slot_profile'),
-    ('role', 'Role Rating', None, '_slot_profile'),
-    ('training', 'Training', '_page_training', '_slot_profile'),
-    ('history', 'History', '_page_history', '_slot_history'),
+    ('profile', 'Profile', '_page_profile'),
+    ('contract', 'Contract & Transfer', '_page_contract'),
+    ('positions', 'Positions', '_page_positions'),
+    ('general', 'General Rating', None),
+    ('role', 'Role Rating', None),
+    ('training', 'Training', '_page_training'),
+    ('history', 'History', '_page_history'),
 ]
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
@@ -244,11 +248,17 @@ QDialog#playerWindow QLabel#pwNote {{ color:{c['text_secondary']}; font-size:11p
 QDialog#playerWindow QLabel#pwHint {{ color:{c['text_secondary']}; font-size:11px; }}
 QDialog#playerWindow QLabel#pwAvatar {{ background:{c['elevated']}; border-radius:3px; }}
 QDialog#playerWindow QLabel#pwBadge {{ color:#FFFFFF; font-size:10px; font-weight:bold; border-radius:2px; }}
-QDialog#playerWindow QLabel#pwPill {{ color:{c['text_secondary']}; font-size:10px; font-weight:bold;
+QDialog#playerWindow QPushButton#pwHgPill {{ background:transparent; color:{c['text_secondary']}; font-size:10px; font-weight:bold;
     border:1px solid {c['border_bright']}; border-radius:9px; padding:0 8px; }}
-QDialog#playerWindow QLabel#pwPillOn {{ color:{c['hgp_green']}; font-size:10px; font-weight:bold;
-    border:1px solid {c['hgp_green']}; border-radius:9px; padding:0 8px; background:rgba(90,160,209,36); }}
-QDialog#playerWindow QLabel#pwPillUnk {{ color:{c['text_secondary']}; font-size:10px; font-weight:bold; padding:0 2px; }}
+QDialog#playerWindow QPushButton#pwHgPill[state="set"] {{ color:{c['hgp_green']}; border:1px solid {c['hgp_green']};
+    background:rgba(90,160,209,36); }}
+QDialog#playerWindow QPushButton#pwHgPill[state="go"] {{ border:1px dashed {c['text_dim']}; }}  /* Qt draws a rounded dashed border as 1px dots: lighter than border_bright so it reads */
+QDialog#playerWindow QPushButton#pwHgPill[state="go"]:hover {{ color:#FFFFFF; border:1px dashed {c['text_secondary']};
+    background:rgba(255,255,255,15); }}
+QDialog#playerWindow QPushButton#pwHgPill[state="queued"] {{ color:{TIER_HEX[5]}; border:1px solid {TIER_HEX[5]};
+    background:rgba(234,217,92,36); }}
+QDialog#playerWindow QPushButton#pwHgPill[state="queued"]:hover {{ background:rgba(234,217,92,61); }}
+QDialog#playerWindow QPushButton#pwHgPill[state="unk"] {{ border:1px solid transparent; padding:0 2px; }}
 QDialog#playerWindow QLabel#pwChipInj {{ background:#8B1A1A; color:#FFFFFF; font-size:11px; font-weight:600;
     border-radius:3px; padding:0 8px; }}
 QDialog#playerWindow QLabel#pwChipOk {{ background:{c['elevated']}; color:#52C287; font-size:11px; font-weight:600;
@@ -459,11 +469,12 @@ class _PitchBig(QWidget):
 
 
 class PlayerWindow(QDialog):
-    """Modal player window. Results for the caller: `_patch_mode` ('hgp' / 'hgc' / 'both' / None) and
-    `_shortlist_added`; both close the window via accept(), the caller then runs its existing flow."""
+    """Modal player window. Result for the caller: `_shortlist_added` (closes via accept(), the caller adds the player).
+    HGP / HGC pills queue changes through `queue` (host with queue_has / queue_toggle / queue_count); can_patch False or
+    no host = display-only pills with `patch_tip` as tooltip."""
 
     def __init__(self, person, save_data, club_entity_id, parent=None, shortlisted=False, can_patch=False,
-                 data=None):
+                 data=None, queue=None, patch_tip='Not your club'):
         super().__init__(parent)
         self.setObjectName('playerWindow')
         self.setWindowTitle(person['name'])
@@ -475,8 +486,9 @@ class PlayerWindow(QDialog):
         self._save_data = save_data
         self._club_entity_id = club_entity_id
         self._shortlisted = shortlisted
-        self._can_patch = can_patch
-        self._patch_mode = None
+        self._queue = queue
+        self._can_patch = bool(can_patch and queue is not None)
+        self._patch_tip = patch_tip
         self._shortlist_added = False
         self._pot_on = False
         self._pot_segs = []         # (Current, Full Potential) buttons of every Current | Full Potential control
@@ -543,7 +555,7 @@ class PlayerWindow(QDialog):
         grp = QButtonGroup(self)
         grp.setExclusive(True)
         self._tab_group = grp
-        for key, label, builder, _slot in TABS:
+        for key, label, builder in TABS:
             if key in _TAB_SEP_BEFORE:
                 sep = QFrame()
                 sep.setObjectName('pwTabSep')
@@ -580,9 +592,6 @@ class PlayerWindow(QDialog):
         _LAST_TAB = key
         self._tab_btns[key].setChecked(True)
         self._stack.setCurrentIndex(self._tab_keys.index(key))
-        slot = next(t[3] for t in TABS if t[0] == key)
-        label, vals, sub = getattr(self, slot)()
-        self._set_slot(label, vals, sub)
 
     def _step_tab(self, d):
         self._select_tab(self._tab_keys[(self._stack.currentIndex() + d) % len(self._tab_keys)])
@@ -791,20 +800,20 @@ class PlayerWindow(QDialog):
         sh.addStretch()
         return sw
 
-    def _cab(self, title, code, val, color):
-        """CA / PA box 150x56 on the shared header grid: title (10/700 caps), then 5 stars (stars mode) or the number
-        + a 6px bar (numbers mode) on the 24px value row. No caption row. Tooltip keeps the raw value ('CA 149')."""
+    def _cab(self, title, tip, val, color, stars=None, frac=0.0):
+        """CA / PA / DEV RATE box 136x56 on the shared header grid: title (10/700 caps), then 5 stars (stars mode, `stars` =
+        star count) or the number + a 6px bar (`frac` = fill 0..1) on the 24px value row. Tooltip keeps the raw value."""
         f = QFrame()
         f.setObjectName('pwCab')
-        f.setFixedSize(150, self._HG_H)
+        f.setFixedSize(136, self._HG_H)
         v = QVBoxLayout(f)
-        v.setContentsMargins(12, self._HG_TOP, 10, 0)
+        v.setContentsMargins(10, self._HG_TOP, 8, 0)
         v.setSpacing(self._HG_GAP)
         v.addWidget(_spaced(_lab(title, 'pwBigLab', None, self._HG_LAB), 0.8))
-        if val is not None:
-            f.setToolTip(f'{code} {val}')
-        if self._ability_stars and val is not None:
-            vw = self._star_row(ability_stars(val))
+        if tip:
+            f.setToolTip(tip)
+        if self._ability_stars and stars is not None:
+            vw = self._star_row(stars)
         else:
             vw = QWidget()
             vh = QHBoxLayout(vw)
@@ -813,22 +822,61 @@ class PlayerWindow(QDialog):
             num = _lab(str(val) if val is not None else '?', 'pwBigNum', h=24)
             num.setStyleSheet(f'QLabel#pwBigNum {{ color:{color}; }}')
             vh.addWidget(num, 0, Qt.AlignmentFlag.AlignVCenter)
-            vh.addWidget(_Bar((val or 0) / 200, color), 1, Qt.AlignmentFlag.AlignVCenter)
+            vh.addWidget(_Bar(frac, color), 1, Qt.AlignmentFlag.AlignVCenter)
         vw.setFixedHeight(self._HG_VAL)
         v.addWidget(vw)
         v.addStretch()
         return f
 
-    def _pill(self, text, on):
-        """Header HGP / HGC pill (mockup .hdr .pill: 18 high, lit only when set); on None = unknown 'HGC?'."""
-        if on:
-            c = _lab(text, 'pwPillOn', Qt.AlignmentFlag.AlignCenter, 18)
-        elif on is False:
-            c = _lab(text, 'pwPill', Qt.AlignmentFlag.AlignCenter, 18)
-        else:
-            c = _lab(text + '?', 'pwPillUnk', Qt.AlignmentFlag.AlignCenter, 18)
-            c.setToolTip('Homegrown status at this club could not be determined')
-        return c
+    # HGP / HGC pill states (mockup hgPill): set (lit, not clickable) | go (not set + patchable: dashed, click queues) |
+    # queued (yellow '+ HGP', click undoes) | plain (display-only, tooltip = why) | unk (bare 'HGC?', display-only)
+    def _pill_state(self, kind):
+        is_set = self._hgp if kind == 'hgp' else self._hgc
+        if kind == 'hgc' and self._hgc is None:
+            return 'unk'
+        if is_set:
+            return 'set'
+        if self._can_patch:
+            return 'queued' if self._queue.queue_has(self._person, kind) else 'go'
+        return 'plain'
+
+    def _make_pill(self, kind):
+        btn = QPushButton()
+        btn.setObjectName('pwHgPill')
+        btn.setFixedHeight(18)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn.clicked.connect(lambda checked=False, k=kind: self._pill_clicked(k))
+        self._pill_btns[kind] = btn
+        self._apply_pill(kind)
+        return btn
+
+    def _apply_pill(self, kind):
+        btn, st, lab = self._pill_btns[kind], self._pill_state(kind), kind.upper()
+        btn.setText({'unk': lab + '?', 'queued': '+ ' + lab}.get(st, lab))
+        btn.setToolTip({'unk': 'HGC unknown - club unknown for this player.', 'queued': 'Queued - click to undo',
+                        'go': f'Click to make {lab}', 'plain': self._patch_tip}.get(st, ''))
+        btn.setProperty('state', st)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor if st in ('go', 'queued') else Qt.CursorShape.ArrowCursor)
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
+        btn.updateGeometry()
+
+    def _pill_clicked(self, kind):
+        if self._pill_state(kind) in ('go', 'queued'):
+            self._queue.queue_toggle(self._person, kind)   # the host refreshes every open window (refresh_queue)
+
+    def refresh_queue(self):
+        """Queue changed (this window or elsewhere): re-render the pills and the 'Changes queued' widget."""
+        for kind in self._pill_btns:
+            self._apply_pill(kind)
+        n = self._queue.queue_count() if self._queue is not None else 0
+        here = sum(1 for k in ('hgp', 'hgc') if self._pill_state(k) == 'queued')
+        self._q_n.setText(str(n))
+        self._q_n.setStyleSheet(f"QLabel#pwSlotV {{ color:{TIER_HEX[5] if n else COLORS['text_secondary']}; }}")
+        self._q_s.setText('Save to take effect' if n else 'Nothing queued')
+        self._q_w.setToolTip(
+            f"{here} in this window{f', {n - here} elsewhere' if n > here else ''} - written when you save" if n
+            else 'Click HGP / HGC on a player you can patch to queue a change')
 
     def _header(self):
         """Variant A 'calm': line 1 = name + position badge ...... HGP HGC (small, right end); line 2 = flag nation ·
@@ -865,8 +913,9 @@ class PlayerWindow(QDialog):
         pills = QHBoxLayout()
         pills.setSpacing(6)
         pills.setContentsMargins(0, 0, 0, 0)
-        pills.addWidget(self._pill('HGP', self._hgp))
-        pills.addWidget(self._pill('HGC', self._hgc))
+        self._pill_btns = {}
+        pills.addWidget(self._make_pill('hgp'))
+        pills.addWidget(self._make_pill('hgc'))
         r1.addLayout(pills)
         r1w = QWidget()
         r1w.setFixedHeight(24)
@@ -901,76 +950,33 @@ class PlayerWindow(QDialog):
         col.addWidget(r2w)
         col.addStretch(1)
         hl.addLayout(col, 1)
-        hl.addWidget(self._cab('CURRENT ABILITY', 'CA', p.get('ca'), COLORS['accent_hover']))
-        hl.addWidget(self._cab('POTENTIAL ABILITY', 'PA', p.get('pa'), C_POT))
-        self._slot_w = QWidget()
-        self._slot_w.setObjectName('pwSlot')
-        self._slot_w.setFixedSize(172, self._HG_H)
-        sv = QVBoxLayout(self._slot_w)
+        ca, pa = p.get('ca'), p.get('pa')
+        hl.addWidget(self._cab('CURRENT ABILITY', f'CA {ca}' if ca is not None else None, ca, COLORS['accent_hover'],
+                               ability_stars(ca) if ca is not None else None, (ca or 0) / 200))
+        hl.addWidget(self._cab('POTENTIAL ABILITY', f'PA {pa}' if pa is not None else None, pa, C_POT,
+                               ability_stars(pa) if pa is not None else None, (pa or 0) / 200))
+        dev = mw._progress_rate(p)
+        hl.addWidget(self._cab('DEVELOPMENT RATE', f'Dev Rate {dev} out of 20' if dev is not None else None, dev,
+                               TIER_HEX[tier(dev)] if dev is not None else COLORS['text_secondary'],
+                               dev_stars(dev) if dev is not None else None, (dev or 0) / 20))
+        # 'Changes queued' widget (mockup .slot): 160x56, hairline on the left, 15 left pad
+        self._q_w = QWidget()
+        self._q_w.setObjectName('pwSlot')
+        self._q_w.setFixedSize(160, self._HG_H)
+        sv = QVBoxLayout(self._q_w)
         sv.setContentsMargins(16, 0, 0, 0)
         sv.setSpacing(0)
-        self._slot_l = _spaced(_lab('', 'pwBigLab', None, self._HG_LAB), 0.8)
-        self._slot_vh = QHBoxLayout()
-        self._slot_vh.setContentsMargins(0, 0, 0, 0)
-        self._slot_vh.setSpacing(8)
-        vw = QWidget()
-        vw.setFixedHeight(self._HG_VAL)
-        vw.setLayout(self._slot_vh)
-        self._slot_s = _ElideLabel('', 'pwSlotS')
-        self._slot_s.setFixedHeight(14)
+        self._q_n = _lab('0', 'pwSlotV', None, self._HG_VAL)
+        self._q_s = _lab('', 'pwSlotS', None, 14)
         sv.addStretch()
-        sv.addWidget(self._slot_l)
+        sv.addWidget(_spaced(_lab('CHANGES QUEUED', 'pwBigLab', None, self._HG_LAB), 0.8))
         sv.addSpacing(self._HG_GAP)
-        sv.addWidget(vw)
-        sv.addWidget(self._slot_s)
+        sv.addWidget(self._q_n)
+        sv.addWidget(self._q_s)
         sv.addStretch()
-        hl.addWidget(self._slot_w)
+        hl.addWidget(self._q_w)
+        self.refresh_queue()
         return hero
-
-    def _set_slot(self, label, widgets, sub):
-        self._slot_l.setText(label.upper())
-        while self._slot_vh.count():
-            it = self._slot_vh.takeAt(0)
-            w = it.widget()
-            if w is not None:
-                w.hide()
-                w.setParent(None)
-                w.deleteLater()
-        for w in widgets:
-            self._slot_vh.addWidget(w, 0, Qt.AlignmentFlag.AlignVCenter)
-        self._slot_vh.addStretch()
-        self._slot_s._full = sub or ''
-        self._slot_s.setText(sub or '')
-        self._slot_s.setVisible(bool(sub))        # no sub line: label + value row centre in the 56px slot
-
-    @staticmethod
-    def _slot_val(text, color=None):
-        lbl = _lab(text, 'pwSlotV')
-        if color:
-            lbl.setStyleSheet(f'QLabel#pwSlotV {{ color:{color}; }}')
-        return lbl
-
-    def _slot_profile(self):
-        from gui import main_window as mw
-        dev = mw._progress_rate(self._person)
-        lab = 'Development rate'
-        if dev is None:
-            return lab, [self._slot_val('-')], ''
-        if self._ability_stars:
-            sw = self._star_row(dev_stars(dev))
-            sw.setToolTip(f'Dev Rate {dev} out of 20')
-            return lab, [sw], ''
-        unit = _lab('/ 20', 'pwSlotS')           # mockup .u: 11px secondary, regular weight
-        return lab, [self._slot_val(str(dev), TIER_HEX[tier(dev)]), unit], ''
-
-    def _slot_contract(self):
-        return 'Contract until', [self._slot_val(self._contract_until() or '-')], self._club_name()
-
-    def _slot_positions(self):
-        R = self._ratings
-        best = self._best_pos(R)
-        v = R[best]
-        return 'Best position', [self._badge(best, True), self._slot_val(str(v), TIER_HEX[tier(v)])], word(v)
 
     def _career(self):
         """Career rows of this player (fm_editor.history.career_for_person), computed once on first use;
@@ -985,16 +991,6 @@ class PlayerWindow(QDialog):
                     c = {'status': 'error', 'rows': []}
             self._career_c = c
         return self._career_c
-
-    def _slot_history(self):
-        c = self._career()
-        rows = c.get('rows') or []
-        if not rows:
-            sub = 'FM install database not found' if c.get('status') == 'no_install' else 'No history found'
-            return 'Apps · Goals', [self._pend_chip()], sub
-        apps = sum(r['apps'] or 0 for r in rows)
-        goals = sum(r['goals'] or 0 for r in rows)
-        return 'Apps · Goals', [self._slot_val(f'{apps} · {goals}')], 'career, league'
 
     @staticmethod
     def _fmt_fee(n):
@@ -1089,27 +1085,6 @@ class PlayerWindow(QDialog):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
         h.addStretch(1)
-        for mode, lab, is_set, ok in (('hgp', 'HGP', self._hgp, True), ('hgc', 'HGC', self._hgc, self._hgc is not None)):
-            if not self._can_patch:  # only players of a human-managed club can be patched
-                break
-            btn = QPushButton(f'{lab} set' if is_set else f'Make {lab}')
-            btn.setObjectName('pwGhost')
-            btn.setFixedHeight(32)
-            btn.setEnabled(bool(ok) and not is_set)
-            if not is_set and not ok:
-                btn.setToolTip('Club unknown for this player.')
-            btn.clicked.connect(lambda checked=False, m=mode: self._emit_patch(m))
-            h.addWidget(btn)
-        if self._can_patch:  # HGP in place, then HGC: one action. Enabled only while neither flag is set
-            both_set = bool(self._hgp) and bool(self._hgc)
-            btn = QPushButton('HGP + HGC set' if both_set else 'Make both')
-            btn.setObjectName('pwGhost')
-            btn.setFixedHeight(32)
-            btn.setEnabled(not self._hgp and not self._hgc and self._hgc is not None)
-            if self._hgc is None:
-                btn.setToolTip('Club unknown for this player.')
-            btn.clicked.connect(lambda checked=False: self._emit_patch('both'))
-            h.addWidget(btn)
         if self._shortlisted:
             sl = QPushButton('✓ On Player Shortlist')
             sl.setObjectName('pwShortOn')
@@ -1643,10 +1618,6 @@ class PlayerWindow(QDialog):
         return panel
 
     # actions ------------------------------------------------------------------------------------
-    def _emit_patch(self, mode):
-        self._patch_mode = mode
-        self.accept()
-
     def _do_add_shortlist(self):
         self._shortlist_added = True
         self.accept()

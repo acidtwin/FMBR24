@@ -50,7 +50,7 @@ FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, la
 
 ## Button order rule
 
-A Close button is ALWAYS the last (far-right) button of any button row or action strip (player window: Make HGP / Make HGC / Add to Shortlist / Close). Apply it to every dialog and mockup you touch.
+A Close button is ALWAYS the last (far-right) button of any button row or action strip (player window: Add to Shortlist / Close). Apply it to every dialog and mockup you touch.
 
 ## Mockup first
 
