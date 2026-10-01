@@ -1640,9 +1640,9 @@ class MainWindow(QMainWindow):
         self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
         self._after_reload_status = None  # one-shot status text shown once the post-save reload finishes
         self._ui_snap = None  # _capture_ui_state() taken when a reload starts, applied once it finishes
+        self._busy = False  # True from _set_busy(True) to _set_busy(False): Save / Reload / Load / Back / Forward / Settings locked
         self._squad = []
         self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
-        self._club_entity_id = None
         self._worker = None
         self._current_club = None
         self._shortlist = []        # players only
@@ -2809,8 +2809,8 @@ class MainWindow(QMainWindow):
 
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         n_hgc = sum(1 for p in squad
-                    if b is not None and self._club_entity_id
-                    and is_hgc(b, p, self._club_entity_id))
+                    if b is not None and self._entity_of(p) is not None
+                    and is_hgc(b, p, self._entity_of(p)))
         n_injured = sum(1 for p in squad if p.get('injured', False))
         cas = [p['ca'] for p in squad if p.get('ca') is not None]
         avg_ca = round(sum(cas) / len(cas)) if cas else 0
@@ -4576,7 +4576,7 @@ class MainWindow(QMainWindow):
             self._nav_history = self._nav_history[:self._nav_pos + 1]
         self._nav_history.append((stack_idx, context))
         self._nav_pos = len(self._nav_history) - 1
-        self._back_btn.setEnabled(self._nav_pos > 0)
+        self._back_btn.setEnabled(not self._busy and self._nav_pos > 0)
         self._fwd_btn.setEnabled(False)
 
     def _nav_back(self, checked=False):
@@ -4594,8 +4594,9 @@ class MainWindow(QMainWindow):
         self._nav_restore(self._nav_history[self._nav_pos])
 
     def _nav_back_btn_update(self):
-        self._back_btn.setEnabled(self._nav_pos > 0)
-        self._fwd_btn.setEnabled(self._nav_pos < len(self._nav_history) - 1)
+        pos = getattr(self, '_nav_pos', -1)
+        self._back_btn.setEnabled(not self._busy and pos > 0)
+        self._fwd_btn.setEnabled(not self._busy and pos < len(getattr(self, '_nav_history', ())) - 1)
 
     def _nav_restore(self, entry: tuple):
         stack_idx, context = entry
@@ -4706,27 +4707,24 @@ class MainWindow(QMainWindow):
         has_file = bool(self._save_path)
         has_data = self._save_data is not None
         has_b = has_data and 'b' in self._save_data
-        self._reload_btn.setEnabled(has_file)
-        self._save_btn.setEnabled(has_b and self._dirty)
-        self._search_box.setEnabled(has_data)
+        idle = not self._busy  # while a Save / Reload / Load runs nothing may be re-enabled here
+        self._reload_btn.setEnabled(idle and has_file)
+        self._save_btn.setEnabled(idle and has_b and self._dirty)
+        self._search_box.setEnabled(idle and has_data)
         has_abilities = has_data and any(
             'ca' in p for p in self._save_data.get('people', []))
         for btn in self._report_btns.values():
-            btn.setEnabled(has_abilities)
-        self._players_nav_btn.setEnabled(has_abilities)
-        self._nav_btns['save_info'].setEnabled(has_data)
-        self._nav_btns['club'].setEnabled(self._current_club is not None)
-        self._nav_btns['squad'].setEnabled(has_data and self._current_club is not None)
-        self._nav_btns['club_staff'].setEnabled(has_data and self._current_club is not None)
-        self._nav_btns['shortlist'].setEnabled(True)
-        self._nav_btns['staff_shortlist'].setEnabled(True)
-        self._scouting_staff_nav_btn.setEnabled(has_data)
+            btn.setEnabled(idle and has_abilities)
+        self._players_nav_btn.setEnabled(idle and has_abilities)
+        self._nav_btns['save_info'].setEnabled(idle and has_data)
+        self._nav_btns['club'].setEnabled(idle and self._current_club is not None)
+        self._nav_btns['squad'].setEnabled(idle and has_data and self._current_club is not None)
+        self._nav_btns['club_staff'].setEnabled(idle and has_data and self._current_club is not None)
+        self._nav_btns['shortlist'].setEnabled(idle)
+        self._nav_btns['staff_shortlist'].setEnabled(idle)
+        self._scouting_staff_nav_btn.setEnabled(idle and has_data)
         self._table.setEnabled(has_data)
-        has_squad = bool(self._squad) and self._table_mode == 'squad'
-        has_b = has_data and 'b' in self._save_data
-        has_sel = has_squad and bool(self._table.selectedItems())
-        self._patch_hgp_btn.setEnabled(has_sel)
-        self._patch_hgc_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
+        self._update_patch_btns()
 
     # -- File loading ---------------------------------------------------------
 
@@ -4741,6 +4739,8 @@ class MainWindow(QMainWindow):
         self._guard_dirty(lambda: self._load_path(path), 'loading another save')
 
     def _load_path(self, path):
+        if self._busy:
+            return
         self._save_path = path
         self._save_data = None
         self._squad = []
@@ -4757,14 +4757,9 @@ class MainWindow(QMainWindow):
         self._reload_save(use_cache=_settings_mod.load()['use_cache'])  # Load may use the cache; Reload never
 
     def _reload_save(self, use_cache=False):
-        if not self._save_path:
+        if not self._save_path or self._busy:
             return
         self._ui_snap = self._capture_ui_state() if self._save_data else None  # None: first load / another file
-        try:
-            from fm_editor.savefile import file_signature
-            self._load_sig = file_signature(self._save_path)  # Save Changes refuses if the file changes after this
-        except OSError:
-            self._load_sig = None
         self._set_busy(True, 'Parsing save file')
         self._preload_gen = getattr(self, '_preload_gen', 0) + 1  # cancels any preload in flight
         self._worker = ParseWorker(self._save_path, use_cache)
@@ -4792,18 +4787,27 @@ class MainWindow(QMainWindow):
         try:
             pct = next(gen)
         except StopIteration:
-            done()
+            self._run_done(done)
             return
         except Exception:
             import traceback
             traceback.print_exc()
             self._players_model.clear()
             self._staff_model.clear()
-            done()
+            self._run_done(done)
             return
         self._progress_target = 98 + 1.9 * pct / 100
         self._status.showMessage(f'Preparing player and staff lists\u2026 {pct}%')
         QTimer.singleShot(0, lambda: self._step_preload(gen, token, done))
+
+    def _run_done(self, done):
+        """Run the load-finished callback; if it throws, unlock the window and show the error."""
+        try:
+            done()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._on_error(f'Loading the save failed: {e}')
 
     def _preload_scouting(self, sd):
         """Generator: build the Players (default sort) and Staff models. Each `yield pct` returns
@@ -4884,13 +4888,11 @@ class MainWindow(QMainWindow):
             lst[:] = [by_id[p.get('id')] for p in lst if same_file and p.get('id') in by_id]
         self._squad = []
         self._club_first_team = []
-        self._club_entity_id = None
         self._current_club = None
         self._report_ratings = {}
         self._nav_history = []
         self._nav_pos = -1
-        self._back_btn.setEnabled(False)
-        self._fwd_btn.setEnabled(False)
+        self._nav_back_btn_update()  # history was just emptied: both disabled
         self._table.setRowCount(0)
         self._squad_info.setText('')
         for btn in self._squad_tab_dynamic_btns:
@@ -4904,13 +4906,20 @@ class MainWindow(QMainWindow):
         self._apply_staff_shortlist_filter()
 
     def _finish_load(self, result):
+        try:
+            self._finish_load_inner(result)
+        finally:
+            if self._busy:  # an exception above must never leave the veil / lock up
+                self._set_busy(False)
+
+    def _finish_load_inner(self, result):
         self._save_data = result
         self._reset_session_state(result)
         self._clear_queue()
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
-        self._save_data['disk_sig'] = getattr(self, '_load_sig', None)
+        self._save_data['disk_sig'] = result.get('disk_sig')  # taken by the ParseWorker of THIS parse
         self._sg_idx = None  # search index is rebuilt lazily
         # fresh lists: reset filters/search subset without re-running them
         self._players_subset = None
@@ -5067,13 +5076,6 @@ class MainWindow(QMainWindow):
         self._squad = squad
         self._club_first_team = squad
 
-        from fm_editor.patch import find_club_entity_id, is_hgc
-        b = self._save_data.get('b')
-        if b is not None:
-            self._club_entity_id = find_club_entity_id(b, squad)
-        else:
-            self._club_entity_id = None
-
         # Update sidebar + header
         dim = COLORS['text_dim']
         self._breadcrumb.setText(
@@ -5180,7 +5182,8 @@ class MainWindow(QMainWindow):
             nation_id = p.get('nation', 0)
             flag = _nation_cell(nation_id, '?')
             hgp = p.get('hgp', False)
-            hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
+            ent = self._entity_of(p)  # club id + 1: the same entity the write uses
+            hgc = is_hgc(b, p, ent) if (b is not None and ent is not None) else None
             pos = _primary_pos(p['positions']) if p.get('positions') else '?'
             ca = p.get('ca')
             pa = p.get('pa')
@@ -5243,7 +5246,7 @@ class MainWindow(QMainWindow):
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc
         n_hgc = sum(1 for p in squad
-                    if b is not None and self._club_entity_id and is_hgc(b, p, self._club_entity_id))
+                    if b is not None and self._entity_of(p) is not None and is_hgc(b, p, self._entity_of(p)))
         n_inj = sum(1 for p in squad if p.get('injured', False))
         def _stat(val, label, color=COLORS['text_secondary']):
             return (f'<span style="color:{COLORS["text_primary"]};font-weight:600;">{val}</span>'
@@ -5586,34 +5589,30 @@ class MainWindow(QMainWindow):
             self._status.showMessage(f'Copied: {name}')
 
     def _on_selection_changed(self):
-        has_sel = bool(self._table.selectedItems())
+        self._update_patch_btns()
+
+    def _can_patch(self, person):
+        """Only players of a human-managed club may be queued (the player-window pills use the same rule)."""
+        sd = self._save_data or {}
+        cid = sd.get('squads', {}).get(person.get('id'))
+        return cid is not None and cid in sd.get('human_clubs', ())
+
+    def _update_patch_btns(self):
+        """Squads toolbar Make HGP / Make HGC: enabled only for a selection that has patchable players
+        (human-managed club) still lacking the flag; never while a Save / Reload runs."""
         has_b = self._save_data is not None and 'b' in self._save_data
-        has_squad = bool(self._squad)
-
-        if has_sel and has_squad:
-            id_to_person = {p.get('id', -1): p for p in self._squad}
-            sel_rows = self._table.selectionModel().selectedRows()
-            sel_pids = [
-                self._table.item(idx.row(), 0).data(Qt.ItemDataRole.UserRole)
-                for idx in sel_rows
-                if self._table.item(idx.row(), 0)
-            ]
-            sel_persons = [id_to_person[pid] for pid in sel_pids if pid in id_to_person]
+        sel = self._get_selected_persons() if (has_b and not self._busy and self._table_mode == 'squad'
+                                               and self._squad) else []
+        sel = [p for p in sel if self._can_patch(p)]
+        all_hgp = all_hgc = True
+        if sel:
             from fm_editor.patch import is_hgc
-            b = self._save_data['b'] if has_b else None
+            b = self._save_data['b']
             # nothing left to queue = every selected player already has the flag or has it queued
-            all_hgp = bool(sel_persons) and all(
-                p.get('hgp', False) or self.queue_has(p, 'hgp') for p in sel_persons)
-            all_hgc = bool(sel_persons) and has_b and all(
-                self.queue_has(p, 'hgc') or (self._entity_of(p) is not None and is_hgc(b, p, self._entity_of(p)))
-                for p in sel_persons)
-        else:
-            all_hgp = False
-            all_hgc = False
-
-        self._patch_hgp_btn.setEnabled(has_squad and has_sel and has_b and not all_hgp)
-        self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
-                                       and self._club_entity_id is not None and not all_hgc)
+            all_hgp = all(p.get('hgp', False) or self.queue_has(p, 'hgp') for p in sel)
+            all_hgc = all(self.queue_has(p, 'hgc') or is_hgc(b, p, self._entity_of(p)) for p in sel)
+        self._patch_hgp_btn.setEnabled(bool(sel) and not all_hgp)
+        self._patch_hgc_btn.setEnabled(bool(sel) and not all_hgc)
 
     def _get_selected_persons(self):
         pid_map = {p.get('id', -1): p for p in self._squad}
@@ -5647,12 +5646,14 @@ class MainWindow(QMainWindow):
 
     def _queue_selected(self, kind):
         """Squads toolbar Make HGP / Make HGC: queue the selected players that still lack that flag."""
-        if not self._save_data or 'b' not in self._save_data:
+        if self._busy or not self._save_data or 'b' not in self._save_data:
             return
         b = self._save_data['b']
         from fm_editor.patch import is_hgc
         n = 0
         for p in self._get_selected_persons():
+            if not self._can_patch(p):  # only players of a human-managed club
+                continue
             ent = self._entity_of(p)
             have = p.get('hgp', False) if kind == 'hgp' else (ent is not None and is_hgc(b, p, ent))
             if not have and (p.get('id'), kind) not in self._queue:
@@ -5660,7 +5661,8 @@ class MainWindow(QMainWindow):
                 n += 1
         self._queue_changed()
         self._status.showMessage(f'{kind.upper()}: {n} player(s) queued. Click Save Changes to write them.'
-                                 if n else f'{kind.upper()}: nothing to queue.')
+                                 if n else f'{kind.upper()}: nothing to queue (only players of a human-managed '
+                                           'club that still lack it can be queued).')
 
     def _queue_changed(self):
         """Queue edited anywhere: dirty flag, pending text, Squads cells, open player window."""
@@ -5729,7 +5731,7 @@ class MainWindow(QMainWindow):
 
     def _do_save(self, checked=False, after=None, confirm=True):
         """Save Changes: verified temp file, 2 backups, overwrite in place (fm_editor/savefile.py)."""
-        if not self._save_data or 'b' not in self._save_data or not self._dirty:
+        if self._busy or not self._save_data or 'b' not in self._save_data or not self._dirty:
             return
         from fm_editor.savefile import backup_state
         path = self._save_path
@@ -5780,14 +5782,19 @@ class MainWindow(QMainWindow):
         self._worker.wait()  # run() returns right after emitting; lets close-after-save proceed
         n_hgp, n_hgc = self._last_applied
         asked = {k: sum(1 for _pid, kk in self._queue if kk == k) for k in ('hgp', 'hgc')}
-        self._clear_queue()
-        self._dirty = False
-        self._pending = []
-        clear_cache(self._save_path)  # cache is keyed by path+mtime; drop the entry for the old layout
-        self._set_busy(False)
+        try:
+            self._clear_queue()
+            self._dirty = False
+            self._pending = []
+            clear_cache(self._save_path)  # cache is keyed by path+mtime; drop the entry for the old layout
+        finally:
+            self._set_busy(False)  # always unlock, whatever the bookkeeping above did
         name = os.path.basename(self._save_path)
         msg = (f'Saved {name} \u00b7 original kept in both backups ({name}.bk1, {name}.bk2)'
                if info.get('first') else f'Saved {name} \u00b7 backups bk1, bk2 updated')
+        if info.get('backup_error'):  # the save is in place; only the backup rotation failed
+            msg = (f'Saved {name}, but backup rotation failed: {info["backup_error"]} '
+                   f'(the existing backups were kept as they were)')
         msg += f' \u00b7 HGP {n_hgp}, HGC {n_hgc}'
         if (n_hgp, n_hgc) != (asked['hgp'], asked['hgc']):
             msg += f' ({asked["hgp"] - n_hgp + asked["hgc"] - n_hgc} queued change(s) needed no edit)'
@@ -5852,11 +5859,13 @@ class MainWindow(QMainWindow):
         self._status.showMessage(self._status_base)
 
     def _on_error(self, msg):
+        self._after_reload_status = None  # a failed post-save reload must not leak its text into the next load
         self._set_busy(False)
         QMessageBox.critical(self, 'Error', msg)
         self._status.showMessage(f'Error: {msg}')
 
     def _set_busy(self, busy, msg=''):
+        self._busy = bool(busy)
         if busy:
             self._progress.setValue(0)
             self._shimmer_phase = 0.0
@@ -5877,6 +5886,8 @@ class MainWindow(QMainWindow):
             self._scouting_staff_nav_btn.setEnabled(False)
             self._welcome_load_btn.setEnabled(False)
             self._welcome_load_btn.setText('Loading Save')
+            self._back_btn.setEnabled(False)
+            self._fwd_btn.setEnabled(False)
         else:
             self._shimmer_timer.stop()
             self._progress.setStyleSheet(
@@ -5896,9 +5907,11 @@ class MainWindow(QMainWindow):
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
         self._save_btn.setEnabled(not busy and self._dirty and bool(self._save_data) and 'b' in (self._save_data or {}))
         self._search_box.setEnabled(not busy and self._save_data is not None)
+        self._settings_btn.setEnabled(not busy)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn.setEnabled(False)
         if msg and not busy:
             self._status.showMessage(msg)
         if not busy:
+            self._nav_back_btn_update()
             self._update_ui_state()
