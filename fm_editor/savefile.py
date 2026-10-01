@@ -2,11 +2,13 @@
 
 Policy (Save Changes):
   1. Build the new archive in '<save>.fm.tmp' (same folder) and verify it.
-  2. Back up the existing file: '<save>.fm.bk1' = the file as it was just before this save,
+  2. Copy the existing file to verified '.bk1.tmp' (+ '.bk2.tmp' on a first save).
+  3. os.replace the verified temp over the original (atomic, same path, same name).
+  4. Only then rotate (renames): '<save>.fm.bk1' = the file as it was just before this save,
      '<save>.fm.bk2' = the previous bk1. First save (no bk1 yet): bk1 AND bk2 are both copies
      of the original, so the pristine original survives until the third save.
-  3. os.replace the verified temp over the original (atomic, same path, same name).
-Any failure before step 3 leaves the original untouched and removes the temp file.
+Any failure before step 3 leaves the original and both backups untouched and removes temps.
+The disk signature is re-checked before the backups and again right before step 3.
 
 Backups end in '.bk1'/'.bk2' (not '.fm') so FM24's Load Game screen does not list them.
 To use one in FM24, copy it next to the saves and drop the '.bk1' suffix. Old-style
@@ -101,30 +103,55 @@ def backup_state(path):
     return prev is None, prev
 
 
-def make_backups(path, progress_cb=None):
-    """Create/rotate the two backups of `path` (see module docstring). Returns {'first': bool}."""
+def prepare_backups(path, progress_cb=None):
+    """Create the verified backup copies as '.tmp' files; nothing existing is touched.
+    Returns a state for commit_backups()/discard_backups()."""
     bk1, bk2 = backup_paths(path)
     first, prev = backup_state(path)
-    tmp1, tmp2 = bk1 + '.tmp', bk2 + '.tmp'
+    st = {'path': path, 'first': first, 'prev': prev, 'tmp1': bk1 + '.tmp', 'tmp2': None}
     try:
         if progress_cb:
             progress_cb('Backing up current file (bk1)...')
-        digest = _copy_verified(path, tmp1)
-        if prev == bk1:
-            os.replace(bk1, bk2)  # rotate: previous bk1 becomes bk2 (rename, no copy)
-        else:  # first save, or only an old-style bk1-<name>.fm exists: copy
+        digest = _copy_verified(path, st['tmp1'])
+        if prev != bk1:  # first save, or only an old-style bk1-<name>.fm exists: copy for bk2
             if progress_cb:
                 progress_cb('Backing up (bk2)...')
-            src, exp = (tmp1, digest) if first else (prev, None)
-            _copy_verified(src, tmp2, exp)
-            os.replace(tmp2, bk2)
-        os.replace(tmp1, bk1)
+            st['tmp2'] = bk2 + '.tmp'
+            src, exp = (st['tmp1'], digest) if first else (prev, None)
+            _copy_verified(src, st['tmp2'], exp)
     except BaseException:
-        _rm(tmp1)
-        _rm(tmp2)
+        discard_backups(st)
         raise
-    _fsync_dir(os.path.dirname(path))
-    return {'first': first}
+    return st
+
+
+def discard_backups(st):
+    _rm(st['tmp1'])
+    if st['tmp2']:
+        _rm(st['tmp2'])
+
+
+def commit_backups(st):
+    """Rename-only rotation; call AFTER the save was replaced, so a failed replace never
+    costs the older backup. Returns {'first': bool}."""
+    bk1, bk2 = backup_paths(st['path'])
+    if st['prev'] == bk1:
+        os.replace(bk1, bk2)  # previous bk1 becomes bk2
+    else:
+        os.replace(st['tmp2'], bk2)
+    os.replace(st['tmp1'], bk1)
+    _fsync_dir(os.path.dirname(st['path']))
+    return {'first': st['first']}
+
+
+def make_backups(path, progress_cb=None):
+    """Create/rotate the two backups of `path` (see module docstring). Returns {'first': bool}."""
+    st = prepare_backups(path, progress_cb)
+    try:
+        return commit_backups(st)
+    except BaseException:
+        discard_backups(st)
+        raise
 
 
 def verify_archive(tmp_path, orig_path, old_members, new_gdb):
@@ -155,13 +182,20 @@ def save_in_place(save_data, path, progress_cb=None):
         if progress_cb:
             progress_cb(msg, pct)
 
+    path = os.path.realpath(path)  # keep a symlinked save a symlink (replace the target)
     if not os.path.isfile(path):
         raise SaveError('The save file no longer exists on disk')
     sig = save_data.get('disk_sig')
-    if sig is not None and sig != file_signature(path):
+    if sig is None:  # no load-time baseline: guard at least against changes during this save
+        sig = file_signature(path)
+    elif sig != file_signature(path):
         raise SaveError('The save file changed on disk since it was loaded (did FM24 or another '
                         'tool overwrite it?). Nothing was written. Reload to pick up that file; '
                         'unsaved edits would need to be redone.')
+
+    def recheck():
+        if file_signature(path) != sig:
+            raise SaveError('The save file changed on disk while saving. Nothing was replaced.')
     size = os.path.getsize(path)
     first, _prev = backup_state(path)
     copies = 3 if first else 2  # tmp + bk1.tmp (+ bk2.tmp on first save); +16 MB headroom
@@ -188,12 +222,19 @@ def save_in_place(save_data, path, progress_cb=None):
         verify_archive(tmp, path, members, b)
         shutil.copymode(path, tmp)
         emit('Creating backups...', 86)
-        info = make_backups(path, lambda m: emit(m, 90))
-        emit('Replacing save file...', 97)
-        os.replace(tmp, path)
+        recheck()
+        bst = prepare_backups(path, lambda m: emit(m, 90))
+        try:
+            recheck()
+            emit('Replacing save file...', 97)
+            os.replace(tmp, path)
+        except BaseException:
+            discard_backups(bst)
+            raise
     except BaseException:
         _rm(tmp)
         raise
+    info = commit_backups(bst)
     _fsync_dir(os.path.dirname(path))
 
     header, nmembers, marker, aname, sdc, subdirs = parse_archive(path)
