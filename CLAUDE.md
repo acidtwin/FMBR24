@@ -47,3 +47,7 @@ Own git repo (branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, privat
 ## Star ratings rule
 
 FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, later more) that we convert to stars MUST keep a raw-number mode too, switched by the Settings option (`ability_display`, Stars / Numbers; extend that option or add a sibling key, never hard-code stars). Use the shared helper in `fm_editor` (one place for the value -> stars mapping) and the shared star widget; in stars mode keep the raw number in a tooltip. Add the setting default, Reset-to-defaults handling and a test whenever a new rating is converted. Mappings are approximations of FM's relative stars: document them and keep them adjustable in one place. Never remove the numbers option.
+
+## Button order rule
+
+A Close button is ALWAYS the last (far-right) button of any button row or action strip (player window: Make HGP / Make HGC / Add to Shortlist / Close). Apply it to every dialog and mockup you touch.

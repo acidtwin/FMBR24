@@ -1,5 +1,5 @@
 """Player window (master visual: mockups/player-window.html). Persistent header (identity, chips, CA/PA, per-tab
-slot) above a left tab strip + QStackedWidget, and a persistent action strip (Close / Make HGP / Make HGC / Shortlist).
+slot) above a left tab strip + QStackedWidget, and a persistent action strip (Make HGP / Make HGC / Shortlist / Close).
 
 TABS rows = (key, label, page builder method name | None, header-slot method name). None = "Coming soon" placeholder
 described by SOON[key]. Add a real tab = write `_page_<key>` and name it in TABS; the slot method returns
@@ -1034,12 +1034,6 @@ class PlayerWindow(QDialog):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
         h.addStretch(1)
-        close = QPushButton('Close')
-        close.setObjectName('pwGhost')
-        close.setFixedHeight(32)
-        close.setCursor(Qt.CursorShape.PointingHandCursor)
-        close.clicked.connect(lambda checked=False: self.reject())
-        h.addWidget(close)
         for mode, lab, is_set, ok in (('hgp', 'HGP', self._hgp, True), ('hgc', 'HGC', self._hgc, self._hgc is not None)):
             if not self._can_patch:  # only players of a human-managed club can be patched
                 break
@@ -1063,7 +1057,13 @@ class PlayerWindow(QDialog):
         sl.setFixedHeight(32)
         sl.setMinimumWidth(164)
         h.addWidget(sl)
-        return strip
+        close = QPushButton('Close')
+        close.setObjectName('pwGhost')
+        close.setFixedHeight(32)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.clicked.connect(lambda checked=False: self.reject())
+        h.addWidget(close)
+        return strip  # Close is always the last (far-right) button
 
     # -- positions tab -------------------------------------------------------------------------------
     def _tile_label(self, v, t, width=None):
