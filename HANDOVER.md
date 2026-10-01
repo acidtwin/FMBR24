@@ -105,7 +105,7 @@ Not in the save at all (checked): club Region/Founded/Facilities, contract bonus
 - History: seasons simulated inside the save (2025-28) are not shown; plain-year season labels for calendar-year leagues are an assumption; needs the FM install DB.
 - Dev Rate and CA/PA star mappings are approximations of FM's relative stars.
 - 'One player would not set homegrown' (FIXED, merged into main, **verified in game 2026-10-01**: Montoro queued HGP, saved, game shows both tags): the old HGP patch only rewrote an EXISTING 0x46 record, so a player with none (55k of 128k; e.g. Alvaro Montoro) was a silent no-op ('needed no edit'). Now a 0x46 England record is inserted. Open: the HGP/HGC patches still REWRITE a player's existing 0x46 / 0x48 records (losing e.g. other-nation or previous-club records); decision 2026-10-01: leave (works in game). A player with no club shows no HGC pill (club unknown).
-- Loading state: while a save / reload / load runs, `_set_busy` disables `_main_stack` and shows `_BusyVeil` (dim, click-blocking layer, `ALPHA` 140) over the list area. Test `tests/test_busy_veil.py`.
+- Loading state: while a SAVE or a RELOAD runs (not on a first load: the Welcome page has its own), `_set_busy` disables `_main_stack` and shows `_BusyVeil` (dim, click-blocking layer, `ALPHA` 140) with a centred "Saving" / "Reloading" label and bouncing dots (`_DOT_SEQ`). Test `tests/test_busy_veil.py`.
 
 ## 8. Open TODOs (priority order)
 

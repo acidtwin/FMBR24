@@ -1648,6 +1648,7 @@ class MainWindow(QMainWindow):
         self._shortlist = []        # players only
         self._staff_shortlist = []  # staff only
         self._status_base = ''
+        self._veil_word = None   # 'Saving' | 'Reloading' while the busy veil is up
         self._dot_phase = -1
         self._table_mode = 'squad'
         self._current_report_key = ''
@@ -5809,7 +5810,7 @@ class MainWindow(QMainWindow):
         self._dot_phase = (self._dot_phase + 1) % len(_DOT_SEQ)
         dots = '.' * _DOT_SEQ[self._dot_phase]
         self._status.showMessage(self._status_base + dots)
-        self._busy_veil.set_text(self._status_base, _DOT_SEQ[self._dot_phase])
+        self._busy_veil.set_text(self._veil_word or '', _DOT_SEQ[self._dot_phase])
 
     def _on_progress_pct(self, pct: int):
         self._progress_target = float(pct)
@@ -5849,7 +5850,6 @@ class MainWindow(QMainWindow):
         self._status_base = msg.rstrip('.')
         self._dot_phase = -1
         self._status.showMessage(self._status_base)
-        self._busy_veil.set_text(self._status_base, 1)
 
     def _on_error(self, msg):
         self._set_busy(False)
@@ -5866,7 +5866,9 @@ class MainWindow(QMainWindow):
             self._dot_phase = -1
             self._status_base = msg or self._status_base
             self._status.showMessage(self._status_base)
-            self._busy_veil.set_text(self._status_base, 1)
+            # veil word: Saving / Reloading only (a first load keeps the Welcome page's own loading state, no veil)
+            self._veil_word = 'Saving' if msg == 'Saving' else ('Reloading' if self._ui_snap is not None else None)
+            self._busy_veil.set_text(self._veil_word or '', 1)
             self._dot_timer.start()
             self._load_btn.setText('Loading')
             for k, btn in self._nav_btns.items():
@@ -5886,8 +5888,9 @@ class MainWindow(QMainWindow):
             self._load_btn.setText('Load')
             self._welcome_load_btn.setText('Load Save')
         self._progress.setVisible(busy)
-        self._main_stack.setEnabled(not busy)   # no keyboard / clicks into the lists while loading
-        self._busy_veil.show_veil(busy)
+        veil = bool(busy and self._veil_word)
+        self._main_stack.setEnabled(not veil)   # no keyboard / clicks into the lists while saving / reloading
+        self._busy_veil.show_veil(veil)
         self._load_btn.setEnabled(not busy)
         self._welcome_load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
