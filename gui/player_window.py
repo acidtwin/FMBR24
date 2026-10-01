@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
 
 from fm_editor import potential as _pot
 from fm_editor import settings as _settings
+from fm_editor.abilitystars import ability_stars
+from gui.stars import _StarWidget
 from fm_editor import traitrec as _tr
 from fm_editor.agecalc import person_age
 from fm_editor.traits import trait_ids, trait_names
@@ -92,15 +94,13 @@ _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill
 # (key, label, builder method name or None = "Coming soon" placeholder described by SOON[key])
 TABS = [
     ('profile', 'Profile', '_page_profile', '_slot_profile'),
-    ('contract', 'Contract', '_page_contract', '_slot_contract'),
-    ('transfer', 'Transfer', None, '_slot_transfer'),
+    ('contract', 'Contract & Transfer', '_page_contract', '_slot_contract'),
     ('positions', 'Positions', '_page_positions', '_slot_positions'),
     ('general', 'General Rating', None, '_slot_profile'),
     ('role', 'Role Rating', None, '_slot_profile'),
     ('history', 'History', None, '_slot_history'),
 ]
 SOON = {
-    'transfer': 'Market value, asking price and transfer / loan status.',
     'general': 'Overall rating and a summary of the role ratings.',
     'role': 'Suitability for each tactical role.',
     'history': 'Career stats by season and club.',
@@ -142,7 +142,7 @@ QDialog#playerWindow QFrame#pwRowNat {{ background:{c['selection_bg']}; }}
 QDialog#playerWindow QFrame#pwRow {{ background:transparent; }}
 QDialog#playerWindow QFrame#pwTabs {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwTab {{ background:transparent; border:none; border-left:3px solid transparent;
-    color:{c['text_secondary']}; text-align:left; padding:0 10px 0 9px; font-size:12px; font-weight:600; border-radius:0; }}
+    color:{c['text_secondary']}; text-align:left; padding:0 2px 0 8px; font-size:12px; font-weight:600; border-radius:0; }}
 QDialog#playerWindow QPushButton#pwTab:hover {{ background:{c['elevated']}; color:{c['text_primary']};
     border-left:3px solid {c['border_bright']}; }}
 QDialog#playerWindow QPushButton#pwTab:checked {{ background:{c['selection_bg']}; color:{c['text_primary']};
@@ -365,6 +365,7 @@ class PlayerWindow(QDialog):
         self.setMinimumSize(1040, 640)
         self.resize(1100, 760)
         self.setStyleSheet(_dlg_qss())
+        self._ability_stars = _settings.ability_as_stars()  # read once when the window opens
         self._person = person
         self._save_data = save_data
         self._club_entity_id = club_entity_id
@@ -436,7 +437,7 @@ class PlayerWindow(QDialog):
         grp.setExclusive(True)
         self._tab_group = grp
         for key, label, builder, _slot in TABS:
-            btn = QPushButton(label)
+            btn = QPushButton(label.replace('&', '&&'))
             btn.setObjectName('pwTab')
             btn.setFixedHeight(34)
             btn.setCheckable(True)
@@ -527,6 +528,7 @@ class PlayerWindow(QDialog):
         note.setContentsMargins(12, 0, 12, 14)
         v.addWidget(note)
         cv.addWidget(panel)
+        cv.addWidget(self._transfer_panel())
         cv.addStretch()
         col.setFixedWidth(360)
         return self._page(col)
@@ -636,15 +638,30 @@ class PlayerWindow(QDialog):
         top.setContentsMargins(0, 0, 0, 0)
         top.addWidget(_spaced(_lab(label, 'pwBigLab'), 0.8), 0, Qt.AlignmentFlag.AlignVCenter)
         top.addStretch()
-        num = _lab(str(val) if val is not None else '?', 'pwBigNum')
-        num.setStyleSheet(f'QLabel#pwBigNum {{ color:{color}; }}')
-        top.addWidget(num, 0, Qt.AlignmentFlag.AlignVCenter)
+        stars = self._ability_stars and val is not None
+        if stars:
+            f.setToolTip(f'{label} {val}')
+        else:
+            num = _lab(str(val) if val is not None else '?', 'pwBigNum')
+            num.setStyleSheet(f'QLabel#pwBigNum {{ color:{color}; }}')
+            top.addWidget(num, 0, Qt.AlignmentFlag.AlignVCenter)
         tw = QWidget()
         tw.setFixedHeight(26)
         tw.setLayout(top)
         v.addWidget(tw)
-        v.addSpacing(3)
-        v.addWidget(_Bar((val or 0) / 200, color))
+        if stars:
+            n = ability_stars(val)
+            sw = QWidget()
+            sh = QHBoxLayout(sw)
+            sh.setContentsMargins(0, 0, 0, 0)
+            sh.setSpacing(1)
+            for i in range(5):
+                sh.addWidget(_StarWidget(max(0.0, min(1.0, n - i))))
+            sh.addStretch()
+            v.addWidget(sw)
+        else:
+            v.addSpacing(3)
+            v.addWidget(_Bar((val or 0) / 200, color))
         v.addStretch()
         return f
 
@@ -768,12 +785,6 @@ class PlayerWindow(QDialog):
 
     def _slot_contract(self):
         return 'Contract until', [self._slot_val(self._contract_until() or '-')], self._club_name()
-
-    def _slot_transfer(self):
-        v = self._data.get('value')
-        if v:
-            return 'Value', [self._slot_val(v)], 'Estimated range'
-        return 'Value', [self._pend_chip()], 'Not in the save yet'
 
     def _slot_positions(self):
         R = self._ratings
@@ -1128,6 +1139,19 @@ class PlayerWindow(QDialog):
         until = self._contract_until()
         rows = [('Until', until if until else _lab('-', 'pwKvR'), False)]
         for label, key in (('Wage', 'wage'), ('Value', 'value')):
+            val = d.get(key)
+            rows.append((label, val if val else self._pend_chip(), not val))
+        for i, (label, right, pend) in enumerate(rows):
+            v.addWidget(self._kv(label, right, i % 2 == 1, pending=pend))
+        v.addSpacing(10)
+        return panel
+
+    def _transfer_panel(self):
+        d = self._data
+        panel, v = self._panel('Transfer')
+        rows = []
+        for label, key in (('Market value', 'value'), ('Asking price', 'asking_price'),
+                           ('Transfer / loan status', 'transfer_status')):
             val = d.get(key)
             rows.append((label, val if val else self._pend_chip(), not val))
         for i, (label, right, pend) in enumerate(rows):

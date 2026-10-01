@@ -16,6 +16,7 @@ from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, Q
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
+from gui.stars import _StarWidget
 from fm_editor.cache import load_cache, save_cache, clear_cache
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
@@ -1580,33 +1581,6 @@ class WeightEditorDialog(QDialog):
 
 
 # -- Hero header widget --------------------------------------------------------
-
-class _StarWidget(QWidget):
-    """One 14px star filled 0, 0.5 or 1 (left half) in gold over a dim outline colour."""
-    def __init__(self, fill, parent=None):
-        super().__init__(parent)
-        self._fill = fill
-        self.setFixedSize(15, 15)
-
-    def paintEvent(self, _e):
-        import math
-        from PyQt6.QtGui import QPainter, QPainterPath, QColor
-        from PyQt6.QtCore import QPointF, QRectF
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        path = QPainterPath()
-        c, ro, ri = 7.5, 7.2, 3.0
-        for k in range(10):
-            r = ro if k % 2 == 0 else ri
-            a = -math.pi / 2 + k * math.pi / 5
-            pt = QPointF(c + r * math.cos(a), c + r * math.sin(a) + 0.4)
-            path.moveTo(pt) if k == 0 else path.lineTo(pt)
-        path.closeSubpath()
-        p.fillPath(path, QColor('#3A4050'))
-        if self._fill > 0:
-            p.setClipRect(QRectF(0, 0, 15 * self._fill, 15))
-            p.fillPath(path, QColor('#F5C518'))
-
 
 class _HeaderHeroWidget(QWidget):
     """140px header bar painted with dark base + stadium image + gradient + pitch-line texture."""

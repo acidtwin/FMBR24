@@ -14,6 +14,7 @@ LEGAL_LINE = ('Unofficial tool for Football Manager 24 — not affiliated with o
               'endorsed by Sports Interactive / SEGA')
 
 LANDING_PAGES = ('save_info', 'club', 'players')
+ABILITY_DISPLAYS = ('stars', 'numbers')
 
 DEFAULTS = {
     'default_save_dir': '',            # '' = not set -> old behaviour (Steam dir / home)
@@ -21,6 +22,7 @@ DEFAULTS = {
     'landing_page': 'save_info',       # page opened after a save finishes loading
     'show_pending': True,              # show PENDING chips on the Club page
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
+    'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
     'trait_threshold': 11,             # Trait recommender: min average attribute (sheet default, 1-20)
 }
 
@@ -57,6 +59,8 @@ def _clean(raw):
         out['trait_threshold'] = DEFAULTS['trait_threshold']
     if out['landing_page'] not in LANDING_PAGES:
         out['landing_page'] = DEFAULTS['landing_page']
+    if out['ability_display'] not in ABILITY_DISPLAYS:
+        out['ability_display'] = DEFAULTS['ability_display']
     return out
 
 
@@ -101,3 +105,8 @@ def save_dialog_dir(fallback):
     """Start dir for the Load dialog: the configured folder if it is a valid dir, else fallback."""
     p = os.path.expanduser(load()['default_save_dir'].strip())
     return p if p and os.path.isdir(p) else fallback
+
+
+def ability_as_stars():
+    """True when CA/PA should be shown as stars (setting 'ability_display' == 'stars')."""
+    return load()['ability_display'] == 'stars'

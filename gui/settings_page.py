@@ -407,6 +407,9 @@ class SettingsPage(QWidget):
         for key, label in _LANDING_LABELS:
             self._landing.addItem(label, key)
         self._pending = self._check(True)
+        self._ability = self._select(220)
+        self._ability.addItem('Stars  (default)', 'stars')
+        self._ability.addItem('Numbers', 'numbers')
         seg, seg_l = _bare(QHBoxLayout)
         seg_l.setSpacing(0)
         for name, text, on in (('setSegL', 'Comfortable', True), ('setSegR', 'Compact', False)):
@@ -423,6 +426,10 @@ class SettingsPage(QWidget):
             self._row('Show PENDING markers',
                       'Flags data FMBR24 cannot read from the save yet. Off hides those rows.',
                       self._ctl_line(self._pending)),
+            self._row('Ability display',
+                      'Show CA / PA as stars or raw numbers in the player window header. '
+                      'Stars are an approximation; hover for the number.',
+                      self._ctl_line(self._ability)),
             self._row('Table density', 'Row height in every table.', seg, soon=True),
         ])
 
@@ -530,6 +537,7 @@ class SettingsPage(QWidget):
         self._pending.toggled.connect(self._on_changed)
         self._use_cache.toggled.connect(self._on_changed)
         self._trait_thr.currentIndexChanged.connect(self._on_changed)
+        self._ability.currentIndexChanged.connect(self._on_changed)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_edit.clicked.connect(self._edit_weights)
         self._preset_import.clicked.connect(self._import_preset)
@@ -547,6 +555,7 @@ class SettingsPage(QWidget):
             'show_pending': self._pending.isChecked(),
             'use_cache': self._use_cache.isChecked(),
             'trait_threshold': self._trait_thr.currentData(),
+            'ability_display': self._ability.currentData(),
         }
 
     def is_dirty(self):
@@ -554,15 +563,16 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
         self._pending.setChecked(v['show_pending'])
         self._use_cache.setChecked(v['use_cache'])
         self._trait_thr.setCurrentIndex(max(0, self._trait_thr.findData(v['trait_threshold'])))
+        self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()

@@ -11,16 +11,17 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 =====================================================================================================================
 
 HOW TO USE
-  Click the left tab strip to switch tabs. Deep links: #profile #contract #transfer #positions #general #role #history
+  Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #history
   State flags after '+':   pot (Profile: "At potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
+    nums (CA/PA as numbers + bar instead of stars)
     tips (pin the tooltips so they show in a screenshot)
   e.g.  #profile+pot   #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
 WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
-  tabProfile  tabContract  tabTransfer  tabPositions  tabGeneral   tabRole  tabHistory  -> registry TABS (section 4)
+  tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabHistory  -> registry TABS (section 4)
   Persistent parts (section 3): header(), tabStrip(), actionStrip().   Data (section 1) is FICTIONAL sample data.
 
 TOKENS (gui/theme.py COLORS, literal)
@@ -49,7 +50,7 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
   (real app: QToolTip / :hover pseudo-states).  Radius <= half height.  Letter-spacing through QFont.
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
-  Profile: Dev Rate N | Contract: "Until Jun 2031" + club | Transfer: value range (PENDING) | Positions: best position + rating
+  Profile: Dev Rate N | Contract & Transfer: "Until Jun 2031" + club | Positions: best position + rating
   (switches to "Best at potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
 
 OPEN QUESTIONS
@@ -302,7 +303,7 @@ Object.values(SAMPLES).forEach(d=>{
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,data:false,tips:false};
+const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,data:false,tips:false};
 const D=()=>SAMPLES[S.smp];
 const isGK=()=>D().pos==='GK';
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
@@ -327,7 +328,9 @@ const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16'
    ===================================================================================================================== */
 function header(slotHTML){
   const d=D();
-  const cab=(l,v,c)=>`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`;
+  const star=(v)=>{const n=Math.max(.5,Math.min(5,Math.round(v/40*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v})"/></svg>`}return s};
+  /* Ability display setting: stars (default; label + 5 half-step stars, value in tooltip; stars = value/40 to nearest .5, clamp .5..5) | numbers (#nums flag: number + bar) */
+  const cab=(l,v,c)=>S.nums?`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`:`<div class="cab" title="${l} ${v}"><div class="t"><small>${l}</small></div><div style="display:flex;gap:1px;margin-top:3px">${star(v)}</div></div>`;
   return `<div class="pn hdr"><div class="avatar">${person}</div>
     <div class="hid">
       <div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div>
@@ -382,18 +385,15 @@ function tabProfile(){
   return attrs+rail;
 }
 
-/* ---------- 4.2 CONTRACT -------------------------------------------------------------------------------------------- */
+/* ---------- 4.2 CONTRACT & TRANSFER ---------------------------------------------------------------------------------- */
 function slotContract(){const d=D();return slot('Contract until',d.until,d.club)}
+const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span><span class="chip soon">COMING SOON</span><span class="d">${text}</span></div>`;
 function tabContract(){
   const d=D();
   return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${kv('Wage',pv(d.wage))}${kv('Value',pv(d.value))}</div></div>
-    <div class="pn">${ph('Bonuses &amp; clauses','<span class="chip soon">COMING</span>')}<div class="note" style="padding-top:0">Bonuses, clauses and release terms will be added here.</div></div></div>`;
+    <div class="pn">${ph('Bonuses &amp; clauses','<span class="chip soon">COMING</span>')}<div class="note" style="padding-top:0">Bonuses, clauses and release terms will be added here.</div></div>
+    <div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${kv('Market value',pv(d.value))}${kv('Asking price',pend)}${kv('Transfer / loan status',pend)}</div></div></div>`;
 }
-
-/* ---------- 4.3 TRANSFER (coming soon) ------------------------------------------------------------------------------ */
-function slotTransfer(){const d=D();return S.data?slot('Value',d.value,'Estimated range'):slot('Value',pend,'Not in the save yet')}
-const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span><span class="chip soon">COMING SOON</span><span class="d">${text}</span></div>`;
-function tabTransfer(){return soonPage('Transfer','Market value, asking price and transfer / loan status.')}
 
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
    Future = position ratings at full potential. DESIGN ONLY: the real implementation must recompute the 15 position ratings
@@ -450,8 +450,7 @@ function tabHistory(){return soonPage('History','Career stats by season and club
 /* ---------- registry: order = tab strip order ---------- */
 const TABS=[
  {key:'profile',label:'Profile',page:tabProfile,slot:slotProfile},
- {key:'contract',label:'Contract',page:tabContract,slot:slotContract},
- {key:'transfer',label:'Transfer',page:tabTransfer,slot:slotTransfer},
+ {key:'contract',label:'Contract & Transfer',page:tabContract,slot:slotContract},
  {key:'positions',label:'Positions',page:tabPositions,slot:slotPositions},
  {key:'general',label:'General Rating',page:tabGeneral,slot:slotDev},
  {key:'role',label:'Role Rating',page:tabRole,slot:slotDev},
@@ -460,8 +459,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['pot','future','scout','short','inj','hgp','hgc','data','tips'];
-const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['data','Real data'],['tips','Pin tooltips']];
+const FLAGS=['nums','pot','future','scout','short','inj','hgp','hgc','data','tips'];
+const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['data','Real data'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').innerHTML=`<div class="os"><span>${D().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header(t.slot())}

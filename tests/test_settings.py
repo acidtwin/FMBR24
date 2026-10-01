@@ -38,6 +38,14 @@ open(settings.settings_path(), 'w').write('[1,2]')
 assert settings.load() == settings.DEFAULTS
 assert settings.save(vals) and settings.load() == vals  # save recovers from a corrupt file
 
+# ability_display: default stars, bad value -> default, accessor
+assert settings.DEFAULTS['ability_display'] == 'stars'
+json.dump({'ability_display': 'bogus'}, open(settings.settings_path(), 'w'))
+assert settings.load()['ability_display'] == 'stars' and settings.ability_as_stars()
+json.dump({'ability_display': 'numbers'}, open(settings.settings_path(), 'w'))
+assert settings.load()['ability_display'] == 'numbers' and not settings.ability_as_stars()
+assert settings.save(vals) and settings.load() == vals
+
 # folder_status
 saves = os.path.join(tmp, 'saves')
 os.makedirs(saves)
