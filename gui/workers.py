@@ -1,6 +1,6 @@
 """Background QThread workers (no widgets touched; results go back through signals)."""
 from PyQt6.QtCore import QThread, pyqtSignal
-from fm_editor.cache import load_cache, save_cache
+from fm_editor.cache import load_cache, save_cache, file_signature
 
 
 class ParseWorker(QThread):
@@ -44,6 +44,7 @@ class ParseWorker(QThread):
                                           find_staff_extras)
             from fm_editor.patch import is_homegrown
 
+            sig = file_signature(self.save_path)  # before any read: save_cache refuses if it changed
             self._emit("Parsing archive...", 3)
             header, members, index_marker, archive_name, subdir_count, subdirs = \
                 parse_archive(self.save_path)
@@ -162,7 +163,7 @@ class ParseWorker(QThread):
 
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
-                       save_info)
+                       save_info, sig=sig)
 
             self.pct.emit(100)
             result = {

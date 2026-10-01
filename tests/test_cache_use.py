@@ -32,8 +32,22 @@ assert cache.load_cache(sv) is None
 raw['version'] = cache._CACHE_VERSION
 json.dump(raw, open(cp, 'w'))
 assert cache.load_cache(sv)
-os.utime(sv, (1, os.path.getmtime(sv) + 100))  # mtime changed -> stale
+st = os.stat(sv)
+os.utime(sv, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000))  # mtime changed -> stale (even sub-second)
 assert cache.load_cache(sv) is None
+os.utime(sv, ns=(st.st_atime_ns, st.st_mtime_ns))
+assert cache.load_cache(sv)  # restored -> valid again
+open(sv, 'ab').write(b'y')  # size changed (same mtime restored) -> stale
+os.utime(sv, ns=(st.st_atime_ns, st.st_mtime_ns))
+assert cache.load_cache(sv) is None
+# changed during parse: signature taken before, file rewritten, save_cache must not write
+cache.clear_cache(sv)
+sig = cache.file_signature(sv)
+open(sv, 'ab').write(b'z')
+cache.save_cache(sv, [{'id': 1}], {1: 2}, {2: {1: [1]}}, people, sig=sig)
+assert not os.path.exists(cp) and cache.load_cache(sv) is None
+cache.save_cache(sv, [{'id': 1}], {1: 2}, {2: {1: [1]}}, people, sig=cache.file_signature(sv))
+assert cache.load_cache(sv)
 
 open(cp, 'w').write('{corrupt')  # corrupt -> None (caller falls back to full parse)
 assert cache.load_cache(sv) is None

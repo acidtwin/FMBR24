@@ -1,8 +1,8 @@
-"""JSON cache for parsed save data, keyed by file mtime.
+"""JSON cache for parsed save data, validated by file mtime_ns + size.
 
 Cache file: ~/.cache/fm24_editor/<sha256_of_path>.json
-Stores: mtime, clubs list, squads dict, sub_squads dict, people list, save_info dict.
-Re-parse if mtime changed or cache missing.
+Stores: mtime_ns, size, clubs list, squads dict, sub_squads dict, people list, save_info dict.
+Re-parse if mtime or size changed or cache missing.
 """
 import json
 import os
@@ -17,11 +17,17 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 26  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 27  # bump when schema changes to auto-invalidate old caches
+
+
+def file_signature(save_path):
+    """(mtime_ns, size) of the save; capture BEFORE reading it, pass to save_cache."""
+    st = os.stat(save_path)
+    return st.st_mtime_ns, st.st_size
 
 
 def load_cache(save_path):
-    """Return cached dict if valid for current mtime, else None."""
+    """Return cached dict if valid for the save's current mtime_ns and size, else None."""
     cp = _cache_path(save_path)
     if not os.path.exists(cp):
         return None
@@ -30,8 +36,7 @@ def load_cache(save_path):
             data = json.load(f)
         if data.get('version', 1) != _CACHE_VERSION:
             return None
-        mtime = os.path.getmtime(save_path)
-        if abs(data.get('mtime', 0) - mtime) > 1:
+        if [data.get('mtime_ns'), data.get('size')] != list(file_signature(save_path)):
             return None
         # JSON dict keys are always strings; normalize back to int keys
         if 'squads' in data:
@@ -59,7 +64,11 @@ def clear_cache(save_path):
 
 
 def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, club_staff=None,
-               save_info=None):
+               save_info=None, sig=None):
+    """sig: file_signature() taken before the parse; a save changed since is not cached."""
+    sig = sig or file_signature(save_path)
+    if sig != file_signature(save_path):
+        return
     os.makedirs(_CACHE_DIR, exist_ok=True)
     cp = _cache_path(save_path)
     slim_people = []
@@ -97,7 +106,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
         slim_people.append(entry)
     data = {
         'version': _CACHE_VERSION,
-        'mtime': os.path.getmtime(save_path),
+        'mtime_ns': sig[0],
+        'size': sig[1],
         'clubs': clubs,
         'squads': squads,
         'sub_squads': sub_squads,
