@@ -105,7 +105,7 @@
   },
   {
    "name": "Marks Opponent Tightly",
-   "id": 32,
+   "id": 15,
    "category": "Defensive",
    "attrs": [
     "marking",
@@ -291,7 +291,7 @@
   },
   {
    "name": "Attempts Overhead Kicks",
-   "id": null,
+   "id": 23,
    "category": "Finishing",
    "attrs": [
     "flair",
