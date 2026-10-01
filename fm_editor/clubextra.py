@@ -144,3 +144,10 @@ def find_human_scouting_budget(b):
     if _u32(b, o) != 390000:
         return None
     return _u32(b, o + 4), o + 4
+
+
+def rep_stars(rep):
+    """Club reputation (1-10000) -> stars 0-5 in half steps. FITTED, not decoded: rep/2000 rounded to the nearest
+    half star matches every in-game screen so far (Barnet 4349=2, Charlton 6153=3, Barcelona 9005=4.5). Boundaries
+    between those points are unverified; refine with more club screenshots."""
+    return min(5.0, round(rep / 2000 * 2) / 2) if rep else 0.0
