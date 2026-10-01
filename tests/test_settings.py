@@ -46,6 +46,17 @@ json.dump({'ability_display': 'numbers'}, open(settings.settings_path(), 'w'))
 assert settings.load()['ability_display'] == 'numbers' and not settings.ability_as_stars()
 assert settings.save(vals) and settings.load() == vals
 
+# player_theme: default steel, bad value / wrong type -> default, valid ids kept, merge-save keeps other keys
+assert settings.DEFAULTS['player_theme'] == 'steel'
+for bad in ('nope', 5, None):
+    json.dump({'player_theme': bad}, open(settings.settings_path(), 'w'))
+    assert settings.load()['player_theme'] == 'steel'
+for tid in settings.PLAYER_THEMES:
+    assert settings.save({'player_theme': tid}) and settings.load()['player_theme'] == tid
+json.dump({'other_key': 7}, open(settings.settings_path(), 'w'))
+assert settings.save({'player_theme': 'plain'}) and json.load(open(settings.settings_path()))['other_key'] == 7
+assert settings.save(vals) and settings.load() == vals
+
 # folder_status
 saves = os.path.join(tmp, 'saves')
 os.makedirs(saves)

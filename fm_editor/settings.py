@@ -16,6 +16,7 @@ LEGAL_LINE = ('Unofficial tool for Football Manager 24 — not affiliated with o
 
 LANDING_PAGES = ('save_info', 'club', 'players')
 ABILITY_DISPLAYS = ('stars', 'numbers')
+PLAYER_THEMES = ('steel', 'pitch', 'floodlit', 'plain')  # = ids of gui/pw_themes.THEMES (tests/test_themes.py checks)
 
 DEFAULTS = {
     'default_save_dir': '',            # '' = not set -> old behaviour (Steam dir / home)
@@ -24,6 +25,7 @@ DEFAULTS = {
     'show_pending': True,              # show PENDING chips on the Club page
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
     'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
+    'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
     'trait_threshold': 11,             # Trait recommender: min average attribute (sheet default, 1-20)
 }
 
@@ -62,6 +64,8 @@ def _clean(raw):
         out['landing_page'] = DEFAULTS['landing_page']
     if out['ability_display'] not in ABILITY_DISPLAYS:
         out['ability_display'] = DEFAULTS['ability_display']
+    if out['player_theme'] not in PLAYER_THEMES:
+        out['player_theme'] = DEFAULTS['player_theme']
     return out
 
 

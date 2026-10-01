@@ -23,6 +23,7 @@ from fm_editor import cache as _cache
 from fm_editor import settings as _settings
 from fm_editor import weights as _weights
 from gui.about_dialog import AboutDialog
+from gui import pw_themes as _pw_themes
 from gui.theme import COLORS
 
 # Extra literals from the mockup (not in COLORS)
@@ -407,6 +408,9 @@ class SettingsPage(QWidget):
         self._landing = self._select(220)
         for key, label in _LANDING_LABELS:
             self._landing.addItem(label, key)
+        self._theme = self._select(220)
+        for tid, t in _pw_themes.THEMES.items():
+            self._theme.addItem(t.name, tid)
         self._pending = self._check(True)
         self._ability = self._select(220)
         self._ability.addItem('Stars  (default)', 'stars')
@@ -424,6 +428,9 @@ class SettingsPage(QWidget):
         self._section(col_l, 'Interface', [
             self._row('Landing page after loading a save', 'The page shown once parsing finishes.',
                       self._ctl_line(self._landing)),
+            self._row('Player window theme',
+                      'Texture for the player window header, tab menu and action bar.',
+                      self._ctl_line(self._theme)),
             self._row('Show PENDING markers',
                       'Flags data FMBR24 cannot read from the save yet. Off hides those rows.',
                       self._ctl_line(self._pending)),
@@ -542,6 +549,7 @@ class SettingsPage(QWidget):
         self._use_cache.toggled.connect(self._on_changed)
         self._trait_thr.currentIndexChanged.connect(self._on_changed)
         self._ability.currentIndexChanged.connect(self._on_changed)
+        self._theme.currentIndexChanged.connect(self._on_changed)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_edit.clicked.connect(self._edit_weights)
         self._preset_import.clicked.connect(self._import_preset)
@@ -560,6 +568,7 @@ class SettingsPage(QWidget):
             'use_cache': self._use_cache.isChecked(),
             'trait_threshold': self._trait_thr.currentData(),
             'ability_display': self._ability.currentData(),
+            'player_theme': self._theme.currentData(),
         }
 
     def is_dirty(self):
@@ -567,7 +576,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -575,8 +584,9 @@ class SettingsPage(QWidget):
         self._use_cache.setChecked(v['use_cache'])
         self._trait_thr.setCurrentIndex(max(0, self._trait_thr.findData(v['trait_threshold'])))
         self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
+        self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()
