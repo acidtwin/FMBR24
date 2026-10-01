@@ -13,6 +13,8 @@ SAVE = os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
     'Documents/Sports Interactive/Football Manager 2024/games/'
     '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import save_path, snapshot_mode  # noqa: E402
+SAVE = save_path(SAVE)
 
 # person id: (starts, subs, goals, assists, minutes or None if only ~known, POM, avg rating)
 GT = {
@@ -94,23 +96,31 @@ def test_spurs_stats_vs_game():
     data = get_member(SAVE, next(m for m in members if m['name'] == 'rgman/player_stats.dat'))
     everyone = parse_player_stats(data, range(1, 200_000))  # all person ids, like ParseWorker
     stats = {pid: everyone[pid] for pid in GT}
+    exact = snapshot_mode(SAVE)
     for pid, (st, sub, g, a, mins, pom, rat) in GT.items():
         s = stats[pid]
-        assert (s['starts'], s['subs'], s['goals'], s['assists'], s['pom']) == (st, sub, g, a, pom), (pid, s)
-        assert s['apps'] == st + sub
-        assert mins is None or s['mins'] == mins, (pid, s)
-        assert abs(s['rating'] - rat) < 0.005, (pid, s)
+        if exact:  # in-game Squad screen values at the snapshot date
+            assert (s['starts'], s['subs'], s['goals'], s['assists'], s['pom']) == (st, sub, g, a, pom), (pid, s)
+            assert s['apps'] == st + sub
+            assert mins is None or s['mins'] == mins, (pid, s)
+            assert abs(s['rating'] - rat) < 0.005, (pid, s)
+        else:  # the save has moved on: invariants only
+            assert s['apps'] == s['starts'] + s['subs'] and s['rated'] <= s['apps'] and s['mins'] >= 0, (pid, s)
+            assert 1 <= s['rating'] <= 10, (pid, s)
     # per-competition blocks of van de Ven (profile screen): league 17(2) 6.97, CL 5(1) 6.95,
     # friendlies 5(0) 7.78, Carabao + Community Shield 2(1) (goal from the Shield), overall 24(4) 7.01
     blocks = _blocks(find_records(data, range(1, 200_000))[39811])
-    assert (1324, 1482, 17, 2, 19, 1, 1, 0) == blocks[1][:7] + (blocks[1][7],)
-    assert (417, 464, 5, 1, 6, 0, 1) == blocks[3][:7]
-    assert (389, 450, 5, 0, 5, 3, 2) == blocks[0][:7]
-    assert (221, 201, 2, 1, 3, 1, 0) == blocks[2][:7]
-    assert (1962, 2147, 24, 4, 28, 2, 2) == blocks[5][:7]
+    if exact:
+        assert (1324, 1482, 17, 2, 19, 1, 1, 0) == blocks[1][:7] + (blocks[1][7],)
+        assert (417, 464, 5, 1, 6, 0, 1) == blocks[3][:7]
+        assert (389, 450, 5, 0, 5, 3, 2) == blocks[0][:7]
+        assert (221, 201, 2, 1, 3, 1, 0) == blocks[2][:7]
+        assert (1962, 2147, 24, 4, 28, 2, 2) == blocks[5][:7]
     # population sanity: ratings 4-10, nobody has more than 70 apps or 4,800 minutes
     assert len(everyone) > 20_000
-    assert all(4.0 <= s['rating'] <= 10.0 for s in everyone.values() if s['rating'])
+    lo = 4.0 if exact else 1.0  # the live save has real 3.85 ratings (2 apps); 4-10 holds at the snapshot date
+    assert all(lo <= s['rating'] <= 10.0 for s in everyone.values() if s['rating'])
+    assert all(s['apps'] == s['starts'] + s['subs'] and s['rated'] <= s['apps'] and s['mins'] >= 0 for s in everyone.values())
     assert max(s['apps'] for s in everyone.values()) <= 70 and max(s['mins'] for s in everyone.values()) < 4800
 
 
