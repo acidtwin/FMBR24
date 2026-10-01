@@ -4918,9 +4918,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         w = getattr(self, '_worker', None)
-        if isinstance(w, SaveWorker) and w.isRunning():
+        if isinstance(w, (SaveWorker, ParseWorker)) and w.isRunning():
             event.ignore()
-            self._status.showMessage('Saving: wait until the save finishes before closing.')
+            self._status.showMessage('Working: wait until the current load/save finishes before closing.')
             return
         if self._dirty:
             B = QMessageBox.StandardButton
@@ -4935,8 +4935,6 @@ class MainWindow(QMainWindow):
                 if r == B.Save:
                     self._do_save(after=self.close, confirm=False)  # closes again once saved
                 return
-        if self._save_path:
-            clear_cache(self._save_path)
         super().closeEvent(event)
 
     # -- State helpers --------------------------------------------------------
@@ -5022,8 +5020,6 @@ class MainWindow(QMainWindow):
             self._load_sig = None
         self._set_busy(True, 'Parsing save file')
         self._preload_gen = getattr(self, '_preload_gen', 0) + 1  # cancels any preload in flight
-        self._players_model.clear()  # drop the previous save's rows now, not at first visit
-        self._staff_model.clear()
         self._worker = ParseWorker(self._save_path, use_cache)
         self._worker.progress.connect(self._on_progress)
         self._worker.pct.connect(self._on_progress_pct)
@@ -5130,8 +5126,39 @@ class MainWindow(QMainWindow):
                 yield 93 + 7 * c // tv.model().columnCount() // 2
         yield 100
 
+    def _reset_session_state(self, result):
+        """Drop everything that still points at the previous parse's person/club dicts (stale offsets
+        would be patched into the new bytes). Shortlists survive a Reload of the same file, re-resolved by id."""
+        same_file = getattr(self, '_loaded_path', None) == self._save_path
+        self._loaded_path = self._save_path
+        self._prev_club_id = (self._current_club or {}).get('id') if same_file else None
+        by_id = {p.get('id'): p for p in result.get('people', []) if p.get('id', -1) != -1}
+        for lst in (self._shortlist, self._staff_shortlist):
+            lst[:] = [by_id[p.get('id')] for p in lst if same_file and p.get('id') in by_id]
+        self._squad = []
+        self._club_first_team = []
+        self._club_entity_id = None
+        self._current_club = None
+        self._report_ratings = {}
+        self._nav_history = []
+        self._nav_pos = -1
+        self._back_btn.setEnabled(False)
+        self._fwd_btn.setEnabled(False)
+        self._table.setRowCount(0)
+        self._squad_info.setText('')
+        for btn in self._squad_tab_dynamic_btns:
+            self._squad_tab_bar.removeWidget(btn)
+            btn.deleteLater()
+        self._squad_tab_dynamic_btns = []
+        self._squad_tab_btns = self._squad_tab_btns[:1]
+        self._club_staff_table.setRowCount(0)
+        self._populate_reports_table([])
+        self._populate_shortlist()
+        self._apply_staff_shortlist_filter()
+
     def _finish_load(self, result):
         self._save_data = result
+        self._reset_session_state(result)
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
@@ -5630,7 +5657,8 @@ class MainWindow(QMainWindow):
             return  # don't yank the user off the Settings page
         page = _settings_mod.load()['landing_page']
         sd = self._save_data or {}
-        club_id = (self._current_club or {}).get('id', (sd.get('save_info') or {}).get('manager_club_id'))
+        club_id = self._prev_club_id if getattr(self, '_prev_club_id', None) is not None else (sd.get('save_info') or {}).get('manager_club_id')
+        self._prev_club_id = None
         club = next((c for c in sd.get('clubs', []) if c.get('id') == club_id), None)
         if page == 'club' and club:
             self._show_squad(club)
