@@ -53,7 +53,7 @@ def test_club_extra():
     # league tables vs in-game screens (Championship, League Two, Premier League): exact at the snapshot date only
     if snapshot_mode(SAVE):
         assert rec('Charlton Athletic') == (23, 24, 26, 5, 8, 13, 22, 34, 23)
-        assert rec('Fulham') == (1, 24, 25, 17, 3, 3 + 2, 47, 23, 54)
+        assert rec('Fulham') == (1, 24, 25, 17, 3, 5, 47, 23, 54)
         assert rec('Southampton') == (2, 24, 26, 13, 9, 4, 44, 28, 48)
         assert rec('Hull City')[0] == 3 and rec('Middlesbrough')[0] == 4 and rec('West Bromwich Albion')[0] == 5
         assert rec('Swansea City') == (9, 24, 25, 10, 7, 8, 31, 31, 37)
@@ -89,6 +89,19 @@ def _fix(*pairs):
     return b''.join(b'\x18' + u(0) + u(5) + b'\x02\x00\x00' + u(h) + b'\xff\x00\x00' + u(a) + b'\xff\x00' for h, a in pairs)
 
 
+def test_league_position_ranking():
+    """4-team synthetic table: points, then goal difference, then goals for (rows are P, W, D, L, GF, GA, PTS)."""
+    from fm_editor import clubextra as X
+    tab = {14: (6, 3, 1, 2, 20, 18, 10),   # 10 pts, GD +2, GF 20
+           13: (6, 3, 1, 2, 10, 5, 10),    # 10 pts, GD +5, GF 10
+           12: (6, 3, 1, 2, 12, 7, 10),    # 10 pts, GD +5, GF 12 -> above 13 on goals for
+           11: (6, 6, 0, 0, 9, 0, 18)}     # leader
+    clubs = [{'team': t} for t in (11, 12, 13, 14)]
+    X.add_league_positions(clubs, [tab])
+    assert [c['league']['pos'] for c in clubs] == [1, 2, 3, 4], [c['league'] for c in clubs]
+    assert all(c['league']['of'] == 4 for c in clubs)
+
+
 def test_is_league_table():
     from fm_editor import clubextra as X
     league = list(range(100, 110))
@@ -109,8 +122,9 @@ def test_is_league_table():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('SKIP: save file not found')
+        print('SKIPPED (save not found): test_club_extra (real-save checks)')
     else:
         test_club_extra()
+    test_league_position_ranking()
     test_is_league_table()
     print('OK')
