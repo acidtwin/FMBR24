@@ -103,7 +103,7 @@ def find_clubs(b, names_start):
         he = at + 47 + n + sn
         status = b[he]  # 1 professional, 2 semi-pro, 3 amateur (see fm24-binary-format.md)
         clubs.append({'id': cid, 'uid': uid, 'name': name, 'short': short, 'offset': at,
-                      'nation': nation, 'status': status if 1 <= status <= 3 else None})
+                      'he': he, 'nation': nation, 'status': status if 1 <= status <= 3 else None})
         search = at + 47 + n + sn + 17  # skip past this record
     return clubs
 
@@ -132,7 +132,7 @@ def add_club_finance(b, clubs, names_start):
     for i, c in enumerate(srt):
         at = c['offset']
         end = srt[i + 1]['offset'] if i + 1 < len(srt) else names_start
-        he = at + 47 + len(c['name'].encode()) + len(c['short'].encode())
+        he = c['he']  # stored by find_clubs: re-encoding the decoded name breaks on invalid UTF-8
         le = he + 9 + 4 * b[he + 8]
         if le + 25 > end:
             continue

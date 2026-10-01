@@ -72,7 +72,7 @@ def run_stages(save=SAVE, timings=None):
         'people_raw': (len(people), people_snap),
         'identities': (len(identities), _h(identities)),
         'abilities': (len(abil), _h({str(k): v for k, v in abil.items()})),
-        'clubs': (len(clubs), _h(clubs)),
+        'clubs': (len(clubs), _h([{k: v for k, v in c.items() if k != 'he'} for c in clubs])),
         'squads': (len(sq), _h(sq)), 'sub_squads': (len(sb), _h(sb)),
         'employment': (len(emp), _h({str(k): v for k, v in emp.items()})),
         'contracts': (len(contracts), _h({str(k): v for k, v in contracts.items()})),
