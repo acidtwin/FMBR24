@@ -1,0 +1,573 @@
+{
+ "default_threshold": 11,
+ "traits": [
+  {
+   "name": "Dictates Tempo",
+   "id": 22,
+   "category": "Mental",
+   "attrs": [
+    "anticipation",
+    "decisions",
+    "flair",
+    "teamwork",
+    "vision",
+    "passing",
+    "technique",
+    "leadership"
+   ],
+   "desc": "Increases the chances of the player taking charge predominantly in midfield situations and using their attributes to influence the team\u2019s performance and pace."
+  },
+  {
+   "name": "Curls Ball",
+   "id": 11,
+   "category": "Technique",
+   "attrs": [
+    "technique",
+    "flair",
+    "bravery",
+    "composure"
+   ],
+   "desc": "Improves the player\u2019s ability to curl the ball above and beyond his ability as already determined by his attributes."
+  },
+  {
+   "name": "Tries Tricks",
+   "id": 35,
+   "category": "Technique",
+   "attrs": [
+    "flair",
+    "technique",
+    "bravery",
+    "determination",
+    "work rate"
+   ],
+   "desc": "Increases the chances of a player displaying more flair during matches and can result in a greater array of skills being used."
+  },
+  {
+   "name": "Uses Outside of Foot",
+   "id": 47,
+   "category": "Technique",
+   "attrs": [
+    "flair",
+    "bravery",
+    "technique",
+    "passing",
+    "finishing",
+    "determination",
+    "vision",
+    "agility"
+   ],
+   "desc": "Increases the likelihood of a player trying to use the outside of his stronger foot rather than his weaker foot, even if the weaker foot is the more natural option for his body position."
+  },
+  {
+   "name": "Brings Ball Out of Defense",
+   "id": 60,
+   "category": "Defensive",
+   "attrs": [
+    "dribbling",
+    "vision",
+    "bravery",
+    "composure",
+    "technique"
+   ],
+   "desc": "Increases the likelihood of a defender running with the ball into midfield positions."
+  },
+  {
+   "name": "Dives Into Tackles",
+   "id": 37,
+   "category": "Defensive",
+   "attrs": [
+    "anticipation",
+    "decisions",
+    "positioning",
+    "tackling",
+    "strength",
+    "teamwork",
+    "determination"
+   ],
+   "desc": "Increases the frequency with which a player will engage in a tackle. It does not simply mean the player goes to ground when challenging for the ball."
+  },
+  {
+   "name": "Does Not Dive Into Tackles",
+   "id": 38,
+   "category": "Defensive",
+   "attrs": [
+    "tackling",
+    "positioning",
+    "teamwork",
+    "acceleration",
+    "balance",
+    "pace",
+    "strength",
+    "stamina",
+    "jumping reach"
+   ],
+   "desc": "Decreases the frequency with which a player will engage into a tackle. It does not simply mean the player stays on his feet when challenging for the ball."
+  },
+  {
+   "name": "Marks Opponent Tightly",
+   "id": 32,
+   "category": "Defensive",
+   "attrs": [
+    "marking",
+    "anticipation",
+    "acceleration",
+    "agility",
+    "pace",
+    "heading",
+    "tackling",
+    "balance",
+    "strength",
+    "work rate",
+    "aggression",
+    "jumping reach"
+   ],
+   "desc": "Increases the chances of a player being successful when asked to adopt tight marking, but his overall success is still controlled by his full set of attributes."
+  },
+  {
+   "name": "Crosses Early",
+   "id": 59,
+   "category": "Passing",
+   "attrs": [
+    "crossing",
+    "passing",
+    "technique",
+    "vision",
+    "teamwork",
+    "concentration",
+    "decisions"
+   ],
+   "desc": "Increases the chances of a player crossing from a deeper position, rather than seeking to find a better opportunity higher up the pitch."
+  },
+  {
+   "name": "Likes to Switch Ball to Other Flank",
+   "id": 26,
+   "category": "Passing",
+   "attrs": [
+    "anticipation",
+    "passing",
+    "technique",
+    "decisions",
+    "teamwork",
+    "vision"
+   ],
+   "desc": "Increases the frequency of a player looking to move the ball from one side of the pitch to the other."
+  },
+  {
+   "name": "Looks for Pass Rather than Attempting to Score",
+   "id": 24,
+   "category": "Passing",
+   "attrs": [
+    "passing",
+    "anticipation",
+    "decisions",
+    "technique",
+    "vision",
+    "teamwork"
+   ],
+   "desc": "Increases the chances of a player opting to give a scoring chance to a team-mate rather than take it on himself. The success of the decision will be based off the player\u2019s attributes."
+  },
+  {
+   "name": "Plays One-Two's",
+   "id": 20,
+   "category": "Passing",
+   "attrs": [
+    "passing",
+    "anticipation",
+    "teamwork",
+    "acceleration",
+    "off the ball",
+    "first touch",
+    "technique",
+    "determination",
+    "strength",
+    "balance"
+   ],
+   "desc": "Increases the frequency with which a player will make a pass and immediately want to receive the ball again, having moved into an advantageous position."
+  },
+  {
+   "name": "Tries Killer Balls Often",
+   "id": 7,
+   "category": "Passing",
+   "attrs": [
+    "anticipation",
+    "passing",
+    "technique",
+    "teamwork",
+    "flair",
+    "vision",
+    "decisions"
+   ],
+   "desc": "Increases the frequency with which a player will attempt through balls."
+  },
+  {
+   "name": "Tries Long Range Passes",
+   "id": 43,
+   "category": "Passing",
+   "attrs": [
+    "passing",
+    "technique",
+    "teamwork",
+    "vision",
+    "decisions",
+    "anticipation"
+   ],
+   "desc": "Increases the chances of a player attempting to pass the ball over longer distances."
+  },
+  {
+   "name": "Knocks Ball Past Opponents",
+   "id": 27,
+   "category": "Dribbling",
+   "attrs": [
+    "work rate",
+    "acceleration",
+    "agility",
+    "pace",
+    "first touch",
+    "technique"
+   ],
+   "desc": "Increases the chances of a player looking to beet his immediate opponent for sheer pace and athleticism to get into a more advantageous position."
+  },
+  {
+   "name": "Likes to Beat Opponent Repeatedly",
+   "id": 46,
+   "category": "Dribbling",
+   "attrs": [
+    "pace",
+    "dribbling",
+    "acceleration",
+    "balance",
+    "strength",
+    "determination",
+    "concentration",
+    "stamina",
+    "work rate",
+    "technique"
+   ],
+   "desc": "Increases the likelihood of a player opting to dribble with the ball regardless of how many opponents are positioned to try to dispossess him."
+  },
+  {
+   "name": "Runs With Ball Often",
+   "id": 51,
+   "category": "Dribbling",
+   "attrs": [
+    "dribbling",
+    "technique",
+    "flair",
+    "balance",
+    "anticipation",
+    "acceleration",
+    "work rate",
+    "agility",
+    "pace"
+   ],
+   "desc": "Increases the chances of a player choosing to run with the ball rather than pass it."
+  },
+  {
+   "name": "Runs With Ball Rarely",
+   "id": 52,
+   "category": "Dribbling",
+   "attrs": [
+    "decisions",
+    "vision",
+    "passing",
+    "anticipation"
+   ],
+   "desc": "Decreases the chances of a player choosing to run with the ball instead looking to make a pass at every turn."
+  },
+  {
+   "name": "Tries to Play Way Out of Trouble",
+   "id": null,
+   "category": "Dribbling",
+   "attrs": [
+    "dribbling",
+    "technique",
+    "flair",
+    "balance",
+    "agility",
+    "anticipation",
+    "decisions"
+   ],
+   "desc": "Increases the chances of a player looking to pass or dribble against pressure in a defensive position, rather than opting for the safety-first approach of clearing the ball."
+  },
+  {
+   "name": "Attempts Overhead Kicks",
+   "id": null,
+   "category": "Finishing",
+   "attrs": [
+    "flair",
+    "finishing",
+    "technique",
+    "anticipation"
+   ],
+   "desc": "Increases the chances of a player attempting a spectacular overhead kick rather than a header at goal or to a team-mate when in an attacking position."
+  },
+  {
+   "name": "Likes to Lob Keeper",
+   "id": 21,
+   "category": "Finishing",
+   "attrs": [
+    "finishing",
+    "technique",
+    "vision",
+    "anticipation",
+    "composure",
+    "decisions"
+   ],
+   "desc": "Increases the likelihood of a player looking to lift the ball over the goalkeeper when presented with a chance at goal."
+  },
+  {
+   "name": "Likes to Round Keeper",
+   "id": 23,
+   "category": "Finishing",
+   "attrs": [
+    "finishing",
+    "dribbling",
+    "anticipation",
+    "composure",
+    "flair",
+    "agility",
+    "pace",
+    "acceleration"
+   ],
+   "desc": "Increases the likelihood of a player looking to go around the goalkeeper in one-on-one situations."
+  },
+  {
+   "name": "Places Shots",
+   "id": 10,
+   "category": "Finishing",
+   "attrs": [
+    "finishing",
+    "technique",
+    "composure",
+    "decisions",
+    "anticipation",
+    "vision",
+    "flair"
+   ],
+   "desc": "Increases the chances of a player opting to place his shots with accuracy rather than power them."
+  },
+  {
+   "name": "Shoots From Distance",
+   "id": 8,
+   "category": "Finishing",
+   "attrs": [
+    "long shots",
+    "technique",
+    "vision",
+    "finishing"
+   ],
+   "desc": "Increases the frequency with which a player will attempt shots from outside the penalty area."
+  },
+  {
+   "name": "Shoots With Power",
+   "id": 9,
+   "category": "Finishing",
+   "attrs": [
+    "finishing",
+    "technique",
+    "strength"
+   ],
+   "desc": "Increases the chances of a player opting to shoot with power over placement. It also increases the likelihood of a player attempting long-range shots, particularly where his Flair is better than his decisions."
+  },
+  {
+   "name": "Tries First Time Shots",
+   "id": 42,
+   "category": "Finishing",
+   "attrs": [
+    "finishing",
+    "technique",
+    "composure",
+    "vision",
+    "anticipation",
+    "decisions"
+   ],
+   "desc": "Increases the likelihood of a player taking a shot before considering a touch to settle himself, unless he\u2019s one-on-one, at which point he will take the best course of action for that situation."
+  },
+  {
+   "name": "Arrives Late in Opponent's Area",
+   "id": 31,
+   "category": "Movement",
+   "attrs": [
+    "work rate",
+    "anticipation",
+    "vision",
+    "decisions",
+    "off the ball",
+    "teamwork",
+    "finishing",
+    "technique"
+   ],
+   "desc": "Increases the frequency with which a player makes forward runs, adjusting for team mentality."
+  },
+  {
+   "name": "Comes Deep to Get Ball",
+   "id": 19,
+   "category": "Movement",
+   "attrs": [
+    "vision",
+    "work rate",
+    "decisions",
+    "off the ball",
+    "dribbling",
+    "passing",
+    "technique",
+    "anticipation"
+   ],
+   "desc": "Increases the frequency of a forward player dropping into midfield to get possession against a team playing with a deep defensive line."
+  },
+  {
+   "name": "Cuts Inside from Both Wings",
+   "id": 39,
+   "category": "Movement",
+   "attrs": [
+    "pace",
+    "dribbling",
+    "technique",
+    "teamwork",
+    "vision"
+   ],
+   "desc": "Increases the frequency with which a player will to attack central areas from a nominal wider starting position."
+  },
+  {
+   "name": "Gets Forward Whenever Possible",
+   "id": 5,
+   "category": "Movement",
+   "attrs": [
+    "work rate",
+    "natural fitness",
+    "off the ball",
+    "anticipation",
+    "teamwork"
+   ],
+   "desc": "Increases the frequency with which a player makes forward runs, adjusting for team mentality."
+  },
+  {
+   "name": "Gets into Opposition Area",
+   "id": 3,
+   "category": "Movement",
+   "attrs": [
+    "anticipation",
+    "aggression",
+    "off the ball",
+    "strength",
+    "teamwork",
+    "decisions"
+   ],
+   "desc": "Mostly governs how often a player makes forward runs but the frequency can also be affected by player tactical instructions."
+  },
+  {
+   "name": "Hugs Line",
+   "id": 40,
+   "category": "Movement",
+   "attrs": [
+    "crossing",
+    "pace",
+    "technique",
+    "vision",
+    "positioning",
+    "dribbling",
+    "teamwork"
+   ],
+   "desc": "Ensures the player will remain in wide areas of the pitch whenever possible."
+  },
+  {
+   "name": "Likes to Try to Beat Offside Trap",
+   "id": 13,
+   "category": "Movement",
+   "attrs": [
+    "acceleration",
+    "pace",
+    "natural fitness",
+    "agility",
+    "first touch",
+    "technique",
+    "anticipation",
+    "decisions",
+    "off the ball",
+    "teamwork"
+   ],
+   "desc": "Increases the frequency with which a player will look to make runs in behind the defense. The success is determined by his other attributes."
+  },
+  {
+   "name": "Moves into Channels",
+   "id": 4,
+   "category": "Movement",
+   "attrs": [
+    "anticipation",
+    "off the ball",
+    "acceleration",
+    "agility",
+    "teamwork",
+    "decisions",
+    "vision",
+    "first touch"
+   ],
+   "desc": "Increases the frequency with which central players will move into the space between their position and a wide attacking position. It also allows wide players in certain roles to move inside into that space."
+  },
+  {
+   "name": "Plays With Back to Goal",
+   "id": 18,
+   "category": "Movement",
+   "attrs": [
+    "technique",
+    "first touch",
+    "teamwork",
+    "strength",
+    "balance",
+    "anticipation",
+    "passing",
+    "jumping reach",
+    "vision",
+    "flair",
+    "decisions"
+   ],
+   "desc": "Player will look to hold up the ball in attacking areas."
+  },
+  {
+   "name": "Stays Back at All Times",
+   "id": 33,
+   "category": "Movement",
+   "attrs": [
+    "marking",
+    "anticipation",
+    "decisions",
+    "positioning",
+    "teamwork",
+    "vision",
+    "work rate",
+    "determination"
+   ],
+   "desc": "Player will make no forward runs, adjusted for team mentality."
+  }
+ ],
+ "conflicts": [
+  [
+   "Runs With Ball Often",
+   "Runs With Ball Rarely"
+  ],
+  [
+   "Dives Into Tackles",
+   "Does Not Dive Into Tackles"
+  ],
+  [
+   "Stays Back at All Times",
+   "Gets Forward Whenever Possible"
+  ],
+  [
+   "Stays Back at All Times",
+   "Gets into Opposition Area"
+  ],
+  [
+   "Stays Back at All Times",
+   "Arrives Late in Opponent's Area"
+  ],
+  [
+   "Shoots With Power",
+   "Places Shots"
+  ],
+  [
+   "Hugs Line",
+   "Cuts Inside from Both Wings"
+  ]
+ ]
+}

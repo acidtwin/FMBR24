@@ -1,26 +1,30 @@
-"""Player window: left-hand tab strip (TABS table) over a QStackedWidget. Styling from mockups/player-window-options.html option B.
+"""Player window (master visual: mockups/player-window.html). Persistent header (identity, chips, CA/PA, per-tab
+slot) above a left tab strip + QStackedWidget, and a persistent action strip (Close / Make HGP / Make HGC / Shortlist).
 
-Profile = hero (identity, status chips, CA/PA, actions), four-column attribute tile grid with a Current | At potential
-switch, and a rail (personality, traits). Contract = Until/Wage/Value panel. Positions = mini pitch + best positions.
-The other tabs are "Coming soon" placeholders. To add a real tab: write a `_page_<key>` method returning a QWidget and
-put its name in the TABS row (None = placeholder using SOON[key]).
+TABS rows = (key, label, page builder method name | None, header-slot method name). None = "Coming soon" placeholder
+described by SOON[key]. Add a real tab = write `_page_<key>` and name it in TABS; the slot method returns
+(label, [widgets], sub text). Positions = list + pitch; its Current | Future switch has Future disabled (position
+ratings are stored in the save, not derived from attributes).
 
 Data the save does not give us yet is read from `data` (see `player_extra_data`) and shown as PENDING
-(respecting Settings > Show PENDING markers) until the value is supplied. Projected ("at potential")
-values are display only: nothing here touches the patch/save code.
+(respecting Settings > Show PENDING markers). Projected ("at potential") values are display only.
 """
 import calendar
+import math
 
-from PyQt6.QtCore import Qt, QPointF, QRect, QRectF, QSize
+
+from PyQt6.QtCore import Qt, QPointF, QRect, QRectF
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QLayout, QPushButton, QScrollArea,
+    QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from fm_editor import potential as _pot
+from fm_editor import settings as _settings
+from fm_editor import traitrec as _tr
 from fm_editor.agecalc import person_age
-from fm_editor.traits import trait_names
+from fm_editor.traits import trait_ids, trait_names
 from gui.theme import COLORS
 
 # -- tokens (mockup comment block, literal) ------------------------------------------------------
@@ -60,23 +64,26 @@ LOWER_BETTER = {31, 41, 48}   # Eccentricity, Dirtiness, Injury Prone: coloured 
 PERS = ['Adaptability', 'Ambition', 'Loyalty', 'Pressure', 'Professionalism', 'Sportsmanship', 'Temperament']
 
 POS_ORDER = ['GK', 'SW', 'DL', 'DC', 'DR', 'DM', 'ML', 'MC', 'MR', 'AML', 'AMC', 'AMR', 'ST', 'WBL', 'WBR']
-POS_NAME = {
-    'GK': 'Goalkeeper', 'SW': 'Sweeper', 'DL': 'Left Back', 'DC': 'Centre Back', 'DR': 'Right Back',
-    'WBL': 'Left Wing-Back', 'WBR': 'Right Wing-Back', 'DM': 'Defensive Midfielder',
-    'ML': 'Left Midfielder', 'MC': 'Central Midfielder', 'MR': 'Right Midfielder',
-    'AML': 'Left Winger', 'AMC': 'Attacking Midfielder', 'AMR': 'Right Winger', 'ST': 'Striker',
-}
-# Mini-pitch dot centres as percent (x, y) of the pitch's padding box, attacking UP. ONE table: edit here to
-# polish. Rows are >= 12% apart vertically (dot = 20px on a 166px box) so dots never overlap.
-PITCH = {
-    'ST': (50, 9),
-    'AML': (16, 23), 'AMC': (50, 23), 'AMR': (84, 23),
-    'ML': (14, 38), 'MC': (50, 38), 'MR': (86, 38),
-    'DM': (50, 53),
-    'WBL': (9, 57), 'WBR': (91, 57),
-    'DL': (22, 70), 'DC': (50, 70), 'DR': (78, 70),
-    'SW': (50, 82),
-    'GK': (50, 93),
+# Mockup position tables (list order = mockup POS). Save order stays POS_ORDER (byte order of the 15 ratings).
+POS_DISPLAY = ['GK', 'SW', 'DL', 'DC', 'DR', 'WBL', 'WBR', 'DM', 'ML', 'MC', 'MR', 'AML', 'AMC', 'AMR', 'ST']
+POS_CODE = {'GK': 'GK', 'SW': 'SW', 'DL': 'D(L)', 'DC': 'D(C)', 'DR': 'D(R)', 'WBL': 'WB(L)', 'WBR': 'WB(R)',
+            'DM': 'DM', 'ML': 'M(L)', 'MC': 'M(C)', 'MR': 'M(R)', 'AML': 'AM(L)', 'AMC': 'AM(C)', 'AMR': 'AM(R)',
+            'ST': 'ST'}
+POS_FULL = {'GK': 'Goalkeeper', 'SW': 'Sweeper', 'DL': 'Defender (Left)', 'DC': 'Defender (Centre)',
+            'DR': 'Defender (Right)', 'WBL': 'Wing Back (Left)', 'WBR': 'Wing Back (Right)',
+            'DM': 'Defensive Midfielder', 'ML': 'Midfielder (Left)', 'MC': 'Midfielder (Centre)',
+            'MR': 'Midfielder (Right)', 'AML': 'Attacking Mid (Left)', 'AMC': 'Attacking Mid (Centre)',
+            'AMR': 'Attacking Mid (Right)', 'ST': 'Striker'}
+# Pitch slot of each position as fractions of the marked field rect, attacking UP (mockup SLOTS). ONE table: edit here.
+SLOTS = {
+    'ST': (.50, .11),
+    'AML': (.16, .25), 'AMC': (.50, .25), 'AMR': (.84, .25),
+    'ML': (.12, .40), 'MC': (.50, .40), 'MR': (.88, .40),
+    'DM': (.50, .535),
+    'WBL': (.08, .60), 'WBR': (.92, .60),
+    'DL': (.20, .72), 'DC': (.50, .72), 'DR': (.80, .72),
+    'SW': (.50, .835),
+    'GK': (.50, .94),
 }
 
 _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#525B68" '
@@ -84,21 +91,21 @@ _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill
 
 # (key, label, builder method name or None = "Coming soon" placeholder described by SOON[key])
 TABS = [
-    ('profile', 'Profile', '_page_profile'),
-    ('contract', 'Contract', '_page_contract'),
-    ('transfer', 'Transfer', None),
-    ('positions', 'Positions', '_page_positions'),
-    ('general', 'General Rating', None),
-    ('positional', 'Positional Rating', None),
-    ('role', 'Role Rating', None),
-    ('history', 'History', None),
+    ('profile', 'Profile', '_page_profile', '_slot_profile'),
+    ('contract', 'Contract', '_page_contract', '_slot_contract'),
+    ('transfer', 'Transfer', None, '_slot_transfer'),
+    ('positions', 'Positions', '_page_positions', '_slot_positions'),
+    ('general', 'General Rating', None, '_slot_profile'),
+    ('positional', 'Positional Rating', None, '_slot_profile'),
+    ('role', 'Role Rating', None, '_slot_profile'),
+    ('history', 'History', None, '_slot_history'),
 ]
 SOON = {
     'transfer': 'Market value, asking price and transfer / loan status.',
     'general': 'Overall rating and a summary of the role ratings.',
     'positional': 'Rating per position, over time and across seasons.',
     'role': 'Suitability for each tactical role.',
-    'history': 'Career stats by season and club. The save holds this data; it will be plugged in here later.',
+    'history': 'Career stats by season and club.',
 }
 _LAST_TAB = 'profile'     # last opened tab, remembered for the session
 
@@ -118,38 +125,55 @@ def player_extra_data(person, save_data):
     return {'wage': None, 'value': None, 'height_cm': None, 'weight_kg': None, 'traits': traits, 'history': None}
 
 
+
 def _dlg_qss():
     c = COLORS
     return f"""
 QDialog#playerWindow {{ background:{c['window_bg']}; }}
 QDialog#playerWindow QWidget {{ background:transparent; }}
 QDialog#playerWindow QScrollArea {{ background:transparent; border:none; }}
+QDialog#playerWindow QScrollBar:vertical {{ background:{c['surface']}; width:6px; margin:0; border:none; }}
+QDialog#playerWindow QScrollBar::handle:vertical {{ background:{c['border_bright']}; border-radius:3px; min-height:20px; }}
+QDialog#playerWindow QScrollBar::add-line:vertical, QDialog#playerWindow QScrollBar::sub-line:vertical {{ height:0; }}
+QDialog#playerWindow QScrollBar::add-page:vertical, QDialog#playerWindow QScrollBar::sub-page:vertical {{ background:transparent; }}
 QDialog#playerWindow QWidget#pwBody {{ background:{c['window_bg']}; }}
 QDialog#playerWindow QLabel {{ background:transparent; color:{c['text_primary']}; font-size:12px; }}
 QDialog#playerWindow QFrame#pwPanel {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QFrame#pwRowAlt {{ background:{C_ALT}; }}
+QDialog#playerWindow QFrame#pwRowNat {{ background:{c['selection_bg']}; }}
 QDialog#playerWindow QFrame#pwRow {{ background:transparent; }}
-QDialog#playerWindow QFrame#pwTabs {{ background:{c['surface']}; border:none; border-right:1px solid {c['border']}; }}
+QDialog#playerWindow QFrame#pwTabs {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwTab {{ background:transparent; border:none; border-left:3px solid transparent;
-    color:{c['text_secondary']}; text-align:left; padding:8px 12px; font-size:12px; border-radius:0; }}
+    color:{c['text_secondary']}; text-align:left; padding:0 10px 0 9px; font-size:12px; font-weight:600; border-radius:0; }}
 QDialog#playerWindow QPushButton#pwTab:hover {{ background:{c['elevated']}; color:{c['text_primary']};
     border-left:3px solid {c['border_bright']}; }}
 QDialog#playerWindow QPushButton#pwTab:checked {{ background:{c['selection_bg']}; color:{c['text_primary']};
     font-weight:bold; border-left:3px solid {c['accent']}; }}
+QDialog#playerWindow QFrame#actionStrip {{ background:{c['surface']}; border:none; border-top:1px solid {c['border']}; }}
+QDialog#playerWindow QWidget#pwSlot {{ border:none; border-left:1px solid {c['border']}; }}
+QDialog#playerWindow QFrame#pwCab {{ background:{c['window_bg']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QLabel#pwSoonT {{ font-size:20px; font-weight:bold; }}
 QDialog#playerWindow QLabel#pwSoonTag {{ color:{c['text_secondary']}; font-size:10px; font-weight:bold;
     border:1px solid {c['border_bright']}; border-radius:10px; padding:0 10px; }}
 QDialog#playerWindow QLabel#pwSoonD {{ color:{c['text_secondary']}; font-size:12px; }}
 QDialog#playerWindow QWidget#pwHead {{ background:transparent; }}
-QDialog#playerWindow QLabel#pwHeadT, QDialog#playerWindow QLabel#pwColHead {{
+QDialog#playerWindow QLabel#pwHeadT, QDialog#playerWindow QLabel#pwColHead, QDialog#playerWindow QLabel#pwSubT {{
     color:{c['text_secondary']}; font-size:11px; font-weight:bold; }}
-QDialog#playerWindow QLabel#pwName {{ font-size:24px; font-weight:bold; }}
+QDialog#playerWindow QLabel#pwSubE {{ color:{c['text_secondary']}; font-size:11px; }}
+QDialog#playerWindow QLabel#pwName {{ font-size:20px; font-weight:bold; }}
 QDialog#playerWindow QLabel#pwSub {{ color:{c['text_secondary']}; font-size:12px; }}
+QDialog#playerWindow QLabel#pwHw {{ color:{c['text_secondary']}; font-size:11px; }}
 QDialog#playerWindow QLabel#pwBigLab {{ color:{c['text_secondary']}; font-size:10px; font-weight:bold; }}
-QDialog#playerWindow QLabel#pwBigNum {{ font-size:36px; font-weight:bold; }}
+QDialog#playerWindow QLabel#pwBigNum {{ font-size:20px; font-weight:bold; }}
+QDialog#playerWindow QLabel#pwSlotV {{ font-size:20px; font-weight:bold; }}
+QDialog#playerWindow QLabel#pwSlotS {{ color:{c['text_secondary']}; font-size:11px; }}
 QDialog#playerWindow QLabel#pwAttrName, QDialog#playerWindow QLabel#pwKvL {{ color:{c['text_secondary']}; }}
 QDialog#playerWindow QLabel#pwKvR {{ font-weight:600; }}
 QDialog#playerWindow QLabel#pwTrait {{ font-weight:600; }}
+QDialog#playerWindow QLabel#pwPosName {{ color:#FFFFFF; }}
+QDialog#playerWindow QLabel#pwPosNameB {{ color:#FFFFFF; font-weight:bold; }}
+QDialog#playerWindow QLabel#pwWord {{ color:{c['text_secondary']}; }}
+QDialog#playerWindow QLabel#pwWordNat {{ color:#FFFFFF; font-weight:bold; }}
 QDialog#playerWindow QLabel#pwNote {{ color:{c['text_secondary']}; font-size:11px; }}
 QDialog#playerWindow QLabel#pwHint {{ color:{c['text_secondary']}; font-size:11px; }}
 QDialog#playerWindow QLabel#pwAvatar {{ background:{c['elevated']}; border-radius:3px; }}
@@ -159,14 +183,10 @@ QDialog#playerWindow QLabel#pwPill {{ color:{c['text_secondary']}; font-size:10p
 QDialog#playerWindow QLabel#pwPillOn {{ color:{c['hgp_green']}; font-size:10px; font-weight:bold;
     border:1px solid {c['hgp_green']}; border-radius:10px; padding:0 9px; background:rgba(90,160,209,36); }}
 QDialog#playerWindow QLabel#pwPillUnk {{ color:{c['text_secondary']}; font-size:10px; font-weight:bold; padding:0 2px; }}
-QDialog#playerWindow QLabel#pwChip {{ background:{c['elevated']}; color:#FFFFFF; font-size:11px; font-weight:600;
-    border-radius:3px; padding:0 8px; }}
 QDialog#playerWindow QLabel#pwChipInj {{ background:#8B1A1A; color:#FFFFFF; font-size:11px; font-weight:600;
     border-radius:3px; padding:0 8px; }}
 QDialog#playerWindow QLabel#pwChipOk {{ background:{c['elevated']}; color:#52C287; font-size:11px; font-weight:600;
     border-radius:3px; padding:0 8px; }}
-QDialog#playerWindow QLabel#pwChipDev {{ background:{c['window_bg']}; color:#FFFFFF; font-size:11px; font-weight:600;
-    border:1px solid {c['border']}; border-radius:3px; padding:0 8px; }}
 QDialog#playerWindow QFrame#pwSeg {{ background:{c['window_bg']}; border:1px solid {c['border_bright']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwSegL, QDialog#playerWindow QPushButton#pwSegR {{ background:{c['window_bg']}; color:{c['text_secondary']};
     border:none; font-size:11px; font-weight:bold; padding:0 12px; }}
@@ -175,13 +195,13 @@ QDialog#playerWindow QPushButton#pwSegR {{ border-top-right-radius:2px; border-b
 QDialog#playerWindow QPushButton#pwSegL:checked, QDialog#playerWindow QPushButton#pwSegR:checked {{ background:{c['accent']}; color:#FFFFFF; }}
 QDialog#playerWindow QPushButton#pwSegR:disabled {{ color:{C_TX3}; background:{c['window_bg']}; }}
 QDialog#playerWindow QPushButton#pwPrimary {{ background:{c['accent']}; color:#FFFFFF; border:1px solid transparent; border-radius:3px;
-    font-size:12px; font-weight:bold; }}
+    font-size:12px; font-weight:bold; padding:0 16px; }}
 QDialog#playerWindow QPushButton#pwPrimary:hover {{ background:{c['accent_hover']}; }}
 QDialog#playerWindow QPushButton#pwPrimary:pressed {{ background:{c['accent_press']}; }}
 QDialog#playerWindow QPushButton#pwShortOn, QDialog#playerWindow QPushButton#pwShortOn:disabled {{ background:{c['selection_bg']}; color:{C_POT};
-    border:1px solid {c['accent_hover']}; border-radius:3px; font-size:12px; font-weight:bold; }}
+    border:1px solid {c['accent_hover']}; border-radius:3px; font-size:12px; font-weight:bold; padding:0 16px; }}
 QDialog#playerWindow QPushButton#pwGhost {{ background:{c['surface']}; color:#FFFFFF; border:1px solid {c['border_bright']};
-    border-radius:3px; font-size:12px; font-weight:bold; }}
+    border-radius:3px; font-size:12px; font-weight:bold; padding:0 16px; }}
 QDialog#playerWindow QPushButton#pwGhost:hover {{ background:{c['elevated']}; }}
 QDialog#playerWindow QPushButton#pwGhost:disabled {{ background:{c['elevated']}; color:{C_TX3}; border:1px solid {c['border']}; }}
 """
@@ -218,58 +238,6 @@ class _ElideLabel(QLabel):
         self.setText(self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, self.width()))
 
 
-class _Flow(QLayout):
-    """Left-to-right wrapping layout (Qt flow-layout example) for the hero chips."""
-
-    def __init__(self, parent=None, hspace=6, vspace=6):
-        super().__init__(parent)
-        self._items, self._h, self._v = [], hspace, vspace
-        self.setContentsMargins(0, 0, 0, 0)
-
-    def addItem(self, item):
-        self._items.append(item)
-
-    def count(self):
-        return len(self._items)
-
-    def itemAt(self, i):
-        return self._items[i] if 0 <= i < len(self._items) else None
-
-    def takeAt(self, i):
-        return self._items.pop(i) if 0 <= i < len(self._items) else None
-
-    def hasHeightForWidth(self):
-        return True
-
-    def heightForWidth(self, w):
-        return self._do(QRect(0, 0, w, 0), True)
-
-    def setGeometry(self, rect):
-        super().setGeometry(rect)
-        self._do(rect, False)
-
-    def sizeHint(self):
-        return self.minimumSize()
-
-    def minimumSize(self):
-        s = QSize()
-        for it in self._items:
-            s = s.expandedTo(it.minimumSize())
-        return s
-
-    def _do(self, rect, test):
-        x, y, row_h = rect.x(), rect.y(), 0
-        for it in self._items:
-            sz = it.sizeHint()
-            if x + sz.width() > rect.right() + 1 and row_h > 0:
-                x, y, row_h = rect.x(), y + row_h + self._v, 0
-            if not test:
-                it.setGeometry(QRect(x, y, sz.width(), sz.height()))
-            x += sz.width() + self._h
-            row_h = max(row_h, sz.height())
-        return y + row_h - rect.y()
-
-
 class _Bar(QWidget):
     """6px square-ended bar (mockup .bar): track #343740, fill `color` up to `frac`."""
 
@@ -285,52 +253,106 @@ class _Bar(QWidget):
         p.fillRect(QRect(0, 0, round(self.width() * self._frac), self.height()), self._color)
 
 
-class _Pitch(QWidget):
-    """112x168 mini pitch (mockup .pitch) with the 15 position ratings as tier-coloured dots."""
-    W, H = 112, 168
+
+def word(v):
+    """Rating word. Thresholds per mockup; 1 = Ineffective / 2-4 = Awkward is UNVERIFIED (open question 2)."""
+    return ('Natural' if v >= 20 else 'Accomplished' if v >= 15 else 'Competent' if v >= 10
+            else 'Unconvincing' if v >= 5 else 'Awkward' if v >= 2 else 'Ineffective')
+
+
+def foot_word(v):
+    """Foot words are assumed (mockup open question 3)."""
+    return ('Very Weak' if v <= 5 else 'Weak' if v <= 9 else 'Reasonable' if v <= 14
+            else 'Fairly Strong' if v <= 17 else 'Strong' if v <= 19 else 'Very Strong')
+
+
+_FUTURE_TIP = ('Not available yet: position ratings are stored in the save, not calculated from attributes, '
+               'so they cannot be recomputed from projected attributes.')
+
+
+class _PitchBig(QWidget):
+    """Mockup pitchSVG: 12 grass bands, markings, 15 rating dots (lowest first so the best sit on top).
+    Geometry constants are the mockup's `g` table; dot slots = SLOTS (fractions of the marked field, attacking up)."""
+    M = 22
+    G = dict(boxW=238, boxD=88, sixW=108, sixD=29, circR=54, spotD=58, goalW=43, goalD=6)
 
     def __init__(self, ratings, parent=None):
         super().__init__(parent)
-        self._r = ratings            # {pos: rating}
-        self.setFixedSize(self.W, self.H)
+        self._r = ratings
+        self.setMinimumSize(300, 420)
 
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        bg = QColor(COLORS['window_bg'])
-        # box: 1px border #454A58, radius 3, bg #14151A
-        p.setPen(QPen(QColor(COLORS['border_bright']), 1))
-        p.setBrush(bg)
-        p.drawRoundedRect(QRectF(0.5, 0.5, self.W - 1, self.H - 1), 3, 3)
-        iw, ih = self.W - 2, self.H - 2      # padding box (inside the 1px border), origin (1, 1)
-        line = QPen(QColor(COLORS['border']), 1)
-        p.setPen(line)
+        g, M = self.G, self.M
+        W, H = self.width(), self.height()
+        p.fillRect(0, 0, W, H, QColor('#15301F'))
+        bh = H / 12
+        for i in range(1, 12, 2):
+            p.fillRect(QRectF(0, i * bh, W, bh), QColor('#1D4229'))
+        ln = QColor(255, 255, 255, round(0.42 * 255))
+        x0 = y0 = M
+        w, h = W - 2 * M, H - 2 * M
+        cx, cy, y1 = x0 + w / 2, y0 + h / 2, y0 + h
+        p.setPen(QPen(ln, 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawLine(QPointF(0, 1 + ih * 0.5 + 0.5), QPointF(self.W, 1 + ih * 0.5 + 0.5))                 # halfway
-        top = 1 + ih * 0.44
-        p.drawEllipse(QRectF(1 + iw * 0.5 - 14 + 0.5, top + 0.5, 27, 27))                               # centre circle 28
-        bx0, bx1 = 1 + iw * 0.25, 1 + iw * 0.75
-        p.drawRect(QRectF(bx0 + 0.5, 0.5, bx1 - bx0 - 1, 19))                                           # boxes top/bottom
-        p.drawRect(QRectF(bx0 + 0.5, self.H - 20.5, bx1 - bx0 - 1, 19))
-        f = p.font()
-        f.setPixelSize(10)
+        p.drawRect(QRectF(x0 + .5, y0 + .5, w, h))
+        p.drawLine(QPointF(x0, cy), QPointF(x0 + w, cy))
+        p.drawEllipse(QPointF(cx, cy), g['circR'], g['circR'])
+        p.setBrush(ln)
+        p.drawEllipse(QPointF(cx, cy), 2, 2)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for bot in (0, 1):
+            bx, sx, gx = cx - g['boxW'] / 2, cx - g['sixW'] / 2, cx - g['goalW'] / 2
+            by = y1 - g['boxD'] if bot else y0
+            sy = y1 - g['sixD'] if bot else y0
+            gy = y1 if bot else y0 - g['goalD']
+            p.drawRect(QRectF(bx, by + .5, g['boxW'], g['boxD']))
+            p.drawRect(QRectF(sx, sy + .5, g['sixW'], g['sixD']))
+            p.drawRect(QRectF(gx, gy + .5, g['goalW'], g['goalD']))
+            spot_y = y1 - g['spotD'] if bot else y0 + g['spotD']
+            dy = abs(g['boxD'] - g['spotD'])
+            alpha = math.degrees(math.asin(dy / g['circR']))
+            p.setBrush(ln)
+            p.drawEllipse(QPointF(cx, spot_y), 2, 2)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            r = g['circR']
+            rect = QRectF(cx - r, spot_y - r, 2 * r, 2 * r)
+            span = round((180 - 2 * alpha) * 16)
+            if bot:
+                p.drawArc(rect, round(alpha * 16), span)        # above the box edge
+            else:
+                p.drawArc(rect, round(-alpha * 16), -span)      # below the box edge
+        f = QFont(p.font())
+        f.setPixelSize(12)
         f.setBold(True)
-        p.setFont(f)
-        for pos, (x, y) in PITCH.items():
+        fl = QFont(f)
+        fl.setPixelSize(10)
+        for pos in sorted(POS_DISPLAY, key=lambda q: (self._r.get(q, 1), -POS_DISPLAY.index(q))):
+            sx_, sy_ = SLOTS[pos]
+            x, y = M + sx_ * w, M + sy_ * h
             v = self._r.get(pos, 1)
             t = tier(v)
-            cx, cy = 1 + iw * x / 100, 1 + ih * y / 100
             col = QColor(TIER_HEX[t])
-            fill = QColor(col)
-            fill.setAlpha(TILE_ALPHA)
-            # fill over the pitch background, then a 1px inset border
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(fill)
-            p.drawEllipse(QRectF(cx - 10, cy - 10, 20, 20))
-            p.setPen(QPen(col, 1))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(QRectF(cx - 9.5, cy - 9.5, 19, 19))
-            p.drawText(QRectF(cx - 10, cy - 10, 20, 20), Qt.AlignmentFlag.AlignCenter, str(v))
+            if v >= 20:
+                p.setPen(QPen(QColor('#FFFFFF'), 2))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawEllipse(QPointF(x, y), 18, 18)
+            ghost = t == 1
+            if ghost:
+                p.setPen(QPen(col, 1))
+                p.setBrush(QColor(20, 21, 26, round(0.55 * 255)))
+                p.drawEllipse(QPointF(x, y), 13.5, 13.5)
+            else:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(col)
+                p.drawEllipse(QPointF(x, y), 14, 14)
+            p.setFont(f)
+            p.setPen(col if ghost else QColor('#14151A'))
+            p.drawText(QRectF(x - 14, y - 14, 28, 28), Qt.AlignmentFlag.AlignCenter, str(v))
+            p.setFont(fl)
+            p.setPen(QColor(255, 255, 255, round(0.72 * 255)))
+            p.drawText(QRectF(x - 30, y - 34, 60, 12), Qt.AlignmentFlag.AlignCenter, POS_CODE[pos])
 
 
 class PlayerWindow(QDialog):
@@ -355,7 +377,8 @@ class PlayerWindow(QDialog):
         self._pot_on = False
         self._proj = None
         self._data = {**player_extra_data(person, save_data), **(data or {})}
-        self._build()      # NB: Profile page must build first (sets _is_gk/_hgp/_ratings used by other tabs)
+        self._init_state()
+        self._build()
 
     # -- data helpers ------------------------------------------------------------------------
     @staticmethod
@@ -377,27 +400,47 @@ class PlayerWindow(QDialog):
             return ''
         return next((c['name'] for c in sd.get('clubs', []) if c.get('id') == cid), '')
 
-    # -- building ------------------------------------------------------------------------------
+    def _init_state(self):
+        from gui import main_window as mw
+        from fm_editor.patch import is_hgc
+        p = self._person
+        pos_list = p.get('positions') or [1] * 15
+        self._ratings = dict(zip(POS_ORDER, pos_list))
+        self._pos = mw._primary_pos(pos_list) if p.get('positions') else None
+        self._is_gk = self._pos == 'GK'
+        b = self._save_data.get('b') if self._save_data else None
+        self._hgp = bool(p.get('hgp', False))
+        self._hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
+
+    # -- shell: header / (tab strip | pages) / action strip ---------------------------------------
     def _build(self):
         global _LAST_TAB
-        outer = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(12, 12, 12, 12)
+        bl.setSpacing(12)
+        bl.addWidget(self._header())
+        main = QHBoxLayout()
+        main.setSpacing(12)
         strip = QFrame()
         strip.setObjectName('pwTabs')
         strip.setFixedWidth(150)
         sv = QVBoxLayout(strip)
-        sv.setContentsMargins(0, 8, 0, 8)
-        sv.setSpacing(0)
+        sv.setContentsMargins(6, 6, 6, 6)
+        sv.setSpacing(2)
         self._stack = QStackedWidget()
         self._tab_btns = {}
-        self._tab_keys = [k for k, _l, _b in TABS]
+        self._tab_keys = [t[0] for t in TABS]
         grp = QButtonGroup(self)
         grp.setExclusive(True)
         self._tab_group = grp
-        for i, (key, label, builder) in enumerate(TABS):
+        for key, label, builder, _slot in TABS:
             btn = QPushButton(label)
             btn.setObjectName('pwTab')
+            btn.setFixedHeight(34)
             btn.setCheckable(True)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -407,8 +450,11 @@ class PlayerWindow(QDialog):
             self._tab_btns[key] = btn
             self._stack.addWidget(getattr(self, builder)() if builder else self._page_soon(label, SOON[key]))
         sv.addStretch()
-        outer.addWidget(strip)
-        outer.addWidget(self._stack, 1)
+        main.addWidget(strip)
+        main.addWidget(self._stack, 1)
+        bl.addLayout(main, 1)
+        outer.addWidget(body, 1)
+        outer.addWidget(self._action_strip())
         QShortcut(QKeySequence('Ctrl+Tab'), self, activated=lambda: self._step_tab(1))
         QShortcut(QKeySequence('Ctrl+Shift+Tab'), self, activated=lambda: self._step_tab(-1))
         self._select_tab(_LAST_TAB if _LAST_TAB in self._tab_btns else 'profile')
@@ -418,19 +464,38 @@ class PlayerWindow(QDialog):
         _LAST_TAB = key
         self._tab_btns[key].setChecked(True)
         self._stack.setCurrentIndex(self._tab_keys.index(key))
+        slot = next(t[3] for t in TABS if t[0] == key)
+        label, vals, sub = getattr(self, slot)()
+        self._set_slot(label, vals, sub)
 
     def _step_tab(self, d):
         self._select_tab(self._tab_keys[(self._stack.currentIndex() + d) % len(self._tab_keys)])
 
     @staticmethod
     def _scrolled(content):
-        """Wrap a page in a vertical-only scroll area over the window background."""
+        """Wrap a page in a vertical-only scroll area (content top-aligned, transparent over the window)."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         content.setObjectName('pwBody')
         scroll.setWidget(content)
         return scroll
+
+    def _page(self, *widgets, stretch=None, fill=False):
+        """Page = row of panels top-aligned (mockup .content: flex, align-items:flex-start, gap 12)."""
+        body = QWidget()
+        h = QHBoxLayout(body)
+        h.setContentsMargins(0, 0, 6, 0)
+        h.setSpacing(12)
+        for i, w in enumerate(widgets):
+            if fill:
+                h.addWidget(w, (stretch or {}).get(i, 0))
+            else:
+                h.addWidget(w, (stretch or {}).get(i, 0), Qt.AlignmentFlag.AlignTop)
+        if not stretch and not fill:
+            h.addStretch()
+        return self._scrolled(body)
 
     def _page_soon(self, label, text):
         w = QWidget()
@@ -446,78 +511,32 @@ class PlayerWindow(QDialog):
         v.addWidget(d, 0, al)
         return w
 
+    # -- pages -----------------------------------------------------------------------------------
     def _page_profile(self):
-        body = QWidget()
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(12, 12, 12, 12)
-        bl.setSpacing(12)
-        bl.addWidget(self._hero())
-        main = QHBoxLayout()
-        main.setSpacing(12)
-        main.addWidget(self._attr_panel(), 1)
-        main.addWidget(self._rail(), 0, Qt.AlignmentFlag.AlignTop)
-        bl.addLayout(main)
-        bl.addStretch()
-        return self._scrolled(body)
+        attrs = self._attr_panel()
+        return self._page(attrs, self._rail(), stretch={0: 1})
 
     def _page_contract(self):
-        body = QWidget()
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(12, 12, 12, 12)
-        bl.setSpacing(12)
-        cp = self._contract_panel()
-        cp.setFixedWidth(360)
-        bl.addWidget(cp)
-        bl.addWidget(_lab('Bonuses, clauses and release terms will be added here.', 'pwNote'))
-        bl.addStretch()
-        return self._scrolled(body)
+        col = QWidget()
+        cv = QVBoxLayout(col)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(12)
+        cv.addWidget(self._contract_panel())
+        tag = _spaced(_lab('COMING', 'pwSoonTag', Qt.AlignmentFlag.AlignCenter, 20))
+        panel, v = self._panel('Bonuses & clauses', tag)
+        note = _lab('Bonuses, clauses and release terms will be added here.', 'pwNote')
+        note.setWordWrap(True)
+        note.setContentsMargins(12, 0, 12, 14)
+        v.addWidget(note)
+        cv.addWidget(panel)
+        cv.addStretch()
+        col.setFixedWidth(360)
+        return self._page(col)
 
     def _page_positions(self):
-        body = QWidget()
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(12, 12, 12, 12)
-        bl.setSpacing(12)
-        panel, v = self._panel('Positions')
-        row = QHBoxLayout()
-        row.setContentsMargins(16, 6, 16, 16)
-        row.setSpacing(24)
-        row.addWidget(_Pitch(self._ratings), 0, Qt.AlignmentFlag.AlignTop)
-        row.addWidget(self._best_positions(), 0, Qt.AlignmentFlag.AlignTop)
-        row.addStretch()
-        v.addLayout(row)
-        panel.setFixedWidth(420)
-        bl.addWidget(panel)
-        bl.addStretch()
-        return self._scrolled(body)
+        return self._page(self._positions_list(), self._positions_pitch(), stretch={1: 1}, fill=True)
 
-    def _best_positions(self):
-        ratings = self._ratings
-        top = sorted(POS_ORDER, key=lambda x: (-ratings[x], POS_ORDER.index(x)))[:5]
-        tp = QVBoxLayout()
-        tp.setSpacing(4)
-        tp.setContentsMargins(0, 0, 0, 0)
-        head = _spaced(_lab('BEST POSITIONS', 'pwBigLab'))
-        head.setContentsMargins(0, 0, 0, 2)
-        tp.addWidget(head)
-        for ps in top:
-            r = QHBoxLayout()
-            r.setSpacing(8)
-            r.setContentsMargins(0, 0, 0, 0)
-            r.addWidget(self._badge(ps))
-            r.addStretch()
-            v = ratings[ps]
-            vl = _lab(str(v), 'pwKvR')
-            vl.setStyleSheet(f'QLabel#pwKvR {{ color:{TIER_HEX[tier(v)]}; font-size:13px; font-weight:bold; }}')
-            r.addWidget(vl)
-            rw = QWidget()
-            rw.setFixedHeight(24)
-            rw.setLayout(r)
-            tp.addWidget(rw)
-        tw = QWidget()
-        tw.setFixedWidth(120)
-        tw.setLayout(tp)
-        return tw
-
+    # -- panels ----------------------------------------------------------------------------------
     def _panel(self, title, right=None):
         """-> (QFrame#pwPanel, body QVBoxLayout). 36px header, 11/700 UPPERCASE #8B96A8."""
         f = QFrame()
@@ -556,112 +575,45 @@ class PlayerWindow(QDialog):
             row.setVisible(False)
         return row
 
-    # hero ---------------------------------------------------------------------------------------
-    def _badge(self, pos):
+    def _seg(self, left, right, right_enabled=True, right_tip=''):
+        """Segmented control h24 (mockup .sg) -> (frame, left btn, right btn)."""
+        seg = QFrame()
+        seg.setObjectName('pwSeg')
+        sl = QHBoxLayout(seg)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(0)
+        bl_, br_ = QPushButton(left), QPushButton(right)
+        bl_.setObjectName('pwSegL')
+        br_.setObjectName('pwSegR')
+        grp = QButtonGroup(seg)
+        grp.setExclusive(True)
+        bold = QFont()
+        bold.setPixelSize(11)
+        bold.setBold(True)
+        fm = QFontMetrics(bold)
+        for b in (bl_, br_):
+            b.setCheckable(True)
+            b.setFixedSize(fm.horizontalAdvance(b.text()) + 28, 24)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            grp.addButton(b)
+            sl.addWidget(b)
+        bl_.setChecked(True)
+        br_.setEnabled(right_enabled)
+        if right_tip:
+            br_.setToolTip(right_tip)
+            if not right_enabled:
+                seg.setToolTip(right_tip)
+        seg._grp = grp
+        return seg, bl_, br_
+
+    # -- header (persistent) ---------------------------------------------------------------------
+    def _badge(self, pos, wide=False):
         from gui.main_window import _POS_BADGE_COLORS
         bg = _POS_BADGE_COLORS.get(pos, ('#2A2D35', '#FFFFFF'))[0]
-        lbl = _lab(pos, 'pwBadge', Qt.AlignmentFlag.AlignCenter, 16)
-        lbl.setMinimumWidth(28)
+        lbl = _lab(POS_CODE.get(pos, pos), 'pwBadge', Qt.AlignmentFlag.AlignCenter, 16)
+        lbl.setMinimumWidth(44 if wide else 28)
         lbl.setStyleSheet(f'QLabel#pwBadge {{ background:{bg}; padding:0 5px; }}')
         return lbl
-
-    def _hero(self):
-        from gui import main_window as mw
-        p = self._person
-        pos_list = p.get('positions') or [1] * 15
-        self._ratings = ratings = dict(zip(POS_ORDER, pos_list))
-        pos = mw._primary_pos(pos_list) if p.get('positions') else '?'
-        age = person_age(p)
-        nation = mw.NATIONS.get(p.get('nation'), f"n={p.get('nation')}")
-        ca, pa = p.get('ca'), p.get('pa')
-        dev = mw._progress_rate(p)
-        self._is_gk = pos == 'GK'
-        b = self._save_data.get('b') if self._save_data else None
-        from fm_editor.patch import is_hgc
-        self._hgp = bool(p.get('hgp', False))
-        self._hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
-
-        hero = QFrame()
-        hero.setObjectName('pwPanel')
-        hero.setFixedHeight(152)
-        hl = QHBoxLayout(hero)
-        hl.setContentsMargins(16, 16, 16, 16)
-        hl.setSpacing(24)
-
-        # identity
-        idl = QHBoxLayout()
-        idl.setSpacing(14)
-        av = QLabel()
-        av.setObjectName('pwAvatar')
-        av.setFixedSize(64, 64)
-        av.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        av.setPixmap(self._svg_pixmap(_PERSON_SVG, 40))
-        idl.addWidget(av, 0, Qt.AlignmentFlag.AlignTop)
-        txt = QVBoxLayout()
-        txt.setSpacing(0)
-        name = _lab(p['name'], 'pwName')
-        name.setWordWrap(True)
-        txt.addWidget(name)
-        club = self._club_name()
-        born = self._born_text()
-        sub = ' · '.join(s for s in (POS_NAME.get(pos, pos), nation, f'{age} years ({born})', club) if s)
-        s1 = _lab(sub, 'pwSub')
-        s1.setWordWrap(True)
-        s1.setContentsMargins(0, 4, 0, 0)
-        txt.addWidget(s1)
-        self._hw_lbl = self._height_weight_line()
-        txt.addWidget(self._hw_lbl)
-        chips = _Flow(hspace=6, vspace=6)
-        for lab, on in (('HGP', self._hgp), ('HGC', self._hgc)):
-            if on:
-                c = _lab(lab, 'pwPillOn', Qt.AlignmentFlag.AlignCenter, 20)
-            elif on is False:
-                c = _lab(lab, 'pwPill', Qt.AlignmentFlag.AlignCenter, 20)
-            else:
-                c = _lab(lab + '?', 'pwPillUnk', Qt.AlignmentFlag.AlignCenter, 20)
-                c.setToolTip('Homegrown status at this club could not be determined')
-            chips.addWidget(c)
-        if p.get('injured'):
-            d = p.get('injury_days', 0)
-            chips.addWidget(_lab(f'Injured · {d} days' if d else 'Injured', 'pwChipInj', Qt.AlignmentFlag.AlignCenter, 20))
-        else:
-            chips.addWidget(_lab('Fit', 'pwChipOk', Qt.AlignmentFlag.AlignCenter, 20))
-        if dev is not None:
-            dv = _lab(f'Dev Rate <b style="color:{TIER_HEX[tier(dev)]}; margin-left:6px">{dev}</b>', 'pwChipDev',
-                      Qt.AlignmentFlag.AlignCenter, 20)
-            dv.setTextFormat(Qt.TextFormat.RichText)
-            chips.addWidget(dv)
-        chip_host = QVBoxLayout()
-        chip_host.setContentsMargins(0, 10, 0, 0)
-        chip_host.addLayout(chips)
-        txt.addLayout(chip_host)
-        txt.addStretch()
-        idl.addLayout(txt, 1)
-        hl.addLayout(idl, 1)
-
-        # CA / PA
-        big = QHBoxLayout()
-        big.setSpacing(20)
-        for lab, val, color in (('CA · Current', ca, COLORS['accent_hover']), ('PA · Potential', pa, C_POT)):
-            col = QVBoxLayout()
-            col.setSpacing(0)
-            col.addWidget(_spaced(_lab(lab.upper(), 'pwBigLab')))
-            num = _lab(str(val) if val is not None else '?', 'pwBigNum')
-            num.setStyleSheet(f'QLabel#pwBigNum {{ color:{color}; }}')
-            num.setContentsMargins(0, 2, 0, 6)
-            col.addWidget(num)
-            col.addWidget(_Bar((val or 0) / 200, color))
-            col.addStretch()
-            big.addLayout(col, 1)
-        bw = QWidget()
-        bw.setFixedWidth(208)
-        bw.setLayout(big)
-        big.setContentsMargins(0, 0, 0, 0)
-        hl.addWidget(bw)
-
-        # actions
-        hl.addWidget(self._actions())
-        return hero
 
     @staticmethod
     def _svg_pixmap(svg, size):
@@ -673,6 +625,170 @@ class PlayerWindow(QDialog):
         r.render(pa)
         pa.end()
         return px
+
+    def _cab(self, label, val, color):
+        """CA / PA box 104x52: label 10/700 + value 20/700 on one 26px row, then a 6px bar (mockup .cab)."""
+        f = QFrame()
+        f.setObjectName('pwCab')
+        f.setFixedSize(104, 52)
+        v = QVBoxLayout(f)
+        v.setContentsMargins(10, 6, 10, 0)
+        v.setSpacing(0)
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.addWidget(_spaced(_lab(label, 'pwBigLab'), 0.8), 0, Qt.AlignmentFlag.AlignVCenter)
+        top.addStretch()
+        num = _lab(str(val) if val is not None else '?', 'pwBigNum')
+        num.setStyleSheet(f'QLabel#pwBigNum {{ color:{color}; }}')
+        top.addWidget(num, 0, Qt.AlignmentFlag.AlignVCenter)
+        tw = QWidget()
+        tw.setFixedHeight(26)
+        tw.setLayout(top)
+        v.addWidget(tw)
+        v.addSpacing(3)
+        v.addWidget(_Bar((val or 0) / 200, color))
+        v.addStretch()
+        return f
+
+    def _header(self):
+        from gui import main_window as mw
+        p = self._person
+        nation = mw.NATIONS.get(p.get('nation'), f"n={p.get('nation')}")
+        hero = QFrame()
+        hero.setObjectName('pwPanel')
+        hero.setFixedHeight(80)
+        hl = QHBoxLayout(hero)
+        hl.setContentsMargins(16, 0, 16, 0)
+        hl.setSpacing(14)
+        av = QLabel()
+        av.setObjectName('pwAvatar')
+        av.setFixedSize(48, 48)
+        av.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        av.setPixmap(self._svg_pixmap(_PERSON_SVG, 30))
+        hl.addWidget(av)
+        col = QVBoxLayout()
+        col.setSpacing(5)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.addStretch(1)
+        r1 = QHBoxLayout()
+        r1.setSpacing(10)
+        r1.setContentsMargins(0, 0, 0, 0)
+        nm = _lab(p['name'], 'pwName')
+        nm.setFixedHeight(24)
+        r1.addWidget(nm, 0)
+        if self._pos:
+            r1.addWidget(self._badge(self._pos), 0, Qt.AlignmentFlag.AlignVCenter)
+        r1.addStretch(1)
+        r1w = QWidget()
+        r1w.setFixedHeight(24)
+        r1w.setLayout(r1)
+        col.addWidget(r1w)
+        sub = ' · '.join(s for s in (nation, f'{person_age(p)} years ({self._born_text()})', self._club_name()) if s)
+        s2 = _ElideLabel(sub, 'pwSub')
+        s2.setFixedHeight(16)
+        col.addWidget(s2)
+        r3 = QHBoxLayout()
+        r3.setSpacing(6)
+        r3.setContentsMargins(0, 0, 0, 0)
+        for lab, on in (('HGP', self._hgp), ('HGC', self._hgc)):
+            if on:
+                c = _lab(lab, 'pwPillOn', Qt.AlignmentFlag.AlignCenter, 20)
+            elif on is False:
+                c = _lab(lab, 'pwPill', Qt.AlignmentFlag.AlignCenter, 20)
+            else:
+                c = _lab(lab + '?', 'pwPillUnk', Qt.AlignmentFlag.AlignCenter, 20)
+                c.setToolTip('Homegrown status at this club could not be determined')
+            r3.addWidget(c)
+        if p.get('injured'):
+            d = p.get('injury_days', 0)
+            r3.addWidget(_lab(f'Injured · {d} days' if d else 'Injured', 'pwChipInj', Qt.AlignmentFlag.AlignCenter, 20))
+        else:
+            r3.addWidget(_lab('Fit', 'pwChipOk', Qt.AlignmentFlag.AlignCenter, 20))
+        r3.addSpacing(2)
+        self._hw_lbl = self._height_weight_line()
+        r3.addWidget(self._hw_lbl)
+        r3.addStretch(1)
+        r3w = QWidget()
+        r3w.setFixedHeight(20)
+        r3w.setLayout(r3)
+        col.addWidget(r3w)
+        col.addStretch(1)
+        hl.addLayout(col, 1)
+        hl.addWidget(self._cab('CA', p.get('ca'), COLORS['accent_hover']))
+        hl.addWidget(self._cab('PA', p.get('pa'), C_POT))
+        self._slot_w = QWidget()
+        self._slot_w.setObjectName('pwSlot')
+        self._slot_w.setFixedSize(172, 56)
+        sv = QVBoxLayout(self._slot_w)
+        sv.setContentsMargins(16, 0, 0, 0)
+        sv.setSpacing(3)
+        self._slot_l = _spaced(_lab('', 'pwBigLab'), 0.8)
+        self._slot_vh = QHBoxLayout()
+        self._slot_vh.setContentsMargins(0, 0, 0, 0)
+        self._slot_vh.setSpacing(8)
+        vw = QWidget()
+        vw.setFixedHeight(24)
+        vw.setLayout(self._slot_vh)
+        self._slot_s = _ElideLabel('', 'pwSlotS')
+        self._slot_s.setFixedHeight(14)
+        sv.addStretch()
+        sv.addWidget(self._slot_l)
+        sv.addWidget(vw)
+        sv.addWidget(self._slot_s)
+        sv.addStretch()
+        hl.addWidget(self._slot_w)
+        return hero
+
+    def _set_slot(self, label, widgets, sub):
+        self._slot_l.setText(label.upper())
+        while self._slot_vh.count():
+            it = self._slot_vh.takeAt(0)
+            w = it.widget()
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
+        for w in widgets:
+            self._slot_vh.addWidget(w, 0, Qt.AlignmentFlag.AlignVCenter)
+        self._slot_vh.addStretch()
+        self._slot_s._full = sub or ''
+        self._slot_s.setText(sub or '')
+
+    @staticmethod
+    def _slot_val(text, color=None):
+        lbl = _lab(text, 'pwSlotV')
+        if color:
+            lbl.setStyleSheet(f'QLabel#pwSlotV {{ color:{color}; }}')
+        return lbl
+
+    def _slot_profile(self):
+        from gui import main_window as mw
+        dev = mw._progress_rate(self._person)
+        if dev is None:
+            return 'Dev Rate', [self._slot_val('-')], ''
+        return 'Dev Rate', [self._slot_val(str(dev), TIER_HEX[tier(dev)])], 'out of 20'
+
+    def _slot_contract(self):
+        return 'Contract until', [self._slot_val(self._contract_until() or '-')], self._club_name()
+
+    def _slot_transfer(self):
+        v = self._data.get('value')
+        if v:
+            return 'Value', [self._slot_val(v)], 'Estimated range'
+        return 'Value', [self._pend_chip()], 'Not in the save yet'
+
+    def _slot_positions(self):
+        R = self._ratings
+        best = self._best_pos(R)
+        v = R[best]
+        return 'Best position', [self._badge(best, True), self._slot_val(str(v), TIER_HEX[tier(v)])], word(v)
+
+    def _slot_history(self):
+        return 'Apps · Goals', [self._pend_chip()], 'Not in the save yet'
+
+    def _best_pos(self, R):
+        """Highest rating; ties -> the listed (primary) position, then mockup list order."""
+        return sorted(POS_DISPLAY, key=lambda q: (-R[q], q != self._pos, POS_DISPLAY.index(q)))[0]
 
     def _born_text(self):
         p = self._person
@@ -690,39 +806,33 @@ class PlayerWindow(QDialog):
         h, w = d.get('height_cm'), d.get('weight_kg')
         host = QWidget()
         hb = QHBoxLayout(host)
-        hb.setContentsMargins(0, 2, 0, 0)
+        hb.setContentsMargins(0, 0, 0, 0)
         hb.setSpacing(6)
         if h is None or w is None:
-            hb.addWidget(_lab('Height / weight', 'pwSub'))
+            hb.addWidget(_lab('Height / weight', 'pwHw'))
             hb.addWidget(self._pend_chip(), 0, Qt.AlignmentFlag.AlignVCenter)
             if not self._show_pending():
                 host.setVisible(False)
         else:
-            hb.addWidget(_lab(f'{h} cm · {w} kg', 'pwSub'))
-        hb.addStretch()
+            hb.addWidget(_lab(f'{h} cm · {w} kg', 'pwHw'))
         return host
 
-    def _actions(self):
-        w = QWidget()
-        w.setFixedWidth(196)
-        v = QVBoxLayout(w)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
-        v.addStretch()
-        if self._shortlisted:
-            sl = QPushButton('✓ On Player Shortlist')
-            sl.setObjectName('pwShortOn')
-            sl.setEnabled(False)
-        else:
-            sl = QPushButton('Add to Shortlist')
-            sl.setObjectName('pwPrimary')
-            sl.setCursor(Qt.CursorShape.PointingHandCursor)
-            sl.clicked.connect(lambda checked=False: self._do_add_shortlist())
-        sl.setFixedHeight(32)
-        v.addWidget(sl)
-        two = QHBoxLayout()
-        two.setSpacing(8)
-        tips = 'Open the player from Squads to patch homegrown status.'
+    # -- action strip (persistent) -----------------------------------------------------------------
+    def _action_strip(self):
+        strip = QFrame()
+        strip.setObjectName('actionStrip')
+        strip.setFixedHeight(52)
+        h = QHBoxLayout(strip)
+        h.setContentsMargins(12, 0, 12, 0)
+        h.setSpacing(8)
+        h.addStretch(1)
+        close = QPushButton('Close')
+        close.setObjectName('pwGhost')
+        close.setFixedHeight(32)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.clicked.connect(lambda checked=False: self.reject())
+        h.addWidget(close)
+        tips = 'Open from Squads to patch'
         for mode, lab, is_set, ok in (('hgp', 'HGP', self._hgp, True), ('hgc', 'HGC', self._hgc, self._hgc is not None)):
             btn = QPushButton(f'{lab} set' if is_set else f'Make {lab}')
             btn.setObjectName('pwGhost')
@@ -733,10 +843,117 @@ class PlayerWindow(QDialog):
             elif not is_set and not ok:
                 btn.setToolTip('Club unknown for this player.')
             btn.clicked.connect(lambda checked=False, m=mode: self._emit_patch(m))
-            two.addWidget(btn, 1)
-        v.addLayout(two)
+            h.addWidget(btn)
+        if self._shortlisted:
+            sl = QPushButton('✓ On Player Shortlist')
+            sl.setObjectName('pwShortOn')
+            sl.setEnabled(False)
+        else:
+            sl = QPushButton('Add to Shortlist')
+            sl.setObjectName('pwPrimary')
+            sl.setCursor(Qt.CursorShape.PointingHandCursor)
+            sl.clicked.connect(lambda checked=False: self._do_add_shortlist())
+        sl.setFixedHeight(32)
+        sl.setMinimumWidth(164)
+        h.addWidget(sl)
+        return strip
+
+    # -- positions tab -------------------------------------------------------------------------------
+    def _tile_label(self, v, t, width=None):
+        lbl = QLabel(str(v))
+        lbl.setFixedHeight(20)
+        lbl.setMinimumWidth(width or 30)
+        if width:
+            lbl.setFixedWidth(width)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet(f'QLabel {{ background:{_rgba(t)}; color:{TIER_HEX[t]}; border-radius:3px; '
+                          f'font-size:12px; font-weight:bold; padding:0 6px; }}')
+        return lbl
+
+    def _positions_list(self):
+        R = self._ratings
+        seg, _cur, fut = self._seg('Current', 'Future', right_enabled=False, right_tip=_FUTURE_TIP)
+        panel, v = self._panel('Positions', seg)
+        panel.setFixedWidth(456)
+        for i, pos in enumerate(POS_DISPLAY):
+            val = R[pos]
+            nat = val >= 20
+            row = QFrame()
+            row.setObjectName('pwRowNat' if nat else 'pwRowAlt' if i % 2 == 0 else 'pwRow')
+            row.setFixedHeight(26)
+            h = QHBoxLayout(row)
+            h.setContentsMargins(12, 0, 12, 0)
+            h.setSpacing(8)
+            h.addWidget(self._badge(pos, True))
+            h.addWidget(_lab(POS_FULL[pos], 'pwPosNameB' if pos == self._pos else 'pwPosName'), 1)
+            h.addWidget(self._tile_label(val, tier(val), 34))
+            w = _lab(word(val), 'pwWordNat' if nat else 'pwWord')
+            w.setFixedWidth(112)
+            h.addWidget(w)
+            v.addWidget(row)
+        raw = self._person.get('raw_attrs') or []
+        if len(raw) > 25:
+            lf, rf = self._disp(raw[24]), self._disp(raw[25])
+            footed = ('Left-footed' if lf > rf else 'Right-footed') if abs(lf - rf) >= 4 else 'Either foot'
+            sub = QWidget()
+            sub.setFixedHeight(30)
+            sh = QHBoxLayout(sub)
+            sh.setContentsMargins(12, 0, 12, 0)
+            sh.addWidget(_spaced(_lab('FEET', 'pwSubT')))
+            sh.addStretch()
+            sh.addWidget(_lab(footed, 'pwSubE'))
+            v.addSpacing(4)
+            v.addWidget(sub)
+            for i, (name, val) in enumerate((('Left Foot', lf), ('Right Foot', rf))):
+                row = QFrame()
+                row.setObjectName('pwRowAlt' if i == 0 else 'pwRow')
+                row.setFixedHeight(26)
+                h = QHBoxLayout(row)
+                h.setContentsMargins(12, 0, 12, 0)
+                h.setSpacing(8)
+                h.addWidget(_lab(name, 'pwPosName'), 1)
+                h.addWidget(self._tile_label(val, tier(val), 34))
+                w = _lab(foot_word(val), 'pwWord')
+                w.setFixedWidth(112)
+                h.addWidget(w)
+                v.addWidget(row)
         v.addStretch()
-        return w
+        v.addWidget(self._positions_key())
+        return panel
+
+    def _positions_key(self):
+        key = QWidget()
+        kv = QVBoxLayout(key)
+        kv.setContentsMargins(12, 6, 12, 12)
+        kv.setSpacing(4)
+        lg = QHBoxLayout()
+        lg.setSpacing(12)
+        for lab, t in (('1–4', 1), ('5–8', 2), ('9–11', 3), ('12–13', 4), ('14–16', 5), ('17–20', 6)):
+            sw = QLabel()
+            sw.setFixedSize(10, 10)
+            sw.setStyleSheet(f'QLabel {{ background:{TIER_HEX[t]}; border-radius:2px; }}')
+            lg.addWidget(sw)
+            lg.addSpacing(-7)
+            lg.addWidget(_lab(lab, 'pwNote'))
+        lg.addStretch()
+        kv.addLayout(lg)
+        txt = _lab('White ring = Natural (20) · bold = listed position<br>'
+                   '<span style="color:#FFFFFF">Natural</span> 20 · Accomplished 15–19 · Competent 10–14<br>'
+                   'Unconvincing 5–9 · Awkward 2–4 · Ineffective 1', 'pwNote')
+        txt.setTextFormat(Qt.TextFormat.RichText)
+        kv.addWidget(txt)
+        return key
+
+    def _positions_pitch(self):
+        f = QFrame()
+        f.setObjectName('pwPanel')
+        f.setMaximumWidth(444)
+        f.setMinimumWidth(300)
+        v = QVBoxLayout(f)
+        v.setContentsMargins(1, 1, 1, 1)
+        v.addWidget(_PitchBig(self._ratings), 1)
+        f.setMinimumHeight(440)
+        return f
 
     # attribute grid -----------------------------------------------------------------------------
     def _attr_panel(self):
@@ -746,29 +963,8 @@ class PlayerWindow(QDialog):
         rh.setSpacing(8)
         self._note = _lab('', 'pwNote')
         rh.addWidget(self._note)
-        seg = QFrame()
-        seg.setObjectName('pwSeg')
-        sl = QHBoxLayout(seg)
-        sl.setContentsMargins(0, 0, 0, 0)
-        sl.setSpacing(0)
-        self._seg_cur = QPushButton('Current')
-        self._seg_cur.setObjectName('pwSegL')
-        self._seg_pot = QPushButton('At potential')
-        self._seg_pot.setObjectName('pwSegR')
-        grp = QButtonGroup(self)
-        grp.setExclusive(True)
-        bold = QFont()
-        bold.setPixelSize(11)
-        bold.setBold(True)
-        fm = QFontMetrics(bold)
-        for b in (self._seg_cur, self._seg_pot):
-            b.setCheckable(True)
-            b.setFixedSize(fm.horizontalAdvance(b.text()) + 28, 24)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            grp.addButton(b)
-            sl.addWidget(b)
-        self._seg_cur.setChecked(True)
-        self._seg_group = grp
+        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'At potential')
+        self._seg_group = seg._grp
         p = self._person
         enabled, tip = _pot.availability(p.get('ca'), p.get('pa'), person_age(p))
         self._pot_note = tip if enabled else ''
@@ -802,6 +998,11 @@ class PlayerWindow(QDialog):
         old.hide()
         old.deleteLater()
         self._cap.setVisible(on)
+        if getattr(self, '_rec_slot', None) is not None:
+            oldp = self._rec_slot.takeAt(0).widget()
+            self._rec_slot.addWidget(self._rec_panel())
+            oldp.hide()
+            oldp.deleteLater()
         note = ''
         if on:
             note = self._pot_note
@@ -862,16 +1063,9 @@ class PlayerWindow(QDialog):
     def _tile(self, cur, new, lower_better):
         # "At potential" replaces the current value with the projected one (toggle back to compare)
         v = new if self._pot_on else cur
-        t = tier(21 - v if lower_better else v)
-        lbl = QLabel(str(v))
-        lbl.setFixedHeight(20)
-        lbl.setMinimumWidth(28)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(f'QLabel {{ background:{_rgba(t)}; color:{TIER_HEX[t]}; border-radius:3px; '
-                          f'font-size:12px; font-weight:bold; padding:0 6px; }}')
-        return lbl
+        return self._tile_label(v, tier(21 - v if lower_better else v))
 
-    # rail (personality + traits; the contract panel lives on the Contract tab) ---------------------------------------------------------------------------------------
+    # rail (personality + traits) ---------------------------------------------------------------------
     def _rail(self):
         w = QWidget()
         w.setFixedWidth(216)
@@ -882,8 +1076,56 @@ class PlayerWindow(QDialog):
         tp = self._traits_panel()
         if tp is not None:
             v.addWidget(tp)
+        self._rec_slot = QVBoxLayout()
+        self._rec_slot.setContentsMargins(0, 0, 0, 0)
+        self._rec_slot.addWidget(self._rec_panel())
+        v.addLayout(self._rec_slot)
         v.addStretch()
         return w
+
+    def _rec_panel(self):
+        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | At potential
+        toggle. Owned traits are ticked; a quiet line when nothing reaches the Settings threshold."""
+        thr = _settings.load()['trait_threshold']
+        raw = self._person.get('raw_attrs') or []
+        panel, v = self._panel('Recommended traits')
+        panel.setToolTip('Average of the attributes behind each trait (source: GuideToFM).\n'
+                         f'Needs an average of {thr}+ (Settings > Trait recommender threshold).')
+        note = ''
+        if self._is_gk or len(raw) < 54:
+            note = 'Not applicable to goalkeepers.' if self._is_gk else 'No attribute data.'
+            recs = []
+        else:
+            attrs = ([_pot.display_value(x) for x in self._projection().proj] if self._pot_on
+                     else _tr.attrs_from_raw(raw))
+            have = trait_ids(self._person.get('trait_mask') or 0)
+            recs = [r for r in _tr.recommend(attrs, thr, have) if r.met or r.has][:5]
+            if not recs:
+                note = f'No trait reaches an average of {thr}.'
+        for i, r in enumerate(recs):
+            row = QFrame()
+            row.setObjectName('pwRowAlt' if i % 2 else 'pwRow')
+            h = QHBoxLayout(row)
+            h.setContentsMargins(12, 2, 12, 2)
+            h.setSpacing(6)
+            n = _lab(('\u2713 ' if r.has else '') + r.name, 'pwKvL' if r.has else 'pwTrait')
+            n.setWordWrap(True)
+            tip = r.desc + ('\nPlayer already has this trait.' if r.has else '')
+            if r.missing:
+                tip += '\nBelow ' + str(thr) + ': ' + ', '.join(f'{a} {x}' for a, x in r.missing)
+            n.setToolTip(tip)
+            h.addWidget(n, 1)
+            sc = _lab(f'{r.score:.1f}', 'pwKvR', Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            sc.setFixedWidth(30)
+            sc.setStyleSheet(f'QLabel#pwKvR {{ color:{TIER_HEX[tier(round(r.score))]}; font-weight:bold; }}')
+            h.addWidget(sc)
+            v.addWidget(row)
+        if note:
+            v.addWidget(_lab(note, 'pwNote'))
+            v.itemAt(v.count() - 1).widget().setContentsMargins(12, 6, 12, 6)
+            v.itemAt(v.count() - 1).widget().setWordWrap(True)
+        v.addSpacing(4)
+        return panel
 
     def _contract_panel(self):
         d = self._data
