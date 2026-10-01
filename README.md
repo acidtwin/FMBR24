@@ -2,17 +2,18 @@
 
 # FM Backroom 24 (FMBR24)
 
-PyQt6 desktop tool for viewing and editing Football Manager 2024 save files on Linux.
+PyQt6 desktop tool for browsing Football Manager 2024 save files on Linux, with one focused edit: homegrown (HGP/HGC) patching.
 
-- Club overview and Save Info (game, database and manager details read from the save)
-- Squads with full attributes, injuries and contract dates; club and global staff tables
-- Scouting reports (prospects, wonderkids, best in position/role), quick filters and separate player and staff shortlists
-- Homegrown patching: mark players HGP (nation) or HGC (club); Save Changes makes two rolling backups (`.bk1`/`.bk2`) and overwrites the save in place
+- Save Info and Club overview (reputation, stadium, league position, finances, contracts, injuries)
+- Squads with full attributes; club staff; scouting tables over every player and staff member in the database
+- Reports (Best Prospects, Wonderkids, Best in Position, Best by Role) with quick filters, and separate player and staff shortlists
+- Detailed player window: ability and potential (stars or numbers), attribute radar, Full Potential projection, traits, season stats, career history
+- Homegrown patching: queue HGP (nation) or HGC (club) for your own club's players, then Save Changes: a verified temp file, two rolling backups (`.bk1`/`.bk2`), atomic replace, automatic reload
 
 ## Run
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # PyQt6, zstandard, numpy
 python main.py
 ```
 

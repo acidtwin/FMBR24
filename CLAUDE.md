@@ -5,53 +5,43 @@ PyQt6 6.11 desktop app, Linux, Python 3.12, FM24 saves only (formerly "FM24 Home
 ## Run / test
 
 ```bash
-pip install -r requirements.txt  # PyQt6, zstandard
+pip install -r requirements.txt   # PyQt6, zstandard, numpy
 python main.py                    # crash log: /tmp/fm_editor_debug.log
-python3 tests/test_saveinfo.py    # also test_saveinfo_format.py, test_club_contracts.py (plain scripts, skip if save absent)
+FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<name>.py   # plain scripts, no pytest
 ```
 
-## Key files
+Always set `FMBR24_CONFIG_DIR` (temp dir) for tests and verification: the real `~/.config/fm24_editor/settings.json` must stay untouched. Tests that need the real save print `SKIPPED` and exit 0 when it is absent. Read `HANDOVER.md` (state, architecture/UI map, TODOs) and `PRODUCT.md` (scope) before big work. FM24 binary format: memory `fm24-binary-format.md`, check it before touching a parser. Bump `_CACHE_VERSION` (`fm_editor/cache.py`) when a parsed field is added or changes.
 
-- `gui/main_window.py` — all UI/logic (~5900 lines); `gui/theme.py` (COLORS + app QSS), `gui/roles.py`, `gui/icon.py` (`make_app_icon`), `gui/assets/` (hero/sidebar/brand images)
-- `fm_editor/` — `archive.py` (FMF/zstd), `gamedb.py` (game_db.dat parser), `patch.py` (HGP/HGC), `saveinfo.py` (Save Info parser), `cache.py` (parse cache, `_CACHE_VERSION`), `weights.py`
-- `resources/icon-source.png` (master) + `resources/icons/icon-{16..512}.png`; `mockups/` design references
-- `HANDOVER.md` — state, UI map, key symbols, TODOs. `PRODUCT.md` — purpose/scope. Read both before big work.
-- FM24 binary format: memory file `fm24-binary-format.md` — always check before touching the parser.
+## Workflow rules
+
+- **Mockup first:** every VISUAL change to the player window (and other designed surfaces) is made and approved in `mockups/player-window.html` (or that surface's mockup) BEFORE app code changes; then build the app mechanically from it. Exception: pure bug fixes with no visual design decision. The user tests the LIVE mockup at http://localhost:8792 (`cd mockups && python3 -m http.server 8792`) by refreshing; do not send screenshots to the user (take them only for your own checks).
+- **Homegrown (HGP/HGC) changes never open dialogs:** they are queued, then Save Changes writes them (one confirm dialog at Save only).
+- **Button order:** Close is ALWAYS the last (far-right) button of any button row or action strip (player window: Add to Shortlist / Close). Applies to every dialog and mockup you touch.
+- **Verify UI headlessly:** construct `MainWindow()` under `QT_QPA_PLATFORM=offscreen`, `.grab().save('x.png')` and LOOK at the PNG; reading QSS misses bugs. Sub-agents without Bash (cavecrew-builder) cannot run tests: verify their output yourself.
+- **Sub-agent worktrees:** create the worktree off `main`, merge back with `--no-ff`, then delete the worktree AND its branch. Do not delete someone else's worktree without asking. No bare `git stash` in worktrees (the stash list is shared by all of them).
+
+## Mockup -> PyQt6 rule
+
+When told to match a mockup 1:1: read the artifact HTML/CSS first, extract every value (px, opacity, gradient stops, alpha, letter-spacing, font-size, radius), translate mechanically, never by eye. `rgba(r,g,b,a)` -> `QColor(r,g,b,round(a*255))`; `background-position: center X%` -> `y_off=int((h-scaled.height())*X/100)`; CSS `opacity` on image -> `p.setOpacity(N)`; gradient stops -> `grad.setColorAt(pos, QColor(...))`.
+
+## Star ratings rule
+
+FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, later more) that we convert to stars MUST keep a raw-number mode too, switched by the Settings option (`ability_display`, Stars / Numbers; extend that option or add a sibling key, never hard-code stars). Use the shared helper in `fm_editor/abilitystars.py` (one place for the value -> stars mapping, `half_stars` rounding) and the shared star widget (`gui/stars.py`); in stars mode keep the raw number in a tooltip. Add the setting default, Reset-to-defaults handling and a test whenever a new rating is converted. Mappings are approximations of FM's relative stars: document them and keep them adjustable in one place. Never remove the numbers option.
 
 ## PyQt6 / Qt gotchas (burned us before)
 
-- `clicked(bool)` passes checked as first arg — `lambda checked, k=key:`, never `lambda k=key:`
-- `ResizeToContents` on headers → O(n²) freeze; use `Interactive` + fixed widths on ALL tables
-- `QApplication.processEvents()` in a slot → re-entrant loop → qFatal; never mid-populate
-- Loop var `w` overwriting a widget ref → GC RuntimeError; use `cw`/`idx`. Keep refs for widgets removed from layouts (`_squad_header_bar`)
-- `disconnect()` raises `RuntimeError` or `TypeError` by version — catch both; `next()` needs a default + guard
-- Bare `QFrame {…}` selectors leak onto child QLabels (QLabel is a QFrame) — scope with `QFrame#objectName`
+- `clicked(bool)` passes checked as first arg: `lambda checked, k=key:`, never `lambda k=key:`
+- `ResizeToContents` on headers -> O(n^2) freeze; use `Interactive` + fixed widths on ALL tables
+- `QApplication.processEvents()` in a slot -> re-entrant loop -> qFatal; never mid-populate
+- Loop var `w` overwriting a widget ref -> GC RuntimeError; use `cw`/`idx`. Keep refs for widgets removed from layouts (`_squad_header_bar`)
+- `disconnect()` raises `RuntimeError` or `TypeError` by version: catch both; `next()` needs a default + guard
+- Bare `QFrame {...}` selectors leak onto child QLabels (QLabel is a QFrame): scope with `QFrame#objectName`
 - A per-widget `setStyleSheet` shadows app QSS for overlapping selectors/subcontrols (caused the spinbox arrow gap); QSpinBox needs explicit up/down-button heights (theme.py)
-- QSS `opacity`, `letter-spacing`, `text-transform`, keyframes are not honoured — use `QFont` letter spacing, `.upper()`, QTimer + stylesheet (`_tick_shimmer`), `setOpacity` when painting
-- `border-radius` ≥ half the size renders square
-- Dialog-scoped QSS: app QSS `QWidget{background}` paints every plain QWidget opaque; add `QDialog#x QWidget{background:transparent}` FIRST and prefix later rules with the same `QDialog#x` (equal specificity, later wins). Wrapped QLabels/Flow layouts and `replaceWidget` need `processEvents()` before `grab()` in offscreen checks.
+- QSS `opacity`, `letter-spacing`, `text-transform`, keyframes are not honoured: use `QFont` letter spacing, `.upper()`, QTimer + stylesheet (`_tick_shimmer`), `setOpacity` when painting
+- `border-radius` >= half the size renders square
+- Dialog-scoped QSS: app QSS `QWidget{background}` paints every plain QWidget opaque; add `QDialog#x QWidget{background:transparent}` FIRST and prefix later rules with the same `QDialog#x` (equal specificity, later wins). Wrapped QLabels/Flow layouts and `replaceWidget` need `processEvents()` (twice) before `grab()` in offscreen checks.
 - Barlow Condensed / Inter are not installed (fallback Noto Sans)
-
-## Verify UI headlessly
-
-`QT_QPA_PLATFORM=offscreen`, construct `MainWindow()`, `.grab().save('x.png')` and LOOK at the PNG — reading QSS misses bugs. Sub-agents without Bash (cavecrew-builder) cannot run tests: verify their output yourself.
-
-## Mockup → PyQt6 rule
-
-When told to match a mockup 1:1: read the artifact HTML/CSS first, extract every value (px, opacity, gradient stops, alpha, letter-spacing, font-size, radius), translate mechanically, never by eye. `rgba(r,g,b,a)` → `QColor(r,g,b,round(a*255))`; `background-position: center X%` → `y_off=int((h-scaled.height())*X/100)`; CSS `opacity` on image → `p.setOpacity(N)`; gradient stops → `grad.setColorAt(pos, QColor(...))`.
 
 ## Repo / GitHub
 
 Own git repo (branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, private). The parent `Claude Code Projects` folder is a separate monorepo: never push it. Commit/push only when asked, specific `git add` paths. SSH agent + `gh` details in memory `reference-github-setup.md`. Never store credentials/passphrases anywhere.
-
-## Star ratings rule
-
-FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, later more) that we convert to stars MUST keep a raw-number mode too, switched by the Settings option (`ability_display`, Stars / Numbers; extend that option or add a sibling key, never hard-code stars). Use the shared helper in `fm_editor` (one place for the value -> stars mapping) and the shared star widget; in stars mode keep the raw number in a tooltip. Add the setting default, Reset-to-defaults handling and a test whenever a new rating is converted. Mappings are approximations of FM's relative stars: document them and keep them adjustable in one place. Never remove the numbers option.
-
-## Button order rule
-
-A Close button is ALWAYS the last (far-right) button of any button row or action strip (player window: Add to Shortlist / Close). Apply it to every dialog and mockup you touch.
-
-## Mockup first
-
-Every VISUAL change to the player window (and other designed surfaces) is made and approved in `mockups/player-window.html` (or that surface's mockup) BEFORE any app code changes. Show the user mockup screenshots, wait for their pick, then build the app mechanically from the mockup. Exception: pure bug fixes with no visual design decision.
