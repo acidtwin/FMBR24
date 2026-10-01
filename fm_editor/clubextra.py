@@ -148,7 +148,7 @@ def find_human_scouting_budget(b):
 
 def rep_stars(rep):
     """Club reputation (1-10000) -> stars 0-5 in half steps. FITTED, not decoded: rep/2000 rounded to the nearest
-    half star matches in-game screens (Barnet 4349=2, Charlton 6153=3, Barcelona 9005=4.5), except the top end:
+    half star matches in-game screens (Miguelturra 750=0.5, Cheltenham 3947=2, Barnet 4349=2, Charlton 6153=3, Rennes 8046=4, Barcelona 9005=4.5, Real Madrid 9053=4.5), except the top end:
     PSG 9197 shows 5, Real Madrid 9053 and Barcelona 9005 show 4.5, so 5 stars starts at 9125 (midpoint of 9053..9197, unverified). More screenshots refine it."""
     if not rep:
         return 0.0
