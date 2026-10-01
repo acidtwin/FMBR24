@@ -7,6 +7,8 @@ anything that does not match structurally - callers show PENDING for missing val
 import re
 import struct
 
+from fm_editor.abilitystars import half_stars
+
 _u32 = lambda b, p: struct.unpack_from('<I', b, p)[0]
 
 # -- Club status table: reputation (1-10000) + last completed season's league finish ------------
@@ -166,9 +168,9 @@ def find_human_scouting_budget(b):
 
 
 def rep_stars(rep):
-    """Club reputation (1-10000) -> stars 0-5 in half steps. FITTED, not decoded: rep/2000 rounded to the nearest
+    """Club reputation (1-10000) -> stars 0-5 in half steps. FITTED, not decoded: rep/2000 rounded half up to the nearest
     half star matches in-game screens (Miguelturra 750=0.5, Cheltenham 3947=2, Barnet 4349=2, Charlton 6153=3, Rennes 8046=4, Barcelona 9005=4.5, Real Madrid 9053=4.5), except the top end:
     PSG 9197 shows 5, Real Madrid 9053 and Barcelona 9005 show 4.5, so 5 stars starts at 9125 (midpoint of 9053..9197, unverified). More screenshots refine it."""
     if not rep:
         return 0.0
-    return 5.0 if rep >= 9125 else min(4.5, round(rep / 2000 * 2) / 2)
+    return 5.0 if rep >= 9125 else min(4.5, half_stars(rep / 2000))
