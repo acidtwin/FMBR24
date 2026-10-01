@@ -1,10 +1,10 @@
 # FM Backroom 24 — Handover
 
-**Last updated:** 2026-10-01 (end of session 16). Repo: `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor` (own git repo, branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, private). Check `git status` for uncommitted work. Deep binary facts: memory `fm24-binary-format.md`.
+**Last updated:** 2026-10-02 (end of session 17). **START WITH the 'RESUME HERE' section below** (branch map: work lives on `cleanup/all` in worktree `.claude/worktrees/all`, NOT on `main`; the lines in 'Current state' below that mention session-16 facts are partly stale: cache is now `_CACHE_VERSION = 29`, `load_cache` IS used on normal Load, full parse ~15 s, cached load ~2 s, 18 test scripts in tests/). Repo: `/run/media/acidtwin/Gaming SSD 1/Claude Code Projects/FM-Save-Editor` (own git repo, branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, private). Check `git status` for uncommitted work. Deep binary facts: memory `fm24-binary-format.md`.
 
 ## Current state
 
-- PyQt6 FM24 save tool ("FM Backroom 24", FMBR24; unofficial, FM24 only, Linux). Tested on a real Tottenham 2026-27 save (~188 MB, full parse ~39 s headless).
+- PyQt6 FM24 save tool ("FM Backroom 24", FMBR24; unofficial, FM24 only, Linux). Tested on a real Tottenham 2026-27 save (~190-240 MB, full parse ~15 s since the numpy prefilters, 2 s from cache).
 - Parse cache `_CACHE_VERSION = 23` (22 = `birth_day`, 23 = `trait_mask`) (`fm_editor/cache.py`; stores people, squads, clubs, `save_info`). `load_cache` is imported in `gui/main_window.py` but never called, so every load re-parses (perf win available).
 - Tests (plain scripts, run with `python3 tests/<file>`): `test_saveinfo.py` (real save, skips if absent), `test_saveinfo_format.py`, `test_club_contracts.py`, `test_club_info.py`, `test_settings.py`, `test_player_stats.py`, `test_squads.py` (real save, ~30 s).
 - Cache/config dirs still `~/.cache/fm24_editor`, `~/.config/fm24_editor` (active weight preset in `settings.json`) — intentional.
