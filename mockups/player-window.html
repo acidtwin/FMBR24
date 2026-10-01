@@ -16,9 +16,11 @@ HOW TO USE
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   unk (HGC status unknown: 'HGC?' + Make HGC disabled)
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
-    nums (CA/PA/Dev Rate as numbers instead of stars)
+    nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your squad': no Make HGP/HGC buttons at all)
     tips (pin the tooltips so they show in a screenshot)
   Screenshot mode: ?bare before the # hides the review bar + OS title bar so the window starts at 0,0 (1122x760).
+  Profile layouts (3 candidates, user picks): ?profile=a|b|c (A Scouting card, B Dashboard, C Dossier) or the review-bar 'profile' toggle; ?full (with ?bare) lets the window grow for screenshots.
+  Recommended traits now live on the Training tab.
   Texture variants: ?tex=a|b|c|off before the # (or the 'texture' toggle in the review bar), e.g.  ?tex=b#positions
   e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
@@ -85,6 +87,7 @@ OPEN QUESTIONS
   --k4:rgba(230,234,240,0.14); --k5:rgba(234,217,92,0.14); --k6:rgba(82,194,135,0.14);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+html.full .win{height:auto;min-height:760px}html.full .main{flex:none;min-height:0}html.full .content{overflow:visible}
 html.bare .rv,html.bare .cap,html.bare .os{display:none}
 html.bare body{padding:0;background:#14151A;overflow:hidden}
 html.bare .viewport{max-width:none;overflow:visible}
@@ -305,7 +308,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .tr2 .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-rail{width:216px;flex:none;display:flex;flex-direction:column;gap:12px}
 .prs{display:flex;align-items:center;gap:8px;height:26px;padding:0 12px}
-.prs .an{width:96px;color:var(--tx2);flex:none} .prs b{width:22px;text-align:right}
+.p-rail .prs .an{width:96px;color:var(--tx2);flex:none} .prs b{width:22px;text-align:right}
 .trow{padding:4px 12px;line-height:17px;display:flex;align-items:center;font-weight:var(--semi)}
 .trow:nth-child(even){background:var(--alt)}
 .trow.mute{color:var(--tx2);font-weight:400}
@@ -318,6 +321,34 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .rec.has .n{color:var(--tx2);font-weight:400}
 .rec b{width:30px;text-align:right;flex:none}
 .rnote{padding:6px 12px;color:var(--tx2);font-size:11px;line-height:15px}
+
+/* ---- PROFILE layouts (?profile=a|b|c): shared bits ---- */
+.pcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.prow{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.prow.st{align-items:stretch}
+.prow>.fl{flex:1;min-width:0}
+.sw{display:inline-flex;align-items:center;gap:8px;height:24px;padding:0 2px 0 8px;border-radius:3px;background:var(--bg);border:1px solid var(--border);white-space:nowrap}
+.swr{display:flex;flex-wrap:wrap;gap:6px;padding:2px 12px 12px}
+.bpr{height:24px;padding:0 12px;display:flex;align-items:center;gap:8px}
+.bpr:nth-child(even){background:var(--alt)}
+.bpr.nat,.bpr.nat:nth-child(even){background:var(--sel)}
+.bpr .wd{flex:1;color:var(--tx2);white-space:nowrap}.bpr.nat .wd{color:#fff;font-weight:700}
+.sc{flex:1;min-width:0;padding:8px 12px 10px;border-left:1px solid var(--border)}
+.sc:first-child{border-left:none}
+.sc small{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);height:14px;line-height:14px}
+.sc b{display:block;font-size:16px;line-height:24px;font-weight:700;white-space:nowrap}
+.sc em{display:block;font-style:normal;font-size:11px;color:var(--tx2);height:14px;line-height:14px}
+.srow{display:flex;border-top:1px solid var(--border)}
+.pmg{display:flex;flex-wrap:wrap;padding:0 4px 8px}
+.pmi{width:25%;display:flex;flex-direction:column;justify-content:center;gap:4px;height:38px;padding:0 10px}
+.pmi div{display:flex;justify-content:space-between;gap:6px}
+.pmi .bar{flex:none}
+.pmi .an{color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.mute{background:transparent;border:1px dashed var(--border2);color:var(--tx2);font-weight:400}
+.tcw{display:flex;flex-wrap:wrap;gap:6px;padding:2px 12px 12px}
+.card{flex:1;min-width:0}
+.card .kv .r{display:flex;align-items:center;gap:6px}
+.rd{display:block;margin:0 auto}
 /* ---- HISTORY (Career history table; widths 78 | club flex | kind 52 | apps 44 | goals 44 | fee 70, gap 8, row 26) ---- */
 .hrow{height:26px;padding:0 12px;display:flex;align-items:center;gap:8px;flex:none}
 .hrow.alt{background:var(--alt)}
@@ -363,6 +394,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
   <h1>Player window</h1>
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
   <span class="lab">texture</span><div class="rseg" id="texSeg"></div>
+  <span class="lab">profile</span><div class="rseg" id="pfSeg"></div>
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
@@ -404,6 +436,7 @@ const SLOTS={
 const OUT={
  name:'Micky van de Ven',pos:'DC',nat:'Netherlands',age:26,born:'12 Apr 2000',club:'Tottenham',ca:149,pa:160,dev:16,inj:0,
  until:'Jun 2031',start:'Jul 2024',wage:'£100K p/w',value:'£93M',height:'193 cm',weight:'81 kg',
+ stats:{apps:27,starts:25,subs:2,goals:3,assists:1,min:2310,potm:2,avg:7.12},
  potNote:'PA is rarely reached after 26.',
  traits:['Marks Opponent Tightly','Tries Long Range Passes','Trait #53','Brings Ball Out Of Defence'],
  /* Recommended traits (fm_editor/traitrec.py; ticked = player already has it): [name, score, has]; recP = at Full Potential */
@@ -422,6 +455,7 @@ const OUT={
 const GKP={
  name:'Guglielmo Vicario',pos:'GK',nat:'Italy',age:29,born:'7 Oct 1996',club:'Tottenham',ca:138,pa:142,dev:13,inj:0,
  until:'Jun 2029',start:'Aug 2022',wage:'£85K p/w',value:'£34M',height:'194 cm',weight:'89 kg',
+ stats:{apps:30,starts:30,subs:0,goals:0,assists:0,min:2700,potm:3,avg:7.05},
  potNote:'PA is rarely reached after 26.',
  traits:[],recNote:'Not applicable to goalkeepers.',
  pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],persLabel:'Professional',
@@ -466,11 +500,13 @@ Object.entries(SAMPLES).forEach(([k,d])=>{for(const g in d.g)d.g[g].forEach(a=>{
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,unk:false,nopend:false,data:false,tips:false};
+const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,unk:false,nopend:false,data:false,tips:false,other:false};
 const D=()=>SAMPLES[S.smp];
+if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
 /* texture: ?tex=a|b|c|off (query string, before the #) */
 const TEXS=[['off','Off'],['a','A Pitch lines'],['b','B Steel'],['c','C Floodlit']];
+S.profile=(new URLSearchParams(location.search).get('profile')||'a').toLowerCase();if(!['a','b','c'].includes(S.profile))S.profile='a';
 S.tex=(new URLSearchParams(location.search).get('tex')||'off').toLowerCase();if(!TEXS.some(t=>t[0]===S.tex))S.tex='off';
 /* seeded noise tiles (stand-ins for pre-rendered QPixmap tiles): fine grain (dense, alpha<=14/255) and dust (sparse specks) */
 function mkTile(fn){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),im=x.createImageData(128,128);let r=1234567;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;fn(im.data,rnd);x.putImageData(im,0,0);return `url(${c.toDataURL()})`}
@@ -539,7 +575,7 @@ function actionStrip(){
     :S.scout?`<button class="btn b2 ${k==='hgp'&&(S.scout||S.tips)?'pin':''}" disabled data-tip="${tip}">Make ${l}</button>`
     :k==='hgc'&&S.unk?`<button class="btn b2 ${S.tips?'pin':''}" disabled data-tip="Club unknown for this player.">Make ${l}</button>`
     :`<button class="btn b2" data-act="mk" data-v="${k}">Make ${l}</button>`;
-  return `<div class="strip"><span class="sp"></span><button class="btn b2" data-act="close">Close</button>${mk('hgp','HGP')}${mk('hgc','HGC')}
+  return `<div class="strip"><span class="sp"></span><button class="btn b2" data-act="close">Close</button>${S.other?'':mk('hgp','HGP')+mk('hgc','HGC')}
     <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button></div>`;
 }
 
@@ -549,30 +585,95 @@ function actionStrip(){
 
 /* ---------- 4.1 PROFILE (approved option B content, tighter) -------------------------------------------------------- */
 function slotProfile(){const d=D();return S.nums?slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20'):slot('Dev Rate',`<span class="stars" title="Dev Rate ${d.dev} out of 20">${star(d.dev,4)}</span>`,'How fast they develop')}
-function tabProfile(){
-  const d=D(),g=d.g;
-  const cols=isGK()?[['Goalkeeping',g.gk,['Footedness',g.foot]],['Mental',g.ment],['Physical',g.phys,['Hidden',g.hid]],['Technical',g.tech]]
-                   :[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys,['Footedness',g.foot]],['Hidden',g.hid]];
-  // "Full Potential" shows ONLY the projected value in the tile (no "current / potential" pair)
-  const grp=(t,l)=>`<div class="ch">${t.toUpperCase()}</div>`+l.map(a=>{const v=S.pot?a[2]:a[1],t=tier(a[3]?21-v:v);
-    return `<div class="tr2"><span class="an">${a[0]}</span><span class="tile k${t} c${t}">${v}</span></div>`}).join('');
-  const grid=cols.map(([t,l,x])=>`<div class="col">${grp(t,l)}${x?'<div style="height:10px"></div>'+grp(x[0],x[1]):''}</div>`).join('');
+/* PROFILE has THREE candidate layouts (?profile=a|b|c, review-bar 'profile'); the user picks one, then it is built in gui/player_window.py.
+   Recommended traits moved to the Training tab. Every element below is fed by real per-player data only (see HANDOVER 'Profile layouts');
+   sections with no data are hidden (season stats, career) or PENDING (contract values), never invented. */
+const gv=a=>S.pot?a[2]:a[1];                                     // value shown: Current or Full Potential
+const good=a=>a[3]?21-gv(a):gv(a);                               // lower-is-better attributes inverted for ranking / averages
+const tileA=a=>{const v=gv(a),t=tier(good(a));return `<span class="tile k${t} c${t}">${v}</span>`};
+const GRP=()=>{const g=D().g;return {Technical:g.tech,Mental:g.ment,Physical:g.phys,Hidden:g.hid,Footedness:g.foot,Goalkeeping:g.gk}};
+/* column plans: groups stacked per column (A/C = 4 cols, B = 3 cols) */
+const COLS={a:()=>isGK()?[['Goalkeeping','Footedness'],['Mental'],['Physical','Hidden'],['Technical']]:[['Technical'],['Mental'],['Physical','Footedness'],['Hidden']],
+ b:()=>isGK()?[['Goalkeeping','Physical'],['Mental','Hidden'],['Technical','Footedness']]:[['Technical'],['Mental'],['Physical','Hidden','Footedness']]};
+COLS.c=COLS.a;
+function attrPanel(L){
+  const d=D(),G=GRP();
+  const grp=(t,l)=>`<div class="ch">${t.toUpperCase()}</div>`+l.map(a=>`<div class="tr2"><span class="an">${a[0]}</span>${tileA(a)}</div>`).join('');
+  const grid=COLS[L]().map(names=>`<div class="col">${names.map((n,i)=>(i?'<div style="height:10px"></div>':'')+grp(n,G[n])).join('')}</div>`).join('');
   const note=S.pot&&d.potNote?`<span class="pnote">${d.potNote}</span>`:'';
-  const attrs=`<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}
+  return `<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}
     <div class="p-cols" style="padding-top:2px">${grid}</div>
     ${S.pot?'<div class="cp">Projection from CA weights; real growth depends on training, playing time and personality.</div>':''}</div>`;
-  const pers=d.pers.map(([n,v])=>`<div class="prs"><span class="an">${n}</span><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span><b class="c${tier(v)}">${v}</b></div>`).join('');
-  // traits: confirmed names white; "Trait #n" = bit whose name is not confirmed yet (muted + tooltip)
-  let firstMute=true;
-  const tr=(d.traits.length?d.traits:['None']).map(t=>{const un=t.startsWith('Trait #'),m=un||!d.traits.length,pin=un&&firstMute&&S.tips;if(un)firstMute=false;
-    return `<div class="trow${m?' mute':''}${pin?' pin':''}"${un?' data-tip="Name not confirmed yet"':''}>${t}</div>`}).join('');
-  const rl=S.pot&&d.recP?d.recP:d.rec;
-  const rec=(rl||[]).map(([n,sc,has])=>`<div class="rec${has?' has':''}"><span class="n">${has?'\u2713 ':''}${n}</span><b class="c${tier(Math.round(sc))}">${sc.toFixed(1)}</b></div>`).join('')+(d.recNote?`<div class="rnote">${d.recNote}</div>`:'');
-  const rail=`<div class="p-rail"><div class="pn">${ph('Personality')}<div style="padding-bottom:8px">${pers}</div></div>
-    <div class="pn">${ph('Player traits')}<div style="padding-bottom:8px">${tr}</div></div>
-    <div class="pn" data-tip="Average of the attributes behind each trait (source: GuideToFM). Needs an average of 11+ (Settings > Trait recommender threshold).">${ph('Recommended traits')}<div style="padding-bottom:4px">${rec}</div></div></div>`;
-  return attrs+rail;
 }
+function persPanel(){const d=D();
+  const rows=d.pers.map(([n,v])=>`<div class="prs"><span class="an">${n}</span><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span><b class="c${tier(v)}">${v}</b></div>`).join('');
+  return `<div class="pn">${ph('Personality',d.persLabel?`<span class="chip pers">${d.persLabel}</span>`:'')}<div style="padding-bottom:8px">${rows}</div></div>`}
+// traits: confirmed names white; "Trait #n" = bit whose name is not confirmed yet (muted + tooltip)
+function traitsPanel(){const d=D();let firstMute=true;
+  const body=`<div style="padding-bottom:8px">${(d.traits.length?d.traits:['None']).map(t=>{const un=t.startsWith('Trait #'),m=un||!d.traits.length,pin=un&&firstMute&&S.tips;if(un)firstMute=false;return `<div class="trow${m?' mute':''}${pin?' pin':''}"${un?' data-tip="Name not confirmed yet"':''}>${t}</div>`}).join('')}</div>`;
+  return `<div class="pn">${ph('Player traits')}${body}</div>`}
+/* key strengths / weaknesses: pool = attributes that matter for the player type (outfield: Technical+Mental+Physical; GK: Goalkeeping+Mental+Physical); ranked by (inverted) value, ties keep list order */
+function ranked(){const g=D().g,pool=(isGK()?[...g.gk,...g.ment,...g.phys]:[...g.tech,...g.ment,...g.phys]).map((a,i)=>({a,i}));
+  const hi=pool.slice().sort((x,y)=>good(y.a)-good(x.a)||x.i-y.i).map(o=>o.a),lo=pool.slice().sort((x,y)=>good(x.a)-good(y.a)||x.i-y.i).map(o=>o.a);return{hi,lo}}
+const swChip=a=>`<span class="sw">${a[0]}${tileA(a)}</span>`;
+const modeNote=()=>`<span class="pnote">${S.pot?'Full Potential':'Current'}</span>`;
+/* best positions: from the 15 stored position ratings, >= 10 (Competent+), best first, max 4 */
+function bestPositions(n){const d=D(),R=d.posr;return POS.slice().sort((a,b)=>R[b]-R[a]||(b===d.pos)-(a===d.pos)||POS.indexOf(a)-POS.indexOf(b)).filter(p=>R[p]>=10).slice(0,n)}
+function posPanel(){const R=D().posr,l=bestPositions(4);
+  return `<div class="pn" style="width:216px;flex:none">${ph('Best positions')}<div style="padding-bottom:8px">${l.map(p=>`<div class="bpr${R[p]>=20?' nat':''}">${badge(p,1)}<span class="wd">${word(R[p])}</span><span class="tile k${tier(R[p])} c${tier(R[p])}">${R[p]}</span></div>`).join('')}${l.length<2?'<div class="rnote" style="padding:6px 12px 0">No other position rated 10 or more.</div>':''}</div></div>`}
+function statsCells(rows){return rows.map(r=>`<div class="srow">${r.map(([l,v,sub])=>`<div class="sc"><small>${l}</small><b>${v}</b><em>${sub||'&nbsp;'}</em></div>`).join('')}</div>`).join('')}
+const mins=n=>n.toLocaleString('en-GB');
+function statsPanel(){const st=D().stats;if(!st)return '';
+  return `<div class="pn">${ph('Season stats',`<span class="pnote">league, this season</span>`)}${statsCells([[['Apps',st.apps,st.starts+'+'+st.subs],['Goals',st.goals],['Assists',st.assists],['Minutes',mins(st.min)],['POTM',st.potm],['Rating',st.avg.toFixed(2)]]])}</div>`}
+const row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
+function contractGlance(){const d=D();
+  return `<div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',S.data?d.wage:'')}${row('Market value',S.data?d.value:'')}</div></div>`}
+
+/* radar of the attribute-group averages (1-20): QPainter = 4-5 polygons for the rings + 1 data polygon + dots + drawText */
+function radar(){const d=D(),G=GRP();
+  const ax=(isGK()?['Goalkeeping','Technical','Mental','Physical','Hidden']:['Technical','Mental','Physical','Hidden']).map(n=>({n,v:G[n].reduce((s,a)=>s+good(a),0)/G[n].length}));
+  const W=204,H=212,cx=102,cy=108,n=ax.length,R=n===4?68:62,a0=n===4?-135:-90,pt=(i,k)=>{const t=(a0+i*360/n)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=k=>ax.map((_,i)=>pt(i,k).map(x=>x.toFixed(1)).join(',')).join(' ');
+  let s=[.25,.5,.75,1].map(k=>`<polygon points="${poly(k)}" fill="none" stroke="rgba(255,255,255,${k===1?.22:.10})" stroke-width="1"/>`).join('');
+  s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="rgba(255,255,255,.10)"/>`}).join('');
+  s+=`<polygon points="${ax.map((a,i)=>pt(i,a.v/20).map(x=>x.toFixed(1)).join(',')).join(' ')}" fill="rgba(115,92,228,.30)" stroke="#735CE4" stroke-width="1.5" stroke-linejoin="round"/>`;
+  s+=ax.map((a,i)=>{const p=pt(i,a.v/20),q=pt(i,1),up=q[1]<cy,ty=up?q[1]-17:q[1]+13;
+    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="${HEX[tier(Math.round(a.v))]}"/>
+      <text x="${q[0].toFixed(1)}" y="${ty}" text-anchor="middle" font-size="10" font-weight="700" fill="#8B96A8" letter-spacing=".8">${a.n.toUpperCase()}</text>
+      <text x="${q[0].toFixed(1)}" y="${ty+13}" text-anchor="middle" font-size="12" font-weight="700" fill="${HEX[tier(Math.round(a.v))]}">${a.v.toFixed(1)}</text>`}).join('');
+  return `<div class="pn">${ph('Attribute groups',modeNote())}<svg class="rd" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg></div>`}
+
+/* ---- A  SCOUTING CARD: top band (key strengths | weaknesses | best positions) over attribute grid + rail ---- */
+function profA(){const {hi,lo}=ranked();
+  const band=`<div class="prow st"><div class="pn fl">${ph('Key strengths',modeNote())}<div class="swr">${hi.slice(0,5).map(swChip).join('')}</div></div>
+    <div class="pn fl">${ph('Weaknesses',modeNote())}<div class="swr">${lo.slice(0,5).map(swChip).join('')}</div></div>${posPanel()}</div>`;
+  return `<div class="pcol">${band}<div class="prow">${attrPanel('a')}<div class="p-rail">${persPanel()}${traitsPanel()}</div></div></div>`}
+
+/* ---- B  DASHBOARD: left grid (+season stats), centre radar + strengths/weaknesses, right rail (+contract) ---- */
+function profB(){const {hi,lo}=ranked(),r3=l=>l.slice(0,3).map(a=>`<div class="kv"><span class="l">${a[0]}</span><span class="r">${tileA(a)}</span></div>`).join('');
+  const centre=`<div style="width:204px;flex:none;display:flex;flex-direction:column;gap:12px">${radar()}
+    <div class="pn">${ph('Strengths · weaknesses')}<div class="sub" style="margin-top:0;height:22px">Strongest</div>${r3(hi)}<div class="sub" style="margin-top:4px;height:26px">Weakest</div><div style="padding-bottom:8px">${r3(lo)}</div></div></div>`;
+  const left=`<div class="pcol">${attrPanel('b')}${statsPanel()}</div>`;
+  return `<div class="prow" style="flex:1">${left}${centre}<div class="p-rail" style="width:200px">${persPanel()}${traitsPanel()}${contractGlance()}</div></div>`}
+
+/* ---- C  DOSSIER: summary cards row, attribute grid full width, personality + traits strip ---- */
+function profC(){const d=D(),R=d.posr,b=bestPos(R),oth=bestPositions(4).filter(p=>p!==b).slice(0,2),st=d.stats;
+  const lf=d.g.foot[0][1],rf=d.g.foot[1][1],footed=Math.abs(lf-rf)>=4?(lf>rf?'Left-footed':'Right-footed'):'Either foot';
+  const card=(t,rows,r='')=>`<div class="pn card">${ph(t,r)}<div style="padding-bottom:8px">${rows}</div></div>`;
+  const t=(v,inv)=>{const k=tier(inv?21-v:v);return `<span class="tile k${k} c${k}">${v}</span>`};
+  const pos=card('Position',kv('Best position',`${badge(b,1)}${t(R[b])}`)+kv('Also',oth.length?oth.map(p=>`<span style="color:var(--tx2)">${CODE[p]}</span>${t(R[p])}`).join(''):'<span style="color:var(--tx2)">None 10+</span>')+kv('Rating',word(R[b]))+kv('Feet',footed));
+  const con=card('Contract & value',kv('Until',d.until)+(d.start?kv('Start',d.start):'')+row('Wage',S.data?d.wage:'')+row('Market value',S.data?d.value:''));
+  let form='';
+  if(st)form=card('This season',kv('Apps',`${st.apps} <span style="color:var(--tx2);font-weight:400">(${st.starts}+${st.subs})</span>`)+kv('Goals · assists',`${st.goals} · ${st.assists}`)+kv('Avg rating',st.avg.toFixed(2))+kv('Player of the Match',st.potm));
+  else if(S.data){const a=HIST.reduce((n,r)=>n+(r.a||0),0),g=HIST.reduce((n,r)=>n+(r.g||0),0),cl=new Set(HIST.filter(r=>r.c).map(r=>r.c)).size;form=card('Career',kv('Apps',a)+kv('Goals',g)+kv('Clubs',cl),'<span class="pnote">league</span>')}
+  const gA=n=>[].concat(...Object.values(d.g)).find(x=>x[0]===n);
+  const fit=card('Fitness',kv('Status',injured()?`<span class="chip inj">Injured · ${d.inj||14} days</span>`:'<span class="chip ok">Fit</span>')+kv('Injury Prone',t(gA('Injury Prone')[1],1))+kv('Natural Fitness',t(gA('Natural Fitness')[1]))+kv('Stamina',t(gA('Stamina')[1])));
+  const pm=d.pers.map(([n,v])=>`<div class="pmi"><div><span class="an">${n}</span><b class="c${tier(v)}">${v}</b></div><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span></div>`).join('');
+  const tp=`<div class="pn" style="width:236px;flex:none">${ph('Player traits')}<div class="tcw">${(d.traits.length?d.traits:['None']).map(x=>`<span class="chip${x.startsWith('Trait #')||!d.traits.length?' mute':''}"${x.startsWith('Trait #')?' data-tip="Name not confirmed yet"':''}>${x}</span>`).join('')}</div></div>`;
+  return `<div class="pcol"><div class="prow st">${pos}${con}${form}${fit}</div>${attrPanel('c')}
+    <div class="prow st"><div class="pn fl">${ph('Personality',d.persLabel?`<span class="chip pers">${d.persLabel}</span>`:'')}<div class="pmg">${pm}</div></div>${tp}</div></div>`}
+
+function tabProfile(){return ({a:profA,b:profB,c:profC}[S.profile]||profA)()}
+
 
 /* ---------- 4.2 CONTRACT & TRANSFER ---------------------------------------------------------------------------------- */
 function slotContract(){const d=D();return slot('Contract until',d.until,d.club)}
@@ -639,7 +740,11 @@ function tabRole(){return soonPage('Role Rating','Suitability for each tactical 
 function slotHistory(){
   if(!S.data)return slot('Apps · Goals',pendV(),'FM install database not found');
   const a=HIST.reduce((n,r)=>n+(r.a||0),0),g=HIST.reduce((n,r)=>n+(r.g||0),0);return slot('Apps · Goals',`${a} · ${g}`,'career, league')}
-function tabTraining(){return soonPage('Training','Training focus, schedules and development notes will live here.')}
+/* Training: Recommended traits (moved here from the Profile rail; follows Current | Full Potential, owned traits ticked) + a coming-soon block. No training data is invented. */
+function tabTraining(){const d=D(),rl=S.pot&&d.recP?d.recP:d.rec;
+  const rec=(rl||[]).map(([n,sc,has])=>`<div class="rec${has?' has':''}"><span class="n">${has?'\u2713 ':''}${n}</span><b class="c${tier(Math.round(sc))}">${sc.toFixed(1)}</b></div>`).join('')+(d.recNote?`<div class="rnote">${d.recNote}</div>`:'');
+  return `<div class="c-col" style="width:440px"><div class="pn" data-tip="Average of the attributes behind each trait (source: GuideToFM). Needs an average of 11+ (Settings > Trait recommender threshold).">${ph('Recommended traits',sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}<div style="padding-bottom:4px">${rec}</div></div>
+    <div class="pn" style="padding:14px 12px 16px;display:flex;flex-direction:column;align-items:flex-start;gap:8px"><span class="chip soon">COMING SOON</span><span class="pnote" style="font-size:12px;line-height:1.5">Training focus, schedules and development notes will live here.</span></div></div>`}
 /* Career history: install-DB rows + this save's seasons (fm_editor/history.py). Fee = fee paid for the move at the end of that row. No rows -> note + PENDING chip. */
 function tabHistory(){
   if(!S.data)return `<div class="pn hpn">${ph('Career history')}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Career history is read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
@@ -661,8 +766,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['nums','pot','future','scout','short','inj','hgp','hgc','unk','nopend','data','tips'];
-const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['other','nums','pot','future','scout','short','inj','hgp','hgc','unk','nopend','data','tips'];
+const TOGGLES=[['other','Not your squad'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
@@ -671,12 +776,14 @@ function render(){
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
   Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;render()};sm.appendChild(b)});
+  const pf=document.getElementById('pfSeg');pf.innerHTML='';
+  [['a','A Scouting card'],['b','B Dashboard'],['c','C Dossier']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.profile===k)b.className='on';b.onclick=()=>{S.profile=k;render()};pf.appendChild(b)});
   const tx=document.getElementById('texSeg');tx.innerHTML='';
   TEXS.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
   const tg=document.getElementById('tgs');tg.innerHTML='';
   TOGGLES.forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
   const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f])].filter(Boolean);
-  const q=new URLSearchParams(location.search);S.tex==='off'?q.delete('tex'):q.set('tex',S.tex);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
+  const q=new URLSearchParams(location.search);S.tex==='off'?q.delete('tex'):q.set('tex',S.tex);S.profile==='a'?q.delete('profile'):q.set('profile',S.profile);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
