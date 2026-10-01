@@ -17,7 +17,7 @@ import calendar
 import math
 
 
-from PyQt6.QtCore import Qt, QPointF, QRect, QRectF, QSize
+from PyQt6.QtCore import QEvent, Qt, QPointF, QRect, QRectF, QSize
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
@@ -110,7 +110,6 @@ TABS = [
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
     'role': 'Suitability for each tactical role.',
-    'history': 'Career stats by season and club.',
 }
 # 16x16 line icons for the tab strip (mirror of ICONS in mockups/player-window.html); {c} = stroke colour
 _TAB_SVG = {
@@ -313,9 +312,20 @@ class _ElideLabel(QLabel):
     def minimumSizeHint(self):
         return QSize(0, super().minimumSizeHint().height())
 
+    def _elide(self):
+        fm = self.fontMetrics()      # elidedText() elides at width == advance (ink bounds): compare the advance ourselves
+        self.setText(self._full if fm.horizontalAdvance(self._full) <= self.width()
+                     else fm.elidedText(self._full, Qt.TextElideMode.ElideRight, self.width()))
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.Type.FontChange:      # QSS font arrives after the parent chain is set: re-measure
+            self.updateGeometry()
+            self._elide()
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        self.setText(self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, self.width()))
+        self._elide()
 
 
 class _DottedLabel(QLabel):
@@ -1013,7 +1023,7 @@ class PlayerWindow(QDialog):
             cl.addStretch()
             v.addWidget(chip)
             return self._page(panel, stretch={0: 1})
-        cols = (('Season', 78, 'l'), ('Club', 0, 'l'), ('', 52, 'l'), ('Apps', 44, 'r'), ('Goals', 44, 'r'),
+        cols = (('Season', 78, 'l'), ('Club', 0, 'l'), ('', 64, 'l'), ('Apps', 44, 'r'), ('Goals', 44, 'r'),
                 ('Fee', 70, 'r'))
 
         def line(vals, name, tips=None):
@@ -1173,7 +1183,7 @@ class PlayerWindow(QDialog):
     def _positions_key(self):
         key = QWidget()
         kv = QVBoxLayout(key)
-        kv.setContentsMargins(12, 6, 12, 12)
+        kv.setContentsMargins(12, 6, 12, 8)      # bottom 8 (was 12): the list panel then fits the 592 px viewport, no 4 px scrollbar
         kv.setSpacing(4)
         lg = QHBoxLayout()
         lg.setSpacing(12)
@@ -1216,8 +1226,6 @@ class PlayerWindow(QDialog):
         if self._pot_on:
             pot.setChecked(True)
         self._pot_segs.append((cur, pot))
-        if not hasattr(self, '_seg_pot'):
-            self._seg_group, self._seg_cur, self._seg_pot = seg._grp, cur, pot
         return seg
 
     def _attr_panel(self):
@@ -1604,7 +1612,12 @@ class PlayerWindow(QDialog):
             lab = _lab(t, 'pwChipMute' if mute else 'pwChip', Qt.AlignmentFlag.AlignCenter, 20)
             if t.startswith('Trait #'):
                 lab.setToolTip('Name not confirmed yet')
-            w = min(lab.sizeHint().width(), inner_w - 24)
+            # width from the QSS font (11px, 600) + padding 0 8px (+ 1px dashed border on muted chips): the label is not
+            # under the dialog yet here, so sizeHint() would still use the default font and clip the text
+            cf = QFont(self.font())
+            cf.setPixelSize(11)
+            cf.setWeight(QFont.Weight.Normal if mute else QFont.Weight.DemiBold)
+            w = min(QFontMetrics(cf).horizontalAdvance(t) + 16 + (2 if mute else 0), inner_w - 24)
             if x > 12 and x + w > inner_w - 12:
                 x, y = 12, y + 26
             lab.setParent(flow)
