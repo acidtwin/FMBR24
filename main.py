@@ -22,7 +22,6 @@ def _excepthook(t, v, tb):
 
 sys.excepthook = _excepthook
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QIcon
 from gui.theme import QSS
 from gui.main_window import MainWindow
 from gui.icon import make_app_icon

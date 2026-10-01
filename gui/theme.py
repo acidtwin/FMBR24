@@ -62,40 +62,10 @@ QMainWindow {{
     background-color: {COLORS['window_bg']};
 }}
 
-/* -- Panels / frames ----------------------------------------------- */
-QFrame#panel {{
-    background-color: {COLORS['surface']};
-    border: 1px solid {COLORS['border']};
-    border-radius: 3px;
-}}
-
 /* -- Labels -------------------------------------------------------- */
 QLabel {{
     color: {COLORS['text_primary']};
     background: transparent;
-}}
-QLabel#header {{
-    color: {COLORS['text_primary']};
-    font-size: 15px;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-}}
-QLabel#subheader {{
-    color: {COLORS['text_secondary']};
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}}
-QLabel#dim {{
-    color: {COLORS['text_dim']};
-    font-size: 11px;
-}}
-QLabel#hgp_yes {{
-    color: {COLORS['hgp_green']};
-    font-weight: bold;
-}}
-QLabel#hgp_no {{
-    color: {COLORS['text_secondary']};
 }}
 
 /* -- Buttons ------------------------------------------------------- */
@@ -258,17 +228,6 @@ QProgressBar {{
 QProgressBar::chunk {{
     background-color: {COLORS['accent']};
     border-radius: 1px;
-}}
-
-/* -- Splitter ------------------------------------------------------ */
-QSplitter::handle {{
-    background: {COLORS['border']};
-}}
-QSplitter::handle:horizontal {{
-    width: 1px;
-}}
-QSplitter::handle:vertical {{
-    height: 1px;
 }}
 
 /* -- Checkboxes ---------------------------------------------------- */

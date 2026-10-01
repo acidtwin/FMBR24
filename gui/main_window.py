@@ -1,20 +1,19 @@
 """FM Backroom 24 - main window."""
 import os
-import shutil
 from datetime import date
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
-    QComboBox, QStyledItemDelegate, QStyleOptionViewItem, QSpinBox,
+    QComboBox, QStyledItemDelegate, QSpinBox,
     QInputDialog, QGridLayout, QBoxLayout, QTableView,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QPoint
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
-from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
+from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget
 from fm_editor.nations import nation_name as _nation_name_long
@@ -240,41 +239,6 @@ class _SidebarFrame(QFrame):
             )
             p.drawPixmap(0, 0, scaled)
         p.end()
-
-
-class _HoverTable(QTableWidget):
-    """QTableWidget that highlights the full hovered row."""
-    _HOVER_COLOR = QColor(105, 51, 189, 26)
-    _SEL_HOVER_COLOR = QColor(105, 51, 189, 64)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._hovered_row = -1
-        self.viewport().setMouseTracking(True)
-        self.viewport().installEventFilter(self)
-
-    def eventFilter(self, obj, event):
-        if obj is self.viewport():
-            if event.type() == event.Type.MouseMove:
-                idx = self.indexAt(event.pos())
-                row = idx.row() if idx.isValid() else -1
-                if row != self._hovered_row:
-                    self._hovered_row = row
-                    self.viewport().update()
-            elif event.type() in (event.Type.Leave, event.Type.HoverLeave):
-                self._hovered_row = -1
-                self.viewport().update()
-        return super().eventFilter(obj, event)
-
-    def drawRow(self, painter, option, index):
-        super().drawRow(painter, option, index)
-        if index.row() == self._hovered_row:
-            color = (self._SEL_HOVER_COLOR
-                     if self.selectionModel().isRowSelected(index.row())
-                     else self._HOVER_COLOR)
-            painter.save()
-            painter.fillRect(option.rect, color)
-            painter.restore()
 
 
 def _primary_pos(positions):
@@ -2107,15 +2071,6 @@ class MainWindow(QMainWindow):
         self._sg_popup = _SearchSuggest(self, self._search_box, self._sg_pick, self._sg_flush)
         self._search_box.textChanged.connect(self._sg_text_changed)
 
-        _tbtn_ss = (
-            "QPushButton { background: rgba(8,14,24,0.70); color: rgba(255,255,255,0.78);"
-            " border: 1px solid rgba(255,255,255,0.18); border-radius: 2px;"
-            " padding: 3px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: rgba(20,32,50,0.85); color: #fff;"
-            " border-color: rgba(255,255,255,0.32); }"
-            "QPushButton:disabled { background: rgba(8,14,24,0.45); color: rgba(255,255,255,0.18);"
-            " border-color: rgba(255,255,255,0.06); }"
-        )
         _tbtn_accent_ss = (
             "QPushButton { background: #2b6cb0; color: #fff;"
             " border: none; border-radius: 2px;"
@@ -2321,30 +2276,6 @@ class MainWindow(QMainWindow):
         for i in range(5):
             row.addWidget(_StarWidget(max(0.0, min(1.0, stars - i))))
         outer.addWidget(row_widget, 0, Qt.AlignmentFlag.AlignRight)
-        return w
-
-    def _make_header_pill_widget(self, pairs: list) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        row = QHBoxLayout(w)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        _pill_ss = (
-            "background: rgba(0,255,135,0.08);"
-            " border: 1px solid rgba(0,255,135,0.15);"
-            " border-radius: 4px;"
-            " padding: 2px 8px;"
-            " font-family: 'Barlow Condensed', 'Barlow', 'Arial Narrow', sans-serif;"
-            " font-size: 12px;"
-        )
-        for label, value in pairs:
-            pill = QLabel(
-                f"<span style='color:#8892A0'>{label}</span>"
-                f" <span style='color:#00FF87'>{value}</span>"
-            )
-            pill.setTextFormat(Qt.TextFormat.RichText)
-            pill.setStyleSheet(_pill_ss)
-            row.addWidget(pill)
         return w
 
     def _update_header_for_view(self, key: str):
@@ -3249,7 +3180,6 @@ class MainWindow(QMainWindow):
         """
         self._squad_tab_ss_str = _squad_tab_ss
         self._squad_tab_bar = tab_row   # keep reference to add dynamic tabs later
-        self._squad_tab_frame = tab_bar
         self._squad_tab_btns = []
         self._squad_tab_dynamic_btns = []
 
@@ -3274,13 +3204,6 @@ class MainWindow(QMainWindow):
             f"QPushButton:disabled {{ background:{COLORS['surface']}; color:{COLORS['text_dim']};"
             f" border:1px solid {COLORS['border']}; }}"
         )
-        _clear_ss = (
-            f"QPushButton {{ background:transparent; color:{COLORS['text_secondary']};"
-            f" border:1px solid {COLORS['border']}; border-radius:2px;"
-            f" padding:3px 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ color:{COLORS['text_primary']}; border-color:{COLORS['border_bright']}; }}"
-            f"QPushButton:disabled {{ color:{COLORS['text_dim']}; }}"
-        )
         self._patch_hgp_btn = QPushButton('Make HGP')
         self._patch_hgp_btn.setStyleSheet(_accent_ss)
         self._patch_hgp_btn.setFixedHeight(28)
@@ -3302,7 +3225,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(tab_bar)
 
         # Table
-        self._table = _HoverTable()
+        self._table = QTableWidget()
         self._table.setColumnCount(9)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -3442,7 +3365,7 @@ class MainWindow(QMainWindow):
 
     def _make_staff_table(self):
         """Staff table (name/club/nation/age + coaching + personality); shared by Staff and Staff Shortlist."""
-        tbl = _HoverTable()
+        tbl = QTableWidget()
         tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         tbl.setAlternatingRowColors(True)
@@ -3665,7 +3588,7 @@ class MainWindow(QMainWindow):
 
         vbox.addWidget(qf_bar)
 
-        self._club_staff_table = _HoverTable()
+        self._club_staff_table = QTableWidget()
         self._club_staff_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._club_staff_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._club_staff_table.setAlternatingRowColors(True)
@@ -3891,7 +3814,7 @@ class MainWindow(QMainWindow):
         filter_vbox.addLayout(sl_filter_row)
         vbox.addWidget(filter_hdr)
 
-        self._shortlist_table = _HoverTable()
+        self._shortlist_table = QTableWidget()
         self._shortlist_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._shortlist_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._shortlist_table.setAlternatingRowColors(True)
@@ -4268,7 +4191,7 @@ class MainWindow(QMainWindow):
         self._report_clear_btn.clicked.connect(self._clear_report_filter)
         filter_row2.addWidget(self._report_clear_btn)
 
-        self._reports_table = _HoverTable()
+        self._reports_table = QTableWidget()
         self._reports_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._reports_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._reports_table.setAlternatingRowColors(True)
@@ -4901,36 +4824,19 @@ class MainWindow(QMainWindow):
         _TT = _COL_TT | {
             'Age': 'Age on the save\'s in-game date',
         }
-        if mode == 'squad':
-            cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
-                    'CtrE'] + _ATTR_ABBREV
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
-                            9: 45, 10: 65}  # 1=INJ, 10=CtrE
-            for i, cw in fixed_widths.items():
-                self._table.setColumnWidth(i, cw)
-            # Attr columns: 35px each
-            for i in range(11, len(cols)):
-                self._table.setColumnWidth(i, 35)
-        elif mode == 'scout':
-            cols = ['Name', 'Club', 'Pos', 'CA', 'PA', 'Dev', 'Age']
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {0: 150, 1: 160, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40}.items():
-                self._table.setColumnWidth(i, cw)
-        else:  # player
-            cols = ['Name', 'Club', 'Nation', 'Born', 'HGP']
-            self._table.setColumnCount(len(cols))
-            self._table.setHorizontalHeaderLabels(cols)
-            for i in range(len(cols)):
-                hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-            for i, cw in {0: 150, 1: 160, 2: 50, 3: 50, 4: 45}.items():
-                self._table.setColumnWidth(i, cw)
+        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
+                'CtrE'] + _ATTR_ABBREV
+        self._table.setColumnCount(len(cols))
+        self._table.setHorizontalHeaderLabels(cols)
+        for i in range(len(cols)):
+            hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
+                        9: 45, 10: 65}  # 1=INJ, 10=CtrE
+        for i, cw in fixed_widths.items():
+            self._table.setColumnWidth(i, cw)
+        # Attr columns: 35px each
+        for i in range(11, len(cols)):
+            self._table.setColumnWidth(i, 35)
         for i, col in enumerate(cols):
             if col in _TT:
                 hdr_item = self._table.horizontalHeaderItem(i)
@@ -5560,32 +5466,7 @@ class MainWindow(QMainWindow):
                 sel.select(m.index(r, 0), sel.SelectionFlag.Select | sel.SelectionFlag.Rows)
 
     def _on_row_double_clicked(self, index):
-        if self._table_mode == 'squad':
-            self._open_player_detail(index.row())
-            return
-        if self._table_mode not in ('player', 'scout'):
-            return
-        item = self._table.item(index.row(), 0)
-        if not item:
-            return
-        pid = item.data(Qt.ItemDataRole.UserRole)
-        player_results = getattr(self, '_player_results', {})
-        if not isinstance(player_results, dict):
-            return
-        p = player_results.get(pid)
-        if not p:
-            return
-        squads = self._save_data.get('squads', {})
-        clubs = self._save_data.get('clubs', [])
-        club_id = squads.get(p['id'])
-        if not club_id:
-            self._status.showMessage(f"{p['name']} has no club.")
-            return
-        club = next((c for c in clubs if c['id'] == club_id), None)
-        if not club:
-            self._status.showMessage(f"{p['name']}'s club not found.")
-            return
-        self._show_squad(club)
+        self._open_player_detail(index.row())
 
     def _open_player_detail(self, row: int):
         item = self._table.item(row, 0)
@@ -5764,32 +5645,6 @@ class MainWindow(QMainWindow):
         self._patch_hgp_btn.setEnabled(has_squad and has_sel and not all_hgp)
         self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
                                         and self._club_entity_id is not None and not all_hgc)
-
-    def _select_all_non_hgp(self):
-        id_to_hgp = {p.get('id', -1): p.get('hgp', False) for p in self._squad}
-        self._table.clearSelection()
-        for row in range(self._table.rowCount()):
-            item = self._table.item(row, 0)
-            if item and not id_to_hgp.get(item.data(Qt.ItemDataRole.UserRole), True):
-                self._table.selectRow(row)
-
-    def _select_all_non_hgc(self):
-        b = self._save_data.get('b') if self._save_data else None
-        if b is None or not self._club_entity_id:
-            return
-        from fm_editor.patch import is_hgc
-        id_to_person = {p.get('id', -1): p for p in self._squad}
-        self._table.clearSelection()
-        for row in range(self._table.rowCount()):
-            item = self._table.item(row, 0)
-            if not item:
-                continue
-            pid = item.data(Qt.ItemDataRole.UserRole)
-            person = id_to_person.get(pid)
-            if person and not is_hgc(b, person, self._club_entity_id):
-                self._table.selectRow(row)
-
-    # -- Patch ----------------------------------------------------------------
 
     def _get_selected_persons(self):
         pid_map = {p.get('id', -1): p for p in self._squad}
