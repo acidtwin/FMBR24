@@ -33,7 +33,7 @@ from fm_editor import settings as _settings
 from fm_editor.abilitystars import ability_stars, dev_stars
 from gui.stars import _StarWidget
 from gui.pw_themes import ActiveTabButton, ThemedFrame, apply_active_theme
-from gui.pw_widgets import FeetWidget, RadarWidget
+from gui.pw_widgets import FeetWidget, RadarWidget, radar_axes
 from fm_editor import traitrec as _tr
 from fm_editor.agecalc import person_age
 from fm_editor.traits import trait_ids, trait_names
@@ -1314,15 +1314,9 @@ class PlayerWindow(QDialog):
 
     # radar + footedness ---------------------------------------------------------------------------
     def _radar_axes(self):
-        order = (['Goalkeeping'] if self._is_gk else []) + ['Technical', 'Mental', 'Physical', 'Hidden']
-        out = []
-        for n in order:
-            rows = self._group_rows(_GROUPS[n])
-            if not rows:
-                continue
-            mean = sum((21 - v if lower else v) for _n, _i, v, lower in rows) / len(rows)
-            out.append((n, mean, QColor(TIER_HEX[tier(int(mean + 0.5))])))
-        return out
+        """[(axis name, mean, tier QColor, tooltip)] from the ONE table in gui/pw_widgets.py (follows Current | Full Potential)."""
+        vals = {n: v for g in _GROUPS.values() for n, _i, v, _l in self._group_rows(g)}
+        return [(n, m, QColor(TIER_HEX[tier(int(m + 0.5))]), tip) for n, m, tip in radar_axes(vals, self._is_gk)]
 
     def _refresh_radar(self):
         self._radar.set_axes(self._radar_axes())
@@ -1331,6 +1325,9 @@ class PlayerWindow(QDialog):
     def _radar_panel(self):
         self._radar_note = _lab('', 'pwNote')
         panel, v = self._panel('Attribute groups', self._radar_note)
+        panel.findChild(QWidget, 'pwHead').setToolTip(
+            "Six scouting groups of this app's own - not taken from the game. Axis = mean of its attributes (1-20); "
+            "hover an axis for the list.")
         self._radar = RadarWidget()
         v.addWidget(self._radar, 0, Qt.AlignmentFlag.AlignHCenter)
         self._refresh_radar()
