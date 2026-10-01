@@ -45,6 +45,23 @@ def unmix(rgb, bg, inks):
     return out
 
 
+def recenter(rgba):
+    """Shift the glyph so the centre of its alpha bounding box is the centre of the cell (same scale for every icon,
+    so optical size stays consistent; only the position is corrected: generators centre by eye, badges skew it)."""
+    h, w, _ = rgba.shape
+    ys, xs = np.nonzero(rgba[..., 3] > 8)
+    if not len(xs):
+        return rgba
+    dx = round(w / 2 - (xs.min() + xs.max() + 1) / 2)
+    dy = round(h / 2 - (ys.min() + ys.max() + 1) / 2)
+    out = np.zeros_like(rgba)
+    out[..., :3] = rgba[0, 0, :3]
+    ys0, ys1 = max(0, dy), min(h, h + dy)
+    xs0, xs1 = max(0, dx), min(w, w + dx)
+    out[ys0:ys1, xs0:xs1] = rgba[ys0 - dy:ys1 - dy, xs0 - dx:xs1 - dx]
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('sheet')
@@ -65,7 +82,7 @@ def main():
     for i, name in enumerate(a.names):
         r, c = divmod(i, a.cols)
         cell = rgb[r * a.size:(r + 1) * a.size, c * a.size:(c + 1) * a.size]
-        rgba = unmix(cell, bg, [white, purple])
+        rgba = recenter(unmix(cell, bg, [white, purple]))
         Image.fromarray(rgba, 'RGBA').save(os.path.join(a.out_dir, name + '.png'))
         print('wrote', name)
 
