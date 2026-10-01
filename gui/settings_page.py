@@ -427,7 +427,7 @@ class SettingsPage(QWidget):
                       'Flags data FMBR24 cannot read from the save yet. Off hides those rows.',
                       self._ctl_line(self._pending)),
             self._row('Ability display',
-                      'Show CA / PA as stars or raw numbers in the player window header. '
+                      'Show CA, PA and Dev Rate as stars or raw numbers in the player window header. '
                       'Stars are an approximation; hover for the number.',
                       self._ctl_line(self._ability)),
             self._row('Table density', 'Row height in every table.', seg, soon=True),

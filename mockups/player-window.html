@@ -15,7 +15,7 @@ HOW TO USE
   State flags after '+':   pot (Profile: "At potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
-    nums (CA/PA as numbers + bar instead of stars)
+    nums (CA/PA/Dev Rate as numbers instead of stars)
     tips (pin the tooltips so they show in a screenshot)
   e.g.  #profile+pot   #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
@@ -328,7 +328,6 @@ const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16'
    ===================================================================================================================== */
 function header(slotHTML){
   const d=D();
-  const star=(v)=>{const n=Math.max(.5,Math.min(5,Math.round(v/40*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v})"/></svg>`}return s};
   /* Ability display setting: stars (default; label + 5 half-step stars, value in tooltip; stars = value/40 to nearest .5, clamp .5..5) | numbers (#nums flag: number + bar) */
   const cab=(l,v,c)=>S.nums?`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`:`<div class="cab" title="${l} ${v}"><div class="t"><small>${l}</small></div><div style="display:flex;gap:1px;margin-top:3px">${star(v)}</div></div>`;
   return `<div class="pn hdr"><div class="avatar">${person}</div>
@@ -342,6 +341,8 @@ function header(slotHTML){
     ${cab('CA',d.ca,'#735CE4')}${cab('PA',d.pa,'#9A8AF5')}
     <div class="slot">${slotHTML}</div></div>`;
 }
+/* Ability display: stars = value/div (CA/PA div 40, Dev Rate div 4) to nearest .5, clamp .5..5 */
+const star=(v,div=40)=>{const n=Math.max(.5,Math.min(5,Math.round(v/div*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v}_${div})"/></svg>`}return s};
 const slot=(label,valueHTML,sub)=>`<small>${label}</small><span class="v">${valueHTML}</span><span class="s">${sub||'&nbsp;'}</span>`;
 
 function tabStrip(){
@@ -362,7 +363,7 @@ function actionStrip(){
    ===================================================================================================================== */
 
 /* ---------- 4.1 PROFILE (approved option B content, tighter) -------------------------------------------------------- */
-function slotProfile(){const d=D();return slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20')}
+function slotProfile(){const d=D();return S.nums?slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20'):`<span title="Dev Rate ${d.dev} out of 20"><small>Dev Rate</small><span class="v" style="display:flex;gap:1px">${star(d.dev,4)}</span></span>`}
 function tabProfile(){
   const d=D(),g=d.g;
   const cols=isGK()?[['Goalkeeping',g.gk,['Footedness',g.foot]],['Mental',g.ment],['Physical',g.phys,['Hidden',g.hid]],['Technical',g.tech]]

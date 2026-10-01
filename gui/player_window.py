@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 
 from fm_editor import potential as _pot
 from fm_editor import settings as _settings
-from fm_editor.abilitystars import ability_stars
+from fm_editor.abilitystars import ability_stars, dev_stars
 from gui.stars import _StarWidget
 from fm_editor import traitrec as _tr
 from fm_editor.agecalc import person_age
@@ -781,6 +781,16 @@ class PlayerWindow(QDialog):
         dev = mw._progress_rate(self._person)
         if dev is None:
             return 'Dev Rate', [self._slot_val('-')], ''
+        if self._ability_stars:
+            n = dev_stars(dev)
+            sw = QWidget()
+            sw.setToolTip(f'Dev Rate {dev} out of 20')
+            sh = QHBoxLayout(sw)
+            sh.setContentsMargins(0, 0, 0, 0)
+            sh.setSpacing(1)
+            for i in range(5):
+                sh.addWidget(_StarWidget(max(0.0, min(1.0, n - i))))
+            return 'Dev Rate', [sw], ''
         return 'Dev Rate', [self._slot_val(str(dev), TIER_HEX[tier(dev)])], 'out of 20'
 
     def _slot_contract(self):
