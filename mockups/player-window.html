@@ -14,9 +14,11 @@ HOW TO USE
   Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
   State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
-    inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
+    inj (injured)   hgp / hgc (homegrown set)   unk (HGC status unknown: 'HGC?' + Make HGC disabled)
+    data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
     nums (CA/PA/Dev Rate as numbers instead of stars)
     tips (pin the tooltips so they show in a screenshot)
+  Screenshot mode: ?bare before the # hides the review bar + OS title bar so the window starts at 0,0 (1122x760).
   Texture variants: ?tex=a|b|c|off before the # (or the 'texture' toggle in the review bar), e.g.  ?tex=b#positions
   e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
@@ -38,11 +40,17 @@ TOKENS (gui/theme.py COLORS, literal)
          labels rgba(255,255,255,0.72).  Custom paintEvent in PyQt6 (fillRect stripes, drawLine/drawRect/drawArc, drawEllipse, drawText).
 
 METRICS (px)
-  Window client 1100x760 (min 1040x640).  OS title bar is the real one (no custom topbar).
-  Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 172 | 12 | content 912 | 12 (window 1062 wide).
+  Fonts: the app QSS asks "Roboto","Segoe UI","Liberation Sans"; Roboto/Segoe are absent on the dev machine and Qt falls back to Noto Sans (same here). CSS weight 600 renders as
+  Medium in Qt (Noto Sans has no SemiBold) -> --semi:500; unselected tab labels are weight 400 in the app. Line boxes: line-height normal (Qt 12px = 17px rows).
+  Window client 1122x760 (min 1062x640; PlayerWindow.resize(1122,760)).  OS title bar is the real one (no custom topbar).
+  Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 172 | 12 | content 914 | 12 (window 1122 wide).
   Panel QFrame#pwPanel: bg surface, 1px border, radius 3.  Panel header 36, pad 0 12, 11/700 UPPERCASE text_secondary (QFont letter-spacing).
-  Header panel 80: pad 0 16, avatar 48, name 20/700, row2 12 secondary, row3 chips h20 (pills r10), CA/PA boxes 104x52 (label, 20/700 value,
-    6px bar), tab slot 172 wide behind a 1px border divider (label 10/700 caps, value 20/700, sub 11 secondary).
+  Header panel 80: pad 0 16, avatar 48, name 20/700, row2 12 secondary, row3 chips h20 (pills r10; unknown HGC = bare 'HGC?' 10/700 secondary),
+    height/weight 11 secondary after the chips ('193 cm \u00b7 81 kg', or 'Height / weight' + PENDING chip).
+    NUMBERS mode: CA/PA boxes 104x52 (label, 20/700 value, 6px bar), slot 172x56 centred (label 10/700 caps, value 20/700, sub 11 secondary).
+    STARS mode (default, Settings > Ability display): ONE grid shared by CA box, PA box and slot (_HG_*): top pad 8 | label 14 | gap 4 | value row 24 |
+      gap 4 | caption 14 = 68px high; CA/PA boxes 116x68 (pad 8 10 0 12, 5 stars 15px gap 2, caption 'Current ability' / 'Potential ability' 11 secondary);
+      slot 172x68 with 16px left pad; Dev Rate = 5 stars + 'How fast they develop'.  Tooltip 'CA 149' on the box.
   Tab strip QFrame panel 172: rows 40, inset 6, 16px line icon + 10 gap; selected = selection_bg + 3px accent left border + white 700 + icon #735CE4; hover = elevated + white icon; hairline before General Rating and Training.
   Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | Full Potential).
   Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  Fonts: Noto Sans fallback; 10/11/12, headings 20, numerals 20-36.
@@ -51,15 +59,16 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
   (real app: QToolTip / :hover pseudo-states).  Radius <= half height.  Letter-spacing through QFont.
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
-  Profile: Dev Rate N | Contract & Transfer: "Until Jun 2031" + club | Positions: best position + rating
-  (switches to "Best at full potential" in Future) | History: Apps / Goals (PENDING) | General / Role / Training: Dev Rate (default).
+  Profile: Dev Rate | Contract & Transfer: "Contract until" Jun 2031 + club | Positions: "Best position" badge + rating + word
+  (design-only Future: "Best at full potential") | History: "Apps \u00b7 Goals" 122 \u00b7 7 + 'career, league' (no rows: PENDING chip + 'No history found' /
+  'FM install database not found') | General / Role / Training: Dev Rate (default).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
      ring only the listed position's dot. Which?
   2. Rating words: "Ineffective" for 1 only and "Awkward" for 2-4 is the agent's recollection, UNVERIFIED (earlier mock had Awkward 1-4).
-  3. Foot words (Very Weak ... Very Strong) are assumed.
-  4. Positions "Future": DESIGN ONLY. A real implementation needs a position-rating recompute from the projected attributes
+  3. Foot words: Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16, Very Strong 20 verified in-game; Very Weak (<=5) and Strong 17-19 assumed.
+  4. Positions "Future": DESIGN ONLY (the real button is DISABLED with a tooltip; '+future' still renders the design). A real implementation needs a position-rating recompute from the projected attributes
      (fm_editor/potential.project_attrs -> the same position-weights that produce the 15 current ratings).
   5. Tab strip style follows the current implementation (selection_bg + accent left edge), not the accent-fill of the earlier mock.
 =====================================================================================================================
@@ -69,39 +78,46 @@ OPEN QUESTIONS
   --bg:#14151A; --surface:#1A2226; --elev:#292B32; --border:#343740; --border2:#454A58;
   --tx:#FFFFFF; --tx2:#8B96A8; --tx3:#525B68;
   --acc:#6933BD; --acc2:#735CE4; --accp:#641EAA; --sel:#2A1B4A;
+  --semi:500; /* QSS font-weight:600. Noto Sans has only Medium (500) + Bold (700): Qt resolves 600 to Medium, Chrome to Bold, so 500 here matches the app. Use 600 if the UI font has a real SemiBold */
   --hg:#5AA0D1; --pot:#9A8AF5; --alt:#1E292E;
   --c1:#E8696A; --c2:#E0973C; --c3:#8B96A8; --c4:#E6EAF0; --c5:#EAD95C; --c6:#52C287;
   --k1:rgba(232,105,106,0.14); --k2:rgba(224,151,60,0.14); --k3:rgba(139,150,168,0.14);
   --k4:rgba(230,234,240,0.14); --k5:rgba(234,217,92,0.14); --k6:rgba(82,194,135,0.14);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0E0F13;color:var(--tx);font:12px/1.3 "Noto Sans","Liberation Sans",Arial,sans-serif;padding:16px 24px 48px}
+html.bare .rv,html.bare .cap,html.bare .os{display:none}
+html.bare body{padding:0;background:#14151A;overflow:hidden}
+html.bare .viewport{max-width:none;overflow:visible}
+html.bare .frame{border:none;margin:0;width:1122px}
+body{background:#0E0F13;color:var(--tx);font:12px/normal "Noto Sans","Liberation Sans",Arial,sans-serif;padding:16px 24px 48px}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 button[disabled]{cursor:default}
 svg{display:block}
 svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 
 /* ---- review bar (NOT part of the window) ---- */
-.rv{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 auto 12px;max-width:1120px}
+.rv{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 auto 12px;max-width:1124px}
 .rv h1{font-size:13px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-right:6px}
 .rv .lab{color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-right:-6px}
 .rseg{display:inline-flex;border:1px solid var(--border);border-radius:3px;overflow:hidden}
 .rseg button{height:28px;padding:0 12px;font-weight:700;color:var(--tx2);background:var(--surface)}
 .rseg button.on{background:var(--acc);color:#fff}
-.tg{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--tx2);font-weight:600}
+.tg{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--tx2);font-weight:var(--semi)}
 .tg.on{border-color:var(--acc2);color:#fff;background:var(--sel)}
-.cap{max-width:1120px;margin:10px auto 0;color:var(--tx3);font-size:11px}
-.viewport{max-width:1120px;margin:0 auto;overflow:auto}
+.cap{max-width:1124px;margin:10px auto 0;color:var(--tx3);font-size:11px}
+.cap details{margin-top:8px}.cap summary{cursor:pointer;color:var(--tx2);font-weight:600}
+.cap ul{margin:6px 0 0 18px;display:flex;flex-direction:column;gap:3px;line-height:1.4}
+.viewport{max-width:1124px;margin:0 auto;overflow:auto}
 
 /* ---- OS window frame ---- */
-.frame{width:1100px;border:1px solid var(--border);background:var(--bg);margin:0 auto}
+.frame{width:1124px;border:1px solid var(--border);background:var(--bg);margin:0 auto}
 .os{height:30px;background:#101116;display:flex;align-items:center;padding:0 12px;color:var(--tx2);font-size:12px;border-bottom:1px solid var(--border)}
 .os span:first-child{flex:1;text-align:center;padding-left:54px}
 .os i{display:inline-block;width:10px;height:10px;border:1px solid var(--tx3);margin-left:8px}
 .win{height:760px;display:flex;flex-direction:column;background:var(--bg);position:relative}
 .body{flex:1;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px}
 .main{flex:1;min-height:0;display:flex;gap:12px}
-.content{flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;overflow-y:auto;overflow-x:hidden}
+.content{flex:1;min-width:0;display:flex;gap:12px;align-items:flex-start;overflow-y:auto;overflow-x:hidden;padding-right:6px}
 .content::-webkit-scrollbar{width:6px}
 .content::-webkit-scrollbar-track{background:var(--surface)}
 .content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
@@ -113,9 +129,9 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .ph .r{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-weight:400}
 .pnote{font-size:11px;font-weight:400;color:var(--tx2)}
 .kv{height:24px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.kv .l{color:var(--tx2)} .kv .r{color:#fff;font-weight:600;text-align:right;white-space:nowrap}
+.kv .l{color:var(--tx2)} .kv .r{color:#fff;font-weight:var(--semi);text-align:right;white-space:nowrap}
 .kv:nth-child(even){background:var(--alt)}
-.pend{display:inline-block;height:16px;line-height:16px;padding:0 6px;border-radius:2px;background:var(--elev);color:var(--tx2);font-size:10px;font-weight:700;letter-spacing:.06em;vertical-align:middle}
+.pend{display:inline-block;height:20px;line-height:20px;padding:0 8px;border-radius:10px;background:rgba(122,143,166,0.12);color:#7a8fa6;font-size:10px;font-weight:700;letter-spacing:1.14px;vertical-align:middle}  /* = main_window._CLUB_PENDING_QSS (QSS says 0.06em; the rendered chip is 73x20 = text + 1.14px/char, measured) */
 .c1{color:var(--c1)}.c2{color:var(--c2)}.c3{color:var(--c3)}.c4{color:var(--c4)}.c5{color:var(--c5)}.c6{color:var(--c6)}
 .f1{background:var(--c1)}.f2{background:var(--c2)}.f3{background:var(--c3)}.f4{background:var(--c4)}.f5{background:var(--c5)}.f6{background:var(--c6)}
 .k1{background:var(--k1)}.k2{background:var(--k2)}.k3{background:var(--k3)}.k4{background:var(--k4)}.k5{background:var(--k5)}.k6{background:var(--k6)}
@@ -123,12 +139,13 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .badge.w{min-width:44px}
 .bGK{background:#C07B2A}.bD{background:#3A6BA8}.bDM{background:#5A3A8A}.bM{background:#3A8A5A}.bST{background:#A83A3A}
 .pill{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid var(--border2);color:var(--tx2)}
+.pill.unk{border-color:transparent;color:var(--tx2);padding:0 2px}
 .pill.on{color:var(--hg);border-color:var(--hg);background:rgba(90,160,209,0.14)}
-.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:3px;font-size:11px;font-weight:600;background:var(--elev);color:#fff;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:3px;font-size:11px;font-weight:var(--semi);background:var(--elev);color:#fff;white-space:nowrap}
 .chip.inj{background:#8B1A1A}
 .chip.ok{color:#52C287}
 .chip.pers{background:var(--sel);color:var(--pot)}
-.chip.soon{height:20px;border-radius:10px;padding:0 10px;font-size:10px;font-weight:700;letter-spacing:.08em;background:transparent;border:1px solid var(--border2);color:var(--tx2)}
+.chip.soon{height:20px;border-radius:10px;padding:0 10px;font-size:10px;font-weight:700;letter-spacing:.88px;background:transparent;border:1px solid var(--border2);color:var(--tx2)}
 .bar{height:6px;background:var(--border);position:relative;min-width:0;flex:1}
 .bar i{position:absolute;left:0;top:0;bottom:0;display:block}
 .tile{height:20px;min-width:30px;padding:0 6px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
@@ -139,13 +156,16 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .b2[disabled],.b2[disabled]:hover{color:var(--tx3);border-color:var(--border);background:var(--elev)}
 /* segmented control (Current | Full Potential, Current | Future) */
 .sg{display:inline-flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden;background:var(--bg)}
-.sg button{white-space:nowrap;height:22px;padding:0 12px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
+.sg button{white-space:nowrap;height:24px;padding:0 14px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
 .sg button.on{background:var(--acc);color:#fff}
+.sg button[disabled]{color:var(--tx3);background:var(--bg);cursor:default}
+.sg{position:relative}
 /* review-only tooltip bubble (real app: QToolTip) */
 [data-tip]{position:relative}
 [data-tip]::after{content:attr(data-tip);display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;
   background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:4px 8px;font-size:11px;font-weight:400;color:#fff;z-index:20;pointer-events:none}
 [data-tip]:hover::after,[data-tip].pin::after{display:block}
+.sg [data-tip]::after{white-space:normal;width:250px;left:auto;right:0;transform:none;text-align:left}
 .trow[data-tip]::after{bottom:auto;top:calc(100% + 4px);left:auto;right:12px;transform:none}
 
 /* ---- persistent header ---- */
@@ -157,29 +177,38 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hid .r2{color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hid .r3{display:flex;align-items:center;gap:6px;height:20px}
-.hid .r3 .hw{margin-left:8px;color:var(--tx2);font-size:11px;display:flex;align-items:center;gap:6px}
+.hid .r3 .hw{margin-left:2px;color:var(--tx2);font-size:11px;display:flex;align-items:center;gap:6px}
 .cab{width:104px;height:52px;padding:6px 10px 0;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
 .cab .t{display:flex;align-items:baseline;justify-content:space-between;height:26px}
 .cab small{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--tx2)}
 .cab b{font-size:20px;line-height:1.1}
 .cab .bar{display:block;flex:none;margin-top:3px}
-.slot{width:172px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:16px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.cab.st{width:116px;height:68px;padding:8px 10px 0 12px;display:flex;flex-direction:column;gap:4px}
+.cab.st small{display:block;height:14px;line-height:14px}
+.cab.st .stars,.slot .stars{height:24px;display:flex;align-items:center;gap:2px}
+.cab.st .cpt{height:14px;line-height:14px;font-size:11px;color:var(--tx2)}
+.slot{width:172px;flex:none;height:56px;border-left:1px solid var(--border);padding-left:15px;display:flex;flex-direction:column;justify-content:flex-start;gap:0}
+/* numbers mode: 14 + 3 + 24 + 1 + 14 = 56 (Qt squeezes the 58px of content into the 56px slot: label y+0, value row y+17, caption y+42) */
+.slot small{height:14px;line-height:14px;margin-bottom:3px}
+.slot .v{margin-bottom:1px}
+.slot.st{height:68px;padding-top:8px;gap:4px}
+.slot.st small,.slot.st .v{margin-bottom:0}
 .slot small{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);white-space:nowrap}
 .slot .v{font-size:20px;font-weight:700;line-height:24px;height:24px;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .slot .s{font-size:11px;color:var(--tx2);height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- persistent tab strip ---- */
 .tabs{width:172px;flex:none;padding:6px;display:flex;flex-direction:column;gap:2px}
-.tab{height:40px;padding:0 8px 0 9px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--tx2);text-align:left;border-left:3px solid transparent;border-radius:0}
+.tab{white-space:nowrap;height:40px;padding:0 8px 0 9px;display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;color:var(--tx2);text-align:left;border-left:3px solid transparent;border-radius:0}
 .tab svg{width:16px;height:16px;flex:none;stroke:#6E7787;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .tab:hover{background:var(--elev);color:#fff;border-left-color:var(--border2)}
 .tab:hover svg{stroke:#fff}
 .tab.on,.tab.on:hover{background:var(--sel);color:#fff;font-weight:700;border-left-color:var(--acc)}
 .tab.on svg,.tab.on:hover svg{stroke:var(--acc2)}
-.tabsep{height:1px;background:var(--border);margin:4px 6px;flex:none}
+.tabsep{height:1px;background:var(--border);margin:2px 6px;flex:none}  /* 2+2+1+2+2 = 9px between the tabs either side (Qt: addSpacing(2) x2 + layout spacing) */
 
 /* ---- persistent action strip ---- */
-.strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;flex:none}
+.strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:8px;padding:9px 12px 0;flex:none}  /* buttons at y+10 as in Qt (QSS border-top does not shrink the layout) */
 .strip .sp{flex:1}
 
 /* =====================================================================================================================
@@ -277,19 +306,37 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .p-rail{width:216px;flex:none;display:flex;flex-direction:column;gap:12px}
 .prs{display:flex;align-items:center;gap:8px;height:26px;padding:0 12px}
 .prs .an{width:96px;color:var(--tx2);flex:none} .prs b{width:22px;text-align:right}
-.trow{padding:4px 12px;min-height:26px;display:flex;align-items:center;font-weight:600}
+.trow{padding:4px 12px;line-height:17px;display:flex;align-items:center;font-weight:var(--semi)}
 .trow:nth-child(even){background:var(--alt)}
 .trow.mute{color:var(--tx2);font-weight:400}
-.cp{padding:0 12px 10px;color:var(--tx2);font-size:11px;line-height:1.5}
+.cp{padding:0 12px 10px;color:var(--tx2);font-size:11px;line-height:15px}
 
+/* recommended traits (Profile rail): owned = muted + tick; score = bold tier colour */
+.rec{padding:2px 12px;line-height:17px;display:flex;align-items:center;gap:6px;font-weight:var(--semi)}
+.rec:nth-child(even){background:var(--alt)}
+.rec .n{flex:1;min-width:0}
+.rec.has .n{color:var(--tx2);font-weight:400}
+.rec b{width:30px;text-align:right;flex:none}
+.rnote{padding:6px 12px;color:var(--tx2);font-size:11px;line-height:15px}
+/* ---- HISTORY (Career history table; widths 78 | club flex | kind 52 | apps 44 | goals 44 | fee 70, gap 8, row 26) ---- */
+.hrow{height:26px;padding:0 12px;display:flex;align-items:center;gap:8px;flex:none}
+.hrow.alt{background:var(--alt)}
+.hrow>*{white-space:nowrap;overflow:hidden;flex:none}
+.hrow .hs{width:78px;font-weight:var(--semi)}.hrow .hc{flex:1;min-width:0;text-overflow:ellipsis;font-weight:var(--semi)}.hrow .hc.un{font-weight:400;color:var(--tx2)}
+.hrow .hk{width:52px;color:var(--tx2)}.hrow .ha,.hrow .hg{width:44px;text-align:right;font-weight:var(--semi)}.hrow .hf{width:70px;text-align:right;color:var(--tx2)}
+.hrow.hh>*{font-weight:700;color:var(--tx2);font-size:11px}
+.hnote{padding:8px 12px 12px;color:var(--tx2);font-size:11px;line-height:15px}
+.hpn{flex:1;align-self:flex-start}
 /* ---- CONTRACT / COMING SOON ---- */
 .c-col{width:360px;flex:none;display:flex;flex-direction:column;gap:12px}
 .note{padding:0 12px 14px;color:var(--tx2);font-size:12px;line-height:1.5}
-.soonpg{flex:1;align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
+.soonpg{margin-right:-6px;flex:1;align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
 .soonpg .t{font-size:20px;font-weight:700}
 .soonpg .d{width:360px;color:var(--tx2);font-size:12px;line-height:1.5}
 
 /* ---- POSITIONS ---- */
+/* page = ONE row that is at least the viewport high and as high as its tallest panel (Qt: body widget in a QScrollArea): both panels stretch to it, a scrollbar appears when it is > 592 */
+.pg{flex:1;min-width:0;display:flex;gap:12px;align-items:stretch;min-height:100%}
 .o1list{width:456px;flex:none;align-self:stretch;display:flex;flex-direction:column}
 .pr{height:26px;padding:0 12px;display:flex;align-items:center;gap:8px;flex:none}
 .pr:nth-child(even){background:var(--alt)}
@@ -303,11 +350,11 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .pr.hl,.pr.hl:nth-child(even){background:var(--elev)}
 .sub{height:30px;margin-top:4px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2);flex:none}
 .sub em{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0}
-.key{margin-top:auto;padding:6px 12px 12px;color:var(--tx2);font-size:11px;line-height:1.5}
-.lg{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.key{margin-top:auto;padding:6px 12px 12px;color:var(--tx2);font-size:11px;line-height:15px}
+.lg{display:flex;align-items:center;gap:12px;margin-bottom:4px;height:15px}
 .lg span{display:inline-flex;align-items:center;gap:5px}
 .lg i{display:inline-block;width:10px;height:10px;border-radius:2px}
-.o1pitch{width:444px;flex:none;align-self:stretch;overflow:hidden}
+.o1pitch{flex:1;max-width:444px;min-width:300px;align-self:stretch;overflow:hidden;position:relative;padding:1px}  /* Qt: layout margin 1 inside the 1px border -> pitch widget = panel - 4 */
 </style>
 </head>
 <body>
@@ -319,7 +366,21 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
-<p class="cap">Sample data is fictional (centre-back template uses van de Ven ratings). PENDING = not in the save yet; "Real data" shows sample wage, value, height and weight.</p>
+<div class="cap"><p>Sample data is fictional (centre-back template uses van de Ven ratings). PENDING = not in the save yet; "Real data" shows sample wage, value, height and weight.</p>
+<details>
+<summary>Still to find / verify (reminders)</summary>
+<ul>
+<li>Trait bit 48 (guess: Attempts To Develop Weaker Foot) - unconfirmed; holders to look up when scouted: Philip Andersson (J&ouml;nk&ouml;pings S&ouml;dra), Michalis Michail (Anorthosis), Vitaly Semenov, Cau&ecirc; Gordilho, Keith Keegan (needs scouting).</li>
+<li>Trait bit 53 - a flag carried only by staff/non-players (e.g. Wanda Nara, Tomislav Puljic): need a staff profile screenshot. Bits 49, 61, 62 are set in the save but the game shows no trait for them (hidden; nothing to do).</li>
+<li>Foot words: 'Strong' at 17-19 vs 'Very Strong' unverified (Branthwaite right 17, Demb&eacute;l&eacute; right 18, Greenwood right 19); 'Very Weak' range unverified.</li>
+<li>Position familiarity words (Natural/Accomplished/Competent/Unconvincing/Awkward/Ineffective) number ranges unverified: need a hover screenshot of a player's positions.</li>
+<li>Asking price and transfer/loan status: not found in the save (market value is stored; the game shows a range around it).</li>
+<li>Wage rounding for the display is inferred (the 50K step above &pound;300K rests on one player); reputation star boundaries fitted to 9 clubs.</li>
+<li>History: seasons simulated in the save (2025-28) not shown; plain-year season labels for calendar-year leagues are an assumption; History needs the FM install database.</li>
+<li>Not in the save at all: club Region, Founded, Facilities; contract Bonuses &amp; clauses (panel removed).</li>
+<li>General Rating and Role Rating tab contents: need in-game screens.</li>
+</ul>
+</details></div>
 
 <script>
 /* =====================================================================================================================
@@ -341,10 +402,13 @@ const SLOTS={
  GK:[.50,.94]};
 // attribute tuple: [name, current, at-potential, lowerIsBetter]
 const OUT={
- name:'Micky van de Ven',pos:'DC',nat:'Dutch',age:26,born:'12 Apr 2000',club:'Tottenham',ca:149,pa:160,dev:15,inj:0,
- until:'Jun 2031',start:'Jul 2024',wage:'£100K p/w',value:'£88M – £97M',height:'193 cm',weight:'81 kg',apps:'212 apps · 14 goals',
+ name:'Micky van de Ven',pos:'DC',nat:'Netherlands',age:26,born:'12 Apr 2000',club:'Tottenham',ca:149,pa:160,dev:16,inj:0,
+ until:'Jun 2031',start:'Jul 2024',wage:'£100K p/w',value:'£93M',height:'193 cm',weight:'81 kg',
  potNote:'PA is rarely reached after 26.',
- traits:['Tries Long Range Passes','Brings Ball Out Of Defence','Trait #12'],
+ traits:['Marks Opponent Tightly','Tries Long Range Passes','Trait #53','Brings Ball Out Of Defence'],
+ /* Recommended traits (fm_editor/traitrec.py; ticked = player already has it): [name, score, has]; recP = at Full Potential */
+ rec:[['Does Not Dive Into Tackles',15.4,0],['Marks Opponent Tightly',14.8,1],['Knocks Ball Past Opponents',14.5,0],['Likes to Beat Opponent Repeatedly',14.2,0],['Stays Back at All Times',14.0,0]],
+ recP:[['Does Not Dive Into Tackles',15.9,0],['Marks Opponent Tightly',15.4,1],['Knocks Ball Past Opponents',15.0,0],['Likes to Beat Opponent Repeatedly',14.8,0],['Stays Back at All Times',14.8,0]],
  pers:[['Adaptability',13],['Ambition',17],['Loyalty',9],['Pressure',14],['Professionalism',15],['Sportsmanship',12],['Temperament',14]],persLabel:'Ambitious',
  posr:{GK:1,SW:14,DL:18,DC:20,DR:9,WBL:16,WBR:7,DM:10,ML:5,MC:8,MR:3,AML:3,AMC:4,AMR:2,ST:4},
  posf:{GK:1,SW:16,DL:19,DC:20,DR:11,WBL:17,WBR:9,DM:12,ML:6,MC:10,MR:4,AML:3,AMC:5,AMR:3,ST:4},
@@ -356,10 +420,10 @@ const OUT={
   hid:[['Consistency',13,14],['Dirtiness',8,8,1],['Important Matches',14,15],['Injury Prone',7,7,1],['Versatility',12,12]],
   foot:[['Left Foot',20,20],['Right Foot',12,13]]}};
 const GKP={
- name:'Guglielmo Vicario',pos:'GK',nat:'Italian',age:28,born:'7 Oct 1996',club:'Tottenham',ca:138,pa:142,dev:13,inj:0,
- until:'Jun 2029',start:'Aug 2022',wage:'£85K p/w',value:'£30M – £38M',height:'194 cm',weight:'89 kg',apps:'301 apps · 0 goals',
+ name:'Guglielmo Vicario',pos:'GK',nat:'Italy',age:29,born:'7 Oct 1996',club:'Tottenham',ca:138,pa:142,dev:13,inj:0,
+ until:'Jun 2029',start:'Aug 2022',wage:'£85K p/w',value:'£34M',height:'194 cm',weight:'89 kg',
  potNote:'PA is rarely reached after 26.',
- traits:['Comes For Crosses','Trait #25'],
+ traits:[],recNote:'Not applicable to goalkeepers.',
  pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],persLabel:'Professional',
  posr:{GK:20,SW:2,DL:1,DC:1,DR:1,WBL:1,WBR:1,DM:1,ML:1,MC:1,MR:1,AML:1,AMC:1,AMR:1,ST:1},
  posf:{GK:20,SW:3,DL:1,DC:1,DR:1,WBL:1,WBR:1,DM:1,ML:1,MC:1,MR:1,AML:1,AMC:1,AMR:1,ST:1},
@@ -370,32 +434,41 @@ const GKP={
   gk:[['Aerial Reach',15,16],['Command of Area',14,15],['Communication',15,16],['Eccentricity',7,7,1],['Handling',15,16],['Kicking',13,14],['One on Ones',14,15],['Punching',11,12],['Reflexes',16,16],['Rushing Out',12,13],['Throwing',12,12]],
   hid:[['Consistency',14,14],['Dirtiness',5,5,1],['Important Matches',13,14],['Injury Prone',9,9,1],['Versatility',4,4]],
   foot:[['Left Foot',10,10],['Right Foot',18,18]]}};
-/* low-rated 19yo: attributes are OUT scaled to ~60% (placeholder), potentials auto-derived by finish() */
+/* low-rated 19yo: attributes are OUT scaled to ~60% (placeholder) */
 const scaleG=(g,k)=>{const o={};for(const s in g)o[s]=g[s].map(a=>a[3]?a.slice():[a[0],Math.max(1,Math.round(a[1]*k)),0]);return o};
 const LOW={
- name:'Jake Holloway',pos:'MC',nat:'English',age:19,born:'3 Feb 2007',club:'Tottenham U21',ca:62,pa:88,dev:12,inj:21,
- until:'Jun 2028',wage:'£4K p/w',value:'£600K – £1.2M',height:'181 cm',weight:'72 kg',apps:'18 apps · 2 goals',
- potNote:'',auto:true,
- traits:[],
+ name:'Jake Holloway',pos:'MC',nat:'England',age:19,born:'3 Feb 2007',club:'Tottenham U21',ca:62,pa:88,dev:12,inj:21,
+ until:'Jun 2028',wage:'£4K p/w',value:'£900K',height:'181 cm',weight:'72 kg',
+ potNote:'',
+ traits:[],recNote:'No trait reaches an average of 11.',
  pers:[['Adaptability',11],['Ambition',14],['Loyalty',8],['Pressure',9],['Professionalism',13],['Sportsmanship',10],['Temperament',11]],persLabel:'Determined',
  posr:{GK:1,SW:3,DL:4,DC:5,DR:5,WBL:6,WBR:5,DM:11,ML:9,MC:13,MR:9,AML:6,AMC:10,AMR:6,ST:4},
  posf:{GK:1,SW:5,DL:7,DC:8,DR:8,WBL:9,WBR:8,DM:16,ML:13,MC:18,MR:13,AML:10,AMC:15,AMR:10,ST:7},
  g:scaleG(OUT.g,.6)};
 LOW.g.foot=[['Left Foot',6,6],['Right Foot',11,11]];
+/* Career history sample (fm_editor/history.career_for_person rows): kind '' | 'loan' | 'youth' | 'youth loan'; club null = 'Unknown club'; fee null = blank, 0 = Free */
+const HIST=[
+ {s:'2018/19',k:'youth',c:'FC Volendam U19',a:12,g:1,f:null},
+ {s:'2019/20',k:'',c:'FC Volendam',a:19,g:0,f:null},
+ {s:'2020/21',k:'loan',c:'Excelsior',a:26,g:2,f:null},
+ {s:'2021/22',k:'',c:'FC Volendam',a:0,g:0,f:3000000},
+ {s:'2021/22',k:'',c:null,a:5,g:0,f:0},
+ {s:'2022/23',k:'',c:'VfL Wolfsburg',a:33,g:1,f:34300000},
+ {s:'2023/24',k:'',c:'Tottenham',a:27,g:3,f:null},
+ {s:'2024/25',k:'youth loan',c:'Tottenham U21',a:null,g:null,f:null}];
 const SAMPLES={out:OUT,gk:GKP,low:LOW};
 const SAMPLE_NAMES={out:'Outfield (CB)',gk:'Goalkeeper',low:'Low-rated'};
-/* potential values: explicit samples freeze hidden/foot (+ physical after 24); `auto` samples derive every non-frozen attr */
-Object.values(SAMPLES).forEach(d=>{
-  if(d.auto){for(const k of ['tech','ment','phys','gk'])d.g[k].forEach(a=>{if(!a[3])a[2]=Math.min(20,a[1]+Math.round((20-a[1])*.3));else a[2]=a[1]});
-             ['hid','foot'].forEach(k=>d.g[k].forEach(a=>a[2]=a[1]));}
-  else{['hid','foot'].forEach(k=>d.g[k].forEach(a=>a[2]=a[1]));if(d.age>24)d.g.phys.forEach(a=>a[2]=a[1])}
-});
+/* Full Potential values = what fm_editor/potential.project_attrs returns for these samples (display_value, 1-20); an attribute missing from POTV does not grow.
+   (Generated from the app; regenerate if the projection changes. Hidden / footedness / lower-is-better never grow.) */
+const POTV={"out":{"Corners":6,"Crossing":9,"Dribbling":11,"Finishing":7,"First Touch":13,"Free Kick":6,"Heading":15,"Long Shots":8,"Marking":16,"Passing":13,"Anticipation":16,"Bravery":15,"Composure":15,"Concentration":15,"Decisions":15,"Leadership":11,"Off the Ball":8,"Positioning":16,"Vision":11,"Work Rate":15,"Agility":14,"Balance":14,"Stamina":15,"Strength":15},"gk":{},"low":{"Crossing":7,"Dribbling":8,"Finishing":5,"First Touch":9,"Free Kick":4,"Heading":9,"Long Shots":6,"Marking":10,"Passing":9,"Penalties":5,"Tackling":11,"Technique":9,"Anticipation":10,"Bravery":9,"Composure":9,"Concentration":9,"Decisions":9,"Leadership":8,"Off the Ball":6,"Positioning":10,"Teamwork":9,"Vision":8,"Work Rate":9,"Acceleration":12,"Agility":9,"Balance":9,"Jumping Reach":11,"Pace":12,"Stamina":9,"Strength":9}};
+Object.entries(SAMPLES).forEach(([k,d])=>{for(const g in d.g)d.g[g].forEach(a=>{a[2]=a[3]?a[1]:(POTV[k][a[0]]||a[1])})});
 
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,data:false,tips:false};
+const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,unk:false,nopend:false,data:false,tips:false};
 const D=()=>SAMPLES[S.smp];
+if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
 /* texture: ?tex=a|b|c|off (query string, before the #) */
 const TEXS=[['off','Off'],['a','A Pitch lines'],['b','B Steel'],['c','C Floodlit']];
 S.tex=(new URLSearchParams(location.search).get('tex')||'off').toLowerCase();if(!TEXS.some(t=>t[0]===S.tex))S.tex='off';
@@ -409,11 +482,13 @@ const HEX=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
 const aT=a=>tier(a[3]?21-a[1]:a[1]);
 /* rating words. UNVERIFIED: 1 = Ineffective, 2-4 = Awkward (see OPEN QUESTIONS 2) */
 const word=v=>v>=20?'Natural':v>=15?'Accomplished':v>=10?'Competent':v>=5?'Unconvincing':v>=2?'Awkward':'Ineffective';
-const footWord=v=>v<=5?'Very Weak':v<=9?'Weak':v<=14?'Reasonable':v<=17?'Fairly Strong':v<=19?'Strong':'Very Strong';
+const footWord=v=>v<=5?'Very Weak':v<=8?'Weak':v<=11?'Reasonable':v<=14?'Fairly Strong':v<=19?'Strong':'Very Strong'; // verified in-game: Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16, Very Strong 20
 const badge=(p,w)=>`<span class="badge ${BADGE[p]}${w?' w':''}">${CODE[p]}</span>`;
 const person='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
 const pend='<span class="pend">PENDING</span>';
 const pv=t=>S.data?t:pend;                          // unparsed field: sample value or PENDING
+const pendV=()=>S.nopend?'':pend;                   // PENDING chip, hidden when Settings > Show PENDING markers is off
+const money=n=>n==null?'':n===0?'Free':'£'+(n>=1e6?(n/1e6).toFixed(1).replace('.0','')+'M':(n/1e3).toFixed(0)+'K');
 const ph=(t,r='')=>`<div class="ph"><span>${t}</span>${r?`<span class="r">${r}</span>`:''}</div>`;
 const kv=(l,r)=>`<div class="kv"><span class="l">${l}</span><span class="r">${r}</span></div>`;
 const sgc=(act,items,cur)=>`<span class="sg">${items.map(([k,l])=>`<button data-act="${act}" data-v="${k}" class="${k===cur?'on':''}">${l}</button>`).join('')}</span>`;
@@ -427,17 +502,17 @@ const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16'
 function header(slotHTML){
   const d=D();
   /* Ability display setting: stars (default; label + 5 half-step stars, value in tooltip; stars = value/40 to nearest .5, clamp .5..5) | numbers (#nums flag: number + bar) */
-  const cab=(l,v,c)=>S.nums?`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`:`<div class="cab" title="${l} ${v}"><div class="t"><small>${l}</small></div><div style="display:flex;gap:1px;margin-top:3px">${star(v)}</div></div>`;
+  const cab=(l,v,c)=>S.nums?`<div class="cab"><div class="t"><small>${l}</small><b style="color:${c}">${v}</b></div><div class="bar"><i style="width:${v/2}%;background:${c}"></i></div></div>`:`<div class="cab st" title="${l} ${v}"><small>${l}</small><div class="stars">${star(v)}</div><div class="cpt">${l==='CA'?'Current ability':'Potential ability'}</div></div>`;
   return `<div class="pn hdr"><div class="avatar">${person}</div>
     <div class="hid">
       <div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div>
       <div class="r2">${d.nat} · ${d.age} years (born ${d.born}) · ${d.club}</div>
-      <div class="r3"><span class="pill ${S.hgp?'on':''}">HGP</span><span class="pill ${S.hgc?'on':''}">HGC</span>
+      <div class="r3"><span class="pill ${S.hgp?'on':''}">HGP</span>${S.unk&&!S.hgc?'<span class="pill unk" data-tip="Homegrown status at this club could not be determined">HGC?</span>':`<span class="pill ${S.hgc?'on':''}">HGC</span>`}
         ${injured()?`<span class="chip inj">Injured · ${d.inj||14} days</span>`:'<span class="chip ok">Fit</span>'}
-        <span class="hw">${S.data?d.height+' · '+d.weight:'Height / weight '+pend}</span></div>
+        ${S.data||!S.nopend?`<span class="hw">${S.data?d.height+' · '+d.weight:'Height / weight '+pend}</span>`:''}</div>
     </div>
     ${cab('CA',d.ca,'#735CE4')}${cab('PA',d.pa,'#9A8AF5')}
-    <div class="slot">${slotHTML}</div></div>`;
+    <div class="slot${S.nums?'':' st'}">${slotHTML}</div></div>`;
 }
 /* Ability display: stars = value/div (CA/PA div 40, Dev Rate div 4) to nearest .5, clamp .5..5 */
 const star=(v,div=40)=>{const n=Math.max(.5,Math.min(5,Math.round(v/div*2)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));s+=`<svg width="15" height="15" viewBox="0 0 15 15"><defs><clipPath id="c${i}${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#c${i}${v}_${div})"/></svg>`}return s};
@@ -462,6 +537,7 @@ function actionStrip(){
   const tip='Open from Squads to patch';
   const mk=(k,l)=>S[k]?`<button class="btn b2" disabled>${l} set</button>`
     :S.scout?`<button class="btn b2 ${k==='hgp'&&(S.scout||S.tips)?'pin':''}" disabled data-tip="${tip}">Make ${l}</button>`
+    :k==='hgc'&&S.unk?`<button class="btn b2 ${S.tips?'pin':''}" disabled data-tip="Club unknown for this player.">Make ${l}</button>`
     :`<button class="btn b2" data-act="mk" data-v="${k}">Make ${l}</button>`;
   return `<div class="strip"><span class="sp"></span><button class="btn b2" data-act="close">Close</button>${mk('hgp','HGP')}${mk('hgc','HGC')}
     <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button></div>`;
@@ -472,7 +548,7 @@ function actionStrip(){
    ===================================================================================================================== */
 
 /* ---------- 4.1 PROFILE (approved option B content, tighter) -------------------------------------------------------- */
-function slotProfile(){const d=D();return S.nums?slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20'):`<span title="Dev Rate ${d.dev} out of 20"><small>Dev Rate</small><span class="v" style="display:flex;gap:1px">${star(d.dev,4)}</span></span>`}
+function slotProfile(){const d=D();return S.nums?slot('Dev Rate',`<span class="c${tier(d.dev)}">${d.dev}</span>`,'out of 20'):slot('Dev Rate',`<span class="stars" title="Dev Rate ${d.dev} out of 20">${star(d.dev,4)}</span>`,'How fast they develop')}
 function tabProfile(){
   const d=D(),g=d.g;
   const cols=isGK()?[['Goalkeeping',g.gk,['Footedness',g.foot]],['Mental',g.ment],['Physical',g.phys,['Hidden',g.hid]],['Technical',g.tech]]
@@ -490,8 +566,11 @@ function tabProfile(){
   let firstMute=true;
   const tr=(d.traits.length?d.traits:['None']).map(t=>{const un=t.startsWith('Trait #'),m=un||!d.traits.length,pin=un&&firstMute&&S.tips;if(un)firstMute=false;
     return `<div class="trow${m?' mute':''}${pin?' pin':''}"${un?' data-tip="Name not confirmed yet"':''}>${t}</div>`}).join('');
-  const rail=`<div class="p-rail"><div class="pn">${ph('Personality',`<span class="chip pers">${d.persLabel}</span>`)}<div style="padding-bottom:8px">${pers}</div></div>
-    <div class="pn">${ph('Player traits')}<div style="padding-bottom:8px">${tr}</div></div></div>`;
+  const rl=S.pot&&d.recP?d.recP:d.rec;
+  const rec=(rl||[]).map(([n,sc,has])=>`<div class="rec${has?' has':''}"><span class="n">${has?'\u2713 ':''}${n}</span><b class="c${tier(Math.round(sc))}">${sc.toFixed(1)}</b></div>`).join('')+(d.recNote?`<div class="rnote">${d.recNote}</div>`:'');
+  const rail=`<div class="p-rail"><div class="pn">${ph('Personality')}<div style="padding-bottom:8px">${pers}</div></div>
+    <div class="pn">${ph('Player traits')}<div style="padding-bottom:8px">${tr}</div></div>
+    <div class="pn" data-tip="Average of the attributes behind each trait (source: GuideToFM). Needs an average of 11+ (Settings > Trait recommender threshold).">${ph('Recommended traits')}<div style="padding-bottom:4px">${rec}</div></div></div>`;
   return attrs+rail;
 }
 
@@ -501,9 +580,9 @@ const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span
 function tabContract(){
   /* Rows with no stored value show PENDING here (the app hides them when Settings > Show PENDING markers is off;
      Start only when the save has it; the Transfer panel disappears when none of its rows are visible). No Bonuses panel. */
-  const d=D(),row=(l,v)=>v?kv(l,v):kv(l,pend);
+  const d=D(),row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
   const tr=[row('Market value',S.data?d.value:''),row('Asking price',''),row('Transfer / loan status','')].join('');
-  return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',d.wage)}${row('Value',S.data?d.value:'')}</div></div>
+  return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',S.data?d.wage:'')}</div></div>
     ${tr?`<div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${tr}</div></div>`:''}</div>`;
 }
 
@@ -543,11 +622,12 @@ function tabPositions(){
     return `<div class="pr${v>=20?' nat':''}${p===d.pos?' me':''}" data-p="${p}">${badge(p,1)}<span class="nm">${FULL[p]}</span><span class="tile k${t} c${t}" style="width:34px">${v}</span><span class="wd">${word(v)}${dl>0?`<i>+${dl}</i>`:''}</span></div>`}).join('');
   const lf=d.g.foot[0][1],rf=d.g.foot[1][1],footed=Math.abs(lf-rf)>=4?(lf>rf?'Left-footed':'Right-footed'):'Either foot';
   const feet=d.g.foot.map(([l,v])=>`<div class="pr"><span class="lb">${l}</span><span class="tile k${tier(v)} c${tier(v)}" style="width:34px">${v}</span><span class="wd">${footWord(v)}</span></div>`).join('');
-  const hd=ph('Positions',(S.future?'<span class="pnote">Estimate at full potential</span>':'')+sgc('future',[['cur','Current'],['future','Future']],S.future?'future':'cur'));
+  /* Future is DISABLED in the real app (tooltip: position ratings are stored in the save, not calculated from attributes); '+future' only previews the design */
+  const hd=ph('Positions',(S.future?'<span class="pnote">Estimate at full potential</span>':'')+`<span class="sg"><button data-act="future" data-v="cur" class="${S.future?'':'on'}">Current</button><button data-act="future" data-v="future" class="${S.future?'on':''}"${S.future?'':` disabled data-tip="Not available yet: position ratings are stored in the save, not calculated from attributes, so they cannot be recomputed from projected attributes."`}>Future</button></span>`);
   const list=`<div class="pn o1list">${hd}${rows}<div class="sub"><span>Feet</span><em>${footed}</em></div>${feet}
     <div class="key"><div class="lg">${tierKey().map(([l,t])=>`<span><i class="f${t}"></i>${l}</span>`).join('')}</div>
       White ring = Natural (20) · bold = listed position<br><span style="color:#fff">Natural</span> 20 · Accomplished 15–19 · Competent 10–14<br>Unconvincing 5–9 · Awkward 2–4 · Ineffective 1</div></div>`;
-  return list+`<div class="pn o1pitch">${pitchSVG(R,442,590,22)}</div>`;
+  return `<div class="pg">${list}<div class="pn o1pitch">${pitchSVG(R,430,592,22)}</div></div>`;
 }
 
 /* ---------- 4.5 GENERAL RATING / 4.6 POSITIONAL RATING / 4.7 ROLE RATING (coming soon) ------------------------------ */
@@ -556,9 +636,17 @@ function tabGeneral(){return soonPage('General Rating','Overall rating and a sum
 function tabRole(){return soonPage('Role Rating','Suitability for each tactical role.')}
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
-function slotHistory(){const d=D();return S.data?slot('Apps · Goals',d.apps,'Career'):slot('Apps · Goals',pend,'Not in the save yet')}
+function slotHistory(){
+  if(!S.data)return slot('Apps · Goals',pendV(),'FM install database not found');
+  const a=HIST.reduce((n,r)=>n+(r.a||0),0),g=HIST.reduce((n,r)=>n+(r.g||0),0);return slot('Apps · Goals',`${a} · ${g}`,'career, league')}
 function tabTraining(){return soonPage('Training','Training focus, schedules and development notes will live here.')}
-function tabHistory(){return soonPage('History','Career stats by season and club.')}
+/* Career history: install-DB rows + this save's seasons (fm_editor/history.py). Fee = fee paid for the move at the end of that row. No rows -> note + PENDING chip. */
+function tabHistory(){
+  if(!S.data)return `<div class="pn hpn">${ph('Career history')}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Career history is read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
+  const kind={loan:'Loan',youth:'Youth','youth loan':'Youth loan'};
+  const rows=HIST.map((r,i)=>`<div class="hrow${i%2?' alt':''}"${r.c?'':' data-tip="Club id 99999 is not in the club tables"'}><span class="hs">${r.s}</span><span class="hc${r.c?'':' un'}">${r.c||'Unknown club'}</span><span class="hk">${kind[r.k]||''}</span><span class="ha">${r.a==null?'-':r.a}</span><span class="hg">${r.g==null?'-':r.g}</span><span class="hf">${money(r.f)}</span></div>`).join('');
+  return `<div class="pn hpn">${ph('Career history')}<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="ha">Apps</span><span class="hg">Goals</span><span class="hf">Fee</span></div>${rows}
+    <div class="hnote">League appearances and goals per season. Rows up to the last season of the FM install database come from it; later seasons come from this save. Fee = transfer fee paid for the move at the end of that row.</div></div>`}
 
 /* ---------- registry: order = tab strip order ---------- */
 const TABS=[
@@ -573,8 +661,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['nums','pot','future','scout','short','inj','hgp','hgc','data','tips'];
-const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['data','Real data'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['nums','pot','future','scout','short','inj','hgp','hgc','unk','nopend','data','tips'];
+const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
@@ -588,7 +676,7 @@ function render(){
   const tg=document.getElementById('tgs');tg.innerHTML='';
   TOGGLES.forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
   const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f])].filter(Boolean);
-  history.replaceState(null,'',(S.tex==='off'?location.pathname:location.pathname+'?tex='+S.tex)+'#'+S.tab+fl.map(f=>'+'+f).join(''));
+  const q=new URLSearchParams(location.search);S.tex==='off'?q.delete('tex'):q.set('tex',S.tex);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
