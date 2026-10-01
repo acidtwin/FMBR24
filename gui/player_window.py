@@ -1,6 +1,6 @@
 """Player window (master visual: mockups/player-window.html). Persistent header (QFrame#pwHeader: identity, HGP/HGC pills,
 CA/PA, per-tab slot) above a left tab strip (QFrame#pwTabStrip) + QStackedWidget, and a persistent action strip
-(QFrame#actionStrip: Make HGP / Make HGC / Add to Shortlist / Close - Close is ALWAYS last, also when the Make buttons
+(QFrame#actionStrip: Make HGP / Make HGC / Make both / Add to Shortlist / Close - Close is ALWAYS last, also when the Make buttons
 are absent). Header, tab strip and action strip are separate widgets so a theme can paint each of them.
 
 TABS rows = (key, label, page builder method name | None, header-slot method name). None = "Coming soon" placeholder
@@ -459,7 +459,7 @@ class _PitchBig(QWidget):
 
 
 class PlayerWindow(QDialog):
-    """Modal player window. Results for the caller: `_patch_mode` ('hgp' / 'hgc' / None) and
+    """Modal player window. Results for the caller: `_patch_mode` ('hgp' / 'hgc' / 'both' / None) and
     `_shortlist_added`; both close the window via accept(), the caller then runs its existing flow."""
 
     def __init__(self, person, save_data, club_entity_id, parent=None, shortlisted=False, can_patch=False,
@@ -1099,6 +1099,16 @@ class PlayerWindow(QDialog):
             if not is_set and not ok:
                 btn.setToolTip('Club unknown for this player.')
             btn.clicked.connect(lambda checked=False, m=mode: self._emit_patch(m))
+            h.addWidget(btn)
+        if self._can_patch:  # HGP in place, then HGC: one action. Enabled only while neither flag is set
+            both_set = bool(self._hgp) and bool(self._hgc)
+            btn = QPushButton('HGP + HGC set' if both_set else 'Make both')
+            btn.setObjectName('pwGhost')
+            btn.setFixedHeight(32)
+            btn.setEnabled(not self._hgp and not self._hgc and self._hgc is not None)
+            if self._hgc is None:
+                btn.setToolTip('Club unknown for this player.')
+            btn.clicked.connect(lambda checked=False: self._emit_patch('both'))
             h.addWidget(btn)
         if self._shortlisted:
             sl = QPushButton('✓ On Player Shortlist')

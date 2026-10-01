@@ -1474,6 +1474,7 @@ class MainWindow(QMainWindow):
         self._dirty = False  # in-memory patches not yet written back with Save Changes
         self._pending = []  # human-readable list of unsaved edits (for the Save / discard prompts)
         self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
+        self._after_reload_msg = None  # one-shot text shown once the next load finishes (stale-offsets flow)
         self._squad = []
         self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
         self._club_entity_id = None
@@ -2849,9 +2850,18 @@ class MainWindow(QMainWindow):
         self._patch_hgc_btn.setToolTip('Set selected players as Homegrown at Club')
         self._patch_hgc_btn.clicked.connect(self._do_patch_hgc)
         self._patch_hgc_btn.setEnabled(False)
+        self._patch_both_btn = QPushButton('Make both')
+        self._patch_both_btn.setStyleSheet(_accent_ss)
+        self._patch_both_btn.setFixedHeight(28)
+        self._patch_both_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._patch_both_btn.setToolTip('Set selected players as Homegrown Player and Homegrown at Club (HGP first, then HGC)')
+        self._patch_both_btn.clicked.connect(self._do_patch_both)
+        self._patch_both_btn.setEnabled(False)
         tab_row.addWidget(self._patch_hgp_btn)
         tab_row.addSpacing(4)
         tab_row.addWidget(self._patch_hgc_btn)
+        tab_row.addSpacing(4)
+        tab_row.addWidget(self._patch_both_btn)
         tab_row.addSpacing(4)
         vbox.addWidget(tab_bar)
 
@@ -4544,6 +4554,7 @@ class MainWindow(QMainWindow):
         has_sel = has_squad and bool(self._table.selectedItems())
         self._patch_hgp_btn.setEnabled(has_sel)
         self._patch_hgc_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
+        self._patch_both_btn.setEnabled(has_sel and has_b and self._club_entity_id is not None)
 
     # -- File loading ---------------------------------------------------------
 
@@ -4750,6 +4761,9 @@ class MainWindow(QMainWindow):
         self._club_top_frame.setVisible(False)
         self._update_ui_state()
         self._land_after_load()  # Settings > Landing page (default Save Info)
+        msg, self._after_reload_msg = self._after_reload_msg, None
+        if msg:
+            QMessageBox.information(self, 'Ready to patch', msg)
 
     # -- Search ---------------------------------------------------------------
 
@@ -5124,9 +5138,9 @@ class MainWindow(QMainWindow):
         dlg.exec()
         if dlg._shortlist_added:
             self._add_to_shortlist(person)
-        if can_patch and dlg._patch_mode in ('hgp', 'hgc'):
-            (self._do_patch_hgp if dlg._patch_mode == 'hgp' else self._do_patch_hgc)(
-                [person], club_entity_id)
+        if can_patch and dlg._patch_mode in ('hgp', 'hgc', 'both'):
+            {'hgp': self._do_patch_hgp, 'hgc': self._do_patch_hgc, 'both': self._do_patch_both}[
+                dlg._patch_mode]([person], club_entity_id)
 
     def _open_player_detail_by_pid(self, pid, person=None):
         """Open the player window for any player by ID (reports/players views)."""
@@ -5274,6 +5288,8 @@ class MainWindow(QMainWindow):
         self._patch_hgp_btn.setEnabled(has_squad and has_sel and not all_hgp)
         self._patch_hgc_btn.setEnabled(has_squad and has_sel and has_b
                                         and self._club_entity_id is not None and not all_hgc)
+        self._patch_both_btn.setEnabled(has_squad and has_sel and has_b and self._club_entity_id is not None
+                                        and not (all_hgp and all_hgc))
 
     def _get_selected_persons(self):
         pid_map = {p.get('id', -1): p for p in self._squad}
@@ -5292,10 +5308,22 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'Reload required', 'Click Reload before patching.')
             return False
         if self._save_data.get('offsets_stale'):
-            QMessageBox.information(
-                self, 'Save and reload first',
-                'An earlier HGC patch inserted data, so player positions in memory are out of date.\n\n'
-                'Click Save Changes, then Reload, before making further edits.')
+            B = QMessageBox.StandardButton
+            box = QMessageBox(QMessageBox.Icon.Question, 'Save and reload first',
+                              'An earlier HGC patch moved data. Save now and reload, then repeat?',
+                              parent=self)
+            save_btn = box.addButton('Save and reload', QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(B.Cancel)
+            box.setDefaultButton(save_btn)
+            box.exec()
+            if box.clickedButton() is save_btn:
+                self._after_reload_msg = ('Saved and reloaded. Click the patch button again to apply '
+                                          'your patch.')
+                # dirty -> existing save flow, then reload (not Reload's discard prompt: nothing to discard)
+                if self._dirty:
+                    self._do_save(after=self._reload_save, confirm=False)
+                else:
+                    self._reload_save()
             return False
         return True
 
@@ -5311,18 +5339,7 @@ class MainWindow(QMainWindow):
             return
         if not self._patch_allowed() or not self._confirm_patch_dialog(people_to_patch, 'HGP'):
             return
-        from fm_editor.patch import patch_to_homegrown, is_homegrown
-        b = self._save_data['b']
-
-        def _recs(p):  # the person's record block; HGP patching is in place so offsets stay valid
-            e = p['end']
-            return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
-        n = 0
-        for p in people_to_patch:
-            before = _recs(p)
-            patch_to_homegrown(b, p)
-            p['hgp'] = is_homegrown(b, p)
-            n += before != _recs(p)
+        n = len(self._hgp_in_place(self._save_data['b'], people_to_patch))
         self._after_patch('HGP', n, False)
 
     def _do_patch_hgc(self, persons=None, club_entity_id=None):
@@ -5347,6 +5364,50 @@ class MainWindow(QMainWindow):
         ordered = sorted(people_to_patch, key=lambda p: p['end'], reverse=True)  # inserts shift later offsets
         n = patch_to_hgc(b, ordered, club_entity_id)
         self._after_patch('HGC', n, len(b) != old_len)
+
+    def _do_patch_both(self, persons=None, club_entity_id=None):
+        """HGP (in place) then HGC (inserts) in one confirm + one outcome. Players that already have a
+        part only get the missing one."""
+        club_entity_id = club_entity_id or self._club_entity_id
+        if not self._save_data or (persons is None and not self._squad) or not club_entity_id:
+            return
+        if 'b' not in self._save_data:
+            QMessageBox.warning(self, 'Reload required', 'Click Reload before patching.')
+            return
+        from fm_editor.patch import is_hgc, patch_to_hgc
+        b = self._save_data['b']
+        people = self._get_selected_persons() if persons is None else persons
+        need_hgp = [p for p in people if not p.get('hgp', False)]
+        need_hgc = [p for p in people if not is_hgc(b, p, club_entity_id)]
+        todo = [p for p in people if p in need_hgp or p in need_hgc]
+        if not todo:
+            QMessageBox.information(self, 'Nothing to patch',
+                                    'All selected players are already HGP and HGC.')
+            return
+        if not self._patch_allowed() or not self._confirm_patch_dialog(todo, 'HGP + HGC'):
+            return
+        changed = {id(p) for p in self._hgp_in_place(b, need_hgp)}  # first: in place, offsets stay valid
+        old_len = len(b)
+        for p in sorted(need_hgc, key=lambda p: p['end'], reverse=True):  # inserts shift later offsets
+            if patch_to_hgc(b, [p], club_entity_id):
+                changed.add(id(p))
+        self._after_patch('HGP + HGC', len(changed), len(b) != old_len)
+
+    def _hgp_in_place(self, b, people):
+        """Apply HGP to each person (in place); sets p['hgp']. Returns the list of changed players."""
+        from fm_editor.patch import patch_to_homegrown, is_homegrown
+
+        def _recs(p):  # the person's record block; HGP patching is in place so offsets stay valid
+            e = p['end']
+            return bytes(b[e + 35:e + 35 + 16 * min(b[e + 34], 40)])
+        out = []
+        for p in people:
+            before = _recs(p)
+            patch_to_homegrown(b, p)
+            p['hgp'] = is_homegrown(b, p)
+            if before != _recs(p):
+                out.append(p)
+        return out
 
     def _confirm_patch_dialog(self, people_to_patch, label):
         names = ', '.join(p['name'] for p in people_to_patch[:5])
@@ -5556,6 +5617,7 @@ class MainWindow(QMainWindow):
         self._search_box.setEnabled(not busy and self._save_data is not None)
         self._patch_hgp_btn.setEnabled(False)
         self._patch_hgc_btn.setEnabled(False)
+        self._patch_both_btn.setEnabled(False)
         if msg and not busy:
             self._status.showMessage(msg)
         if not busy:

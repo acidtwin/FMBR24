@@ -554,7 +554,12 @@ function actionStrip(){
     :S.scout?`<button class="btn b2 ${k==='hgp'&&(S.scout||S.tips)?'pin':''}" disabled data-tip="${tip}">Make ${l}</button>`
     :k==='hgc'&&S.unk?`<button class="btn b2 ${S.tips?'pin':''}" disabled data-tip="Club unknown for this player.">Make ${l}</button>`
     :`<button class="btn b2" data-act="mk" data-v="${k}">Make ${l}</button>`;
-  return `<div class="strip"><span class="sp"></span>${S.other?'':mk('hgp','HGP')+mk('hgc','HGC')}
+  /* 'Make both' = HGP in place, then HGC, in one action. Enabled only while neither flag is set (a single Make button covers the other case);
+     disabled with the same tips as Make HGC when the club is unknown / opened from Scouting. */
+  const bothSet=S.hgp&&S.hgc,bothOff=S.scout||S.unk||S.hgp||S.hgc;
+  const both=bothSet?`<button class="btn b2" disabled>HGP + HGC set</button>`
+    :`<button class="btn b2" ${bothOff?'disabled':'data-act="mk" data-v="both"'} ${S.unk&&!S.scout?'data-tip="Club unknown for this player."':S.scout?`data-tip="${tip}"`:''}>Make both</button>`;
+  return `<div class="strip"><span class="sp"></span>${S.other?'':mk('hgp','HGP')+mk('hgc','HGC')+both}
     <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button><button class="btn b2" data-act="close">Close</button></div>`;  /* Close is ALWAYS last (far right), also in the 'other' state */
 }
 
@@ -775,7 +780,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.tab){S.tab=t.dataset.tab;return render()}
   const a=t.dataset.act,v=t.dataset.v;
   if(a==='pot')S.pot=v==='pot';else if(a==='future')S.future=v==='future';else if(a==='short')S.short=!S.short;
-  else if(a==='mk')S[v]=true;else return;      // Make HGP/HGC: the real button patches and closes; here it just shows "set"
+  else if(a==='mk'){if(v==='both')S.hgp=S.hgc=true;else S[v]=true}else return;      // Make HGP/HGC: the real button patches and closes; here it just shows "set"
   render();
 });
 function fromHash(){
