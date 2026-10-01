@@ -41,6 +41,6 @@ def test_height_weight():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('skip: save not found')
+        print('SKIPPED (save not found): test_height_weight')
     else:
         test_height_weight()

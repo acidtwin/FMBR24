@@ -21,7 +21,7 @@ STAFF = {127: (1120, 'Pep Guardiola'), 362: (4059, 'Mauricio Pochettino'), 10510
 def main():
     from fm_editor import history as H
     if not os.path.exists(SAVE) or not H.install_db_dir(SAVE):
-        print('skip: save or install DB absent')
+        print('SKIPPED (save or install DB not found): test_history')
         return
     from fm_editor.archive import get_member, parse_archive
     from fm_editor.gamedb import find_names, find_people, match_identities

@@ -10,7 +10,7 @@ from tests.test_parse_golden import SAVE
 
 def test_injuries():
     if not os.path.exists(SAVE):
-        print('SKIP: save not found'); return
+        print('SKIPPED (save not found): test_injuries'); return
     from fm_editor.archive import parse_archive, get_member
     from fm_editor import gamedb as G
     from fm_editor.saveinfo import parse_save_info

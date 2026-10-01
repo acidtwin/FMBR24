@@ -4,6 +4,7 @@
 Run directly: python3 tests/test_club_contracts.py
 """
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import sys
 from datetime import date
 

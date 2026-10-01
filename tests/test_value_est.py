@@ -15,7 +15,7 @@ NOT_FOR_SALE = (16963, 32666)  # Muriqi, Grealish -> 300,000,000
 
 def test_value_est():
     if not os.path.exists(SAVE):
-        print('SKIP: save not found'); return
+        print('SKIPPED (save not found): test_value_est'); return
     from fm_editor.archive import parse_archive, get_member
     from fm_editor.gamedb import find_names, find_abilities
     _, members, _, _, _, _ = parse_archive(SAVE)

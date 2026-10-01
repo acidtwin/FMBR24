@@ -5,6 +5,7 @@ find_contract_blocks: block before the person record (ff*8 + end date + start da
 backlink. The old b11=0x6a record is a last-evaluation month, NOT the contract end.
 """
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import sys
 from collections import Counter
 
@@ -53,6 +54,6 @@ def test_contract_block():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('skip: save not found')
+        print('SKIPPED (save not found): test_contract_block')
     else:
         test_contract_block()

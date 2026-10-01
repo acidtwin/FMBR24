@@ -74,6 +74,6 @@ def test_squads():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('SKIP: save not found')
+        print('SKIPPED (save not found): test_squads')
     else:
         test_squads()
