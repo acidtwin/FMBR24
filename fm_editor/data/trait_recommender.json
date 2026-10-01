@@ -15,7 +15,7 @@
     "technique",
     "leadership"
    ],
-   "desc": "Increases the chances of the player taking charge predominantly in midfield situations and using their attributes to influence the team\u2019s performance and pace."
+   "desc": "Increases the chances of the player taking charge predominantly in midfield situations and using their attributes to influence the team’s performance and pace."
   },
   {
    "name": "Curls Ball",
@@ -27,7 +27,7 @@
     "bravery",
     "composure"
    ],
-   "desc": "Improves the player\u2019s ability to curl the ball above and beyond his ability as already determined by his attributes."
+   "desc": "Improves the player’s ability to curl the ball above and beyond his ability as already determined by his attributes."
   },
   {
    "name": "Tries Tricks",
@@ -44,7 +44,7 @@
   },
   {
    "name": "Uses Outside of Foot",
-   "id": 47,
+   "id": 14,
    "category": "Technique",
    "attrs": [
     "flair",
@@ -164,7 +164,7 @@
     "vision",
     "teamwork"
    ],
-   "desc": "Increases the chances of a player opting to give a scoring chance to a team-mate rather than take it on himself. The success of the decision will be based off the player\u2019s attributes."
+   "desc": "Increases the chances of a player opting to give a scoring chance to a team-mate rather than take it on himself. The success of the decision will be based off the player’s attributes."
   },
   {
    "name": "Plays One-Two's",
@@ -317,7 +317,7 @@
   },
   {
    "name": "Likes to Round Keeper",
-   "id": 23,
+   "id": 12,
    "category": "Finishing",
    "attrs": [
     "finishing",
@@ -381,7 +381,7 @@
     "anticipation",
     "decisions"
    ],
-   "desc": "Increases the likelihood of a player taking a shot before considering a touch to settle himself, unless he\u2019s one-on-one, at which point he will take the best course of action for that situation."
+   "desc": "Increases the likelihood of a player taking a shot before considering a touch to settle himself, unless he’s one-on-one, at which point he will take the best course of action for that situation."
   },
   {
    "name": "Arrives Late in Opponent's Area",
