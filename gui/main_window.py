@@ -5567,15 +5567,8 @@ class MainWindow(QMainWindow):
         person = person or next((p for p in people if p.get('id') == pid), None)
         if not person:
             return
-        squads = self._save_data.get('squads', {})
-        clubs = self._save_data.get('clubs', [])
-        club_id = squads.get(pid)
-        club_entity_id = None
-        if club_id:
-            club = next((c for c in clubs if c['id'] == club_id), None)
-            if club and club_id == getattr(self, '_current_club', {}).get('id') \
-                    if isinstance(getattr(self, '_current_club', None), dict) else False:
-                club_entity_id = self._club_entity_id
+        club_id = self._save_data.get('squads', {}).get(pid)
+        club_entity_id = club_id + 1 if club_id else None  # club entity id = club_id + 1 (memory fm24-binary-format)
         self._run_player_window(person, club_entity_id, in_squad=False)
 
     def _on_list_table_context_menu(self, table, pos):
