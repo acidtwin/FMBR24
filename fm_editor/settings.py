@@ -74,7 +74,8 @@ def save(values):
     """Merge values into the file (unknown keys kept). Returns True on success."""
     try:
         data = _read_raw()
-        data.update(_clean(values))
+        clean = _clean({**data, **values})
+        data.update({k: clean[k] for k in values if k in clean})
         os.makedirs(config_dir(), exist_ok=True)
         tmp = settings_path() + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:

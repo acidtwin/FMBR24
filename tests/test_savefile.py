@@ -162,6 +162,66 @@ def main():
         S.save_in_place(s2, p2)
         assert rd(S.backup_paths(p2)[0]) == o2 and rd(S.backup_paths(p2)[1]) == b'old-style backup'
         assert rd(S.legacy_bk1_path(p2)) == b'old-style backup'
+        # 10. final os.replace fails -> original, bk1 AND bk2 all untouched (no rotation happened)
+        cur, b1, b2 = rd(path), rd(bk1), rd(bk2)
+        sd['b'][11] ^= 1
+        real_replace = os.replace
+        def bad_replace(src, dst):
+            if dst == path: raise OSError('injected replace failure')
+            return real_replace(src, dst)
+        os.replace = bad_replace
+        try:
+            S.save_in_place(sd, path); raise AssertionError('should fail')
+        except OSError:
+            pass
+        finally:
+            os.replace = real_replace
+        assert rd(path) == cur and rd(bk1) == b1 and rd(bk2) == b2
+        assert not os.path.exists(path + '.tmp') and not os.path.exists(bk1 + '.tmp')
+
+        # 11. file rewritten between the first check and the backups -> SaveError, nothing replaced
+        real_prep = S.prepare_backups
+        def touch_then_prep(*a, **k):
+            with open(path, 'ab') as f: f.write(b'x')
+            return real_prep(*a, **k)
+        S.prepare_backups = touch_then_prep
+        try:
+            S.save_in_place(sd, path); raise AssertionError('should fail')
+        except S.SaveError as e:
+            assert 'while saving' in str(e)
+        finally:
+            S.prepare_backups = real_prep
+        assert rd(path) == cur + b'x' and rd(bk1) == b1 and rd(bk2) == b2
+        with open(path, 'wb') as f: f.write(cur)
+        sd['disk_sig'] = S.file_signature(path)
+
+        # 12. change during the backup copy is caught by the second check (also with disk_sig None)
+        sd['disk_sig'] = None
+        real_copy = S._copy_verified
+        def touch_copy(*a, **k):
+            r = real_copy(*a, **k)
+            with open(path, 'ab') as f: f.write(b'y')
+            return r
+        S._copy_verified = touch_copy
+        try:
+            S.save_in_place(sd, path); raise AssertionError('should fail')
+        except S.SaveError as e:
+            assert 'while saving' in str(e)
+        finally:
+            S._copy_verified = real_copy
+        assert rd(path) == cur + b'y' and rd(bk1) == b1 and rd(bk2) == b2
+        assert not os.path.exists(bk1 + '.tmp')
+        with open(path, 'wb') as f: f.write(cur)
+
+        # 13. symlinked save path: link survives, target gets the new archive, backups by target
+        d3 = os.path.join(d, 'lnk'); os.mkdir(d3)
+        real = os.path.join(d3, 'Real.fm'); link = os.path.join(d3, 'Link.fm')
+        build_archive(real, base)
+        os.symlink(real, link)
+        s3 = load(link); s3['b'][3] ^= 1
+        S.save_in_place(s3, link)
+        assert os.path.islink(link) and bytes(load(real)['b']) == bytes(s3['b'])
+        assert os.path.exists(real + '.bk1') and not os.path.exists(link + '.bk1')
     print('OK')
 
 
