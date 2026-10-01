@@ -3554,7 +3554,7 @@ class MainWindow(QMainWindow):
                 name_item,
                 _SortItem(club_name),
                 _SortItem(ptype),
-                _SortItem(pos),
+                _SortItem(pos, _POS_SORT_ORDER.get(pos, 99)),
                 _SortItem(ca, p.get('ca', -1) if is_player else -1),
                 _SortItem(pa, p.get('pa', -1) if is_player else -1),
                 _SortItem(str(age), age),
