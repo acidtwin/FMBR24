@@ -75,7 +75,7 @@ TRAIT_TABLE = {
     58: ('Cuts Inside From Right', 'B'),
     59: ('Crosses Early', 'A'),
     60: ('Brings Ball Out Of Defence', 'A'),
-    61: (None, '?'),
+    61: (None, 'X'),
     62: (None, 'X'),
     63: ('Plays Ball With Feet', 'A'),
 }
