@@ -49,6 +49,9 @@ def patch_to_homegrown(b, person):
         if roff + 16 > len(b): break
         b10, b11 = b[roff + 10], b[roff + 11]
         if b10 == 0x00 and b11 == 0x40:
+            # Verified on the real save (2,460 such records over 132,024 people): byte12 == 0 and
+            # byte14 == 0 in ALL of them, so find_injuries (0x47: byte14==0 and byte12>0) never reads
+            # a flipped record as an injury. Re-check if a save ever shows byte12 > 0 here.
             b[roff + 11] = 0x47
         if b10 == 0x08 and b11 == 0x46 and b[roff] != ENGLAND_NATION_ID:
             b[roff] = ENGLAND_NATION_ID
