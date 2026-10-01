@@ -33,8 +33,15 @@ assert (h._glow_layers()[0] is core), 'cached per size'
 
 # first load: glow starts, timer runs, smooth pulse between floor and floor+depth, eases in from 0
 w._ui_snap = None
+# a quick (cached) load ends before the delay: no glow at all, nothing running afterwards
 w._set_busy(True, 'Parsing save file')
-assert h.glow_active() and h._g_timer.isActive()
+assert h._g_state == 'wait' and not h._g_timer.isActive() and h.glow_intensity() == 0.0 and h._g_delay.isActive()
+w._set_busy(False)
+assert h._g_state == 'off' and not h._g_delay.isActive() and not h._g_timer.isActive()
+# a long load: after the delay the glow runs
+w._set_busy(True, 'Parsing save file')
+h._glow_begin()
+assert h._g_state == 'run' and h.glow_active() and h._g_timer.isActive()
 h._g_t = 0.0
 assert h.glow_intensity() == 0.0                    # eases in from 0
 period = HERO_GLOW['period_ms']
@@ -72,6 +79,7 @@ assert not h.glow_active() and not h._g_timer.isActive() and h.glow_intensity() 
 
 # error: same fade, stops
 w._set_busy(True, 'Parsing save file')
+h._glow_begin()
 h._g_t = 5000.0
 cur = h.glow_intensity()
 w._set_busy(False, failed=True)
@@ -81,12 +89,22 @@ assert not h.glow_active() and not h._g_timer.isActive()
 
 # hidden window: tick stops the timer
 w._set_busy(True, 'Parsing save file')
+h._glow_begin()
 assert h._g_timer.isActive()
 w.hide(); app.processEvents()
 assert not h._g_timer.isActive()
 w.show(); app.processEvents()
 assert h._g_timer.isActive()
 w._set_busy(False); h.glow_stop()
+
+# the glow never leaks onto the page the load lands on
+w._set_busy(True, 'Parsing save file')
+h._glow_begin()
+assert h.glow_active()
+h.set_page('save_info')
+assert not h.glow_active() and not h._g_timer.isActive() and h.glow_intensity() == 0.0
+w._set_busy(False)
+h.set_page('welcome')
 
 # reload / save (veil) never glow
 for snap, word in (({'dummy': 1}, 'Parsing save file'), (None, 'Saving')):

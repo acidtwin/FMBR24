@@ -1524,6 +1524,7 @@ HERO_GLOW = dict(
     depth=0.65,             # intensity added at the top of each pulse (floor + depth = 1.0)
     fade_in_ms=900,         # ease in from 0 when the load starts
     fade_ms=350,            # ease out when the load ends (the bar reached 100 %)
+    delay_ms=2500,          # a load that ends sooner (cache hit, ~2 s) never glows at all
     fps_ms=16,              # ~60 fps timer: smooth
 )
 
@@ -1560,7 +1561,7 @@ class _HeaderHeroWidget(QWidget):
         self._pixmap_cache = {}
         self._bg_pixmap = self._load('welcome.webp')
         self._page = 'welcome'
-        self._g_state = 'off'    # 'off' | 'run' (first load in progress) | 'end' (fade out)
+        self._g_state = 'off'    # 'off' | 'wait' (load started, glow not yet) | 'run' (glowing) | 'end' (fade out)
         self._g_t = 0.0          # ms since the glow started
         self._g_end_t = 0.0      # ms since the finish began
         self._g_from = 0.0       # intensity when the finish began (the fade eases from here: no jump)
@@ -1569,6 +1570,10 @@ class _HeaderHeroWidget(QWidget):
         self._g_timer = QTimer(self)
         self._g_timer.setInterval(HERO_GLOW['fps_ms'])
         self._g_timer.timeout.connect(self._glow_timer_tick)
+        self._g_delay = QTimer(self)
+        self._g_delay.setSingleShot(True)
+        self._g_delay.setInterval(HERO_GLOW['delay_ms'])
+        self._g_delay.timeout.connect(self._glow_begin)
         self.setFixedHeight(186)
 
     def _load(self, filename):
@@ -1589,6 +1594,8 @@ class _HeaderHeroWidget(QWidget):
 
     def set_page(self, key: str):
         self._page = key
+        if key != 'welcome' and self._g_state != 'off':
+            self.glow_stop()   # never leak onto the page the load lands on
         filename = self._PAGE_IMAGE.get(key, self._FALLBACK)
         self._bg_pixmap = self._load(filename)
         self.update()
@@ -1605,14 +1612,23 @@ class _HeaderHeroWidget(QWidget):
     # -- loading glow (Welcome page, first load only) ----------------------------
 
     def glow_start(self):
-        """Begin pulsing; only on the Welcome hero (the caller says nothing about veils: first load only)."""
+        """First load began (Welcome hero only; the caller says nothing about veils). The glow itself starts after
+        `delay_ms`, so a quick (cached) load never glows."""
         if self._page != 'welcome':
             return
-        self._g_state, self._g_t = 'run', 0.0
-        self._glow_timer_resume()
+        self._g_state = 'wait'
+        self._g_delay.start()
+
+    def _glow_begin(self):
+        if self._g_state == 'wait':
+            self._g_state, self._g_t = 'run', 0.0
+            self._glow_timer_resume()
 
     def glow_finish(self):
         """Load ended (the bar is done): ease from the current intensity down to 0, then stop."""
+        if self._g_state == 'wait':      # load ended before the glow began: nothing to show
+            self.glow_stop()
+            return
         if self._g_state != 'run':
             return
         self._g_from = self.glow_intensity()
@@ -1622,6 +1638,7 @@ class _HeaderHeroWidget(QWidget):
 
     def glow_stop(self):
         self._g_state, self._g_t, self._g_end_t = 'off', 0.0, 0.0
+        self._g_delay.stop()
         self._g_timer.stop()
         self.update()
 
@@ -1664,7 +1681,7 @@ class _HeaderHeroWidget(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
-        if self._g_state != 'off':
+        if self._g_state in ('run', 'end'):
             self._glow_timer_resume()
 
     def hideEvent(self, e):
