@@ -525,7 +525,7 @@ class PlayerWindow(QDialog):
         outer.addWidget(self._action_strip())
         QShortcut(QKeySequence('Ctrl+Tab'), self, activated=lambda: self._step_tab(1))
         QShortcut(QKeySequence('Ctrl+Shift+Tab'), self, activated=lambda: self._step_tab(-1))
-        self._select_tab(_LAST_TAB if _LAST_TAB in self._tab_btns else 'profile')
+        self._select_tab('profile')  # always open on the Profile tab (user preference)
 
     def _select_tab(self, key):
         global _LAST_TAB
