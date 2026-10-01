@@ -17,7 +17,8 @@ HOW TO USE
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
     nums (CA/PA/Dev Rate as numbers instead of stars)
     tips (pin the tooltips so they show in a screenshot)
-  e.g.  #profile+pot   #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
+  Texture variants: ?tex=a|b|c|off before the # (or the 'texture' toggle in the review bar), e.g.  ?tex=b#positions
+  e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
 WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
@@ -181,6 +182,91 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;flex:none}
 .strip .sp{flex:1}
 
+/* =====================================================================================================================
+   TEXTURE VARIANTS (?tex=a|b|c|off, or the "texture" toggle in the review bar). Three surfaces: .hdr (header panel),
+   .tabs (left strip), .strip (bottom action bar). Every layer is a gradient / pre-rendered tile / pinstripe / line that
+   QPainter can draw in paintEvent (see the QPAINTER RECIPE below). Layers are listed TOP first (CSS order).
+   --nzf / --nzd are tiled noise pixmaps generated at load (fine grain / sparse dust), standing in for QPixmap tiles.
+   Panel bases stay opaque so contrast is unchanged: lightest base #1F2A3C vs text_secondary #8B96A8 = 5.4:1.
+   ===================================================================================================================== */
+/* ---- A  PITCH LINES: mown stripes (hero pitch greens) + markings; header gets a centre-circle motif at the right ---- */
+.frame[data-tex=a] .hdr{
+  background:
+    linear-gradient(90deg,rgba(26,34,38,0) 0,rgba(26,34,38,0) 40%,rgba(26,34,38,0.55) 78%,rgba(26,34,38,0) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='80'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'%3E%3Cline x1='232.5' y1='0' x2='232.5' y2='80'/%3E%3Ccircle cx='232.5' cy='40' r='46'/%3E%3C/g%3E%3Ccircle cx='232.5' cy='40' r='2' fill='rgba(255,255,255,0.14)'/%3E%3C/svg%3E") right top no-repeat,
+    repeating-linear-gradient(90deg,rgba(29,66,41,0.22) 0 40px,rgba(21,48,31,0.10) 40px 80px),
+    var(--surface)}
+.frame[data-tex=a] .tabs{
+  background:
+    repeating-linear-gradient(90deg,rgba(29,66,41,0.24) 0 22px,rgba(21,48,31,0.10) 22px 44px),
+    var(--surface)}
+.frame[data-tex=a] .strip{
+  border-top-color:rgba(82,194,135,0.55);
+  background:
+    linear-gradient(180deg,rgba(82,194,135,0.18) 0,rgba(82,194,135,0.05) 6px,rgba(82,194,135,0) 12px),
+    repeating-linear-gradient(90deg,rgba(29,66,41,0.20) 0 40px,rgba(21,48,31,0.08) 40px 80px),
+    var(--surface)}
+
+/* ---- B  BRUSHED STEEL / TUNNEL: diagonal grain (sidebar family) + raised-panel depth + violet glow on the active bits ---- */
+.frame[data-tex=b] .hdr,.frame[data-tex=b] .tabs,.frame[data-tex=b] .strip{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.09) 0,rgba(255,255,255,0.09) 1px,rgba(255,255,255,0.035) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
+    linear-gradient(0deg,rgba(0,0,0,0.30) 0,rgba(0,0,0,0) 12px) 0 100%/100% 12px no-repeat,
+    repeating-linear-gradient(135deg,rgba(255,255,255,0.040) 0 1px,rgba(255,255,255,0) 1px 3px),
+    var(--nzf),
+    linear-gradient(180deg,#222D32 0,#1A2226 55%,#161D21 100%)}
+.frame[data-tex=b] .strip{border-top-color:var(--border2);isolation:isolate}
+.frame[data-tex=b] .tab.on,.frame[data-tex=b] .tab.on:hover{
+  background:linear-gradient(0deg,rgba(115,92,228,0.34) 0,rgba(115,92,228,0) 18px) 0 100%/100% 18px no-repeat,
+             linear-gradient(90deg,rgba(115,92,228,0.20) 0,rgba(115,92,228,0) 75%),var(--sel)}
+.frame[data-tex=b] .strip .b1{position:relative}
+.frame[data-tex=b] .strip .b1::before{content:"";position:absolute;left:-18px;right:-18px;top:-12px;bottom:-12px;z-index:-1;
+  background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(115,92,228,0.65) 0,rgba(115,92,228,0.26) 55%,rgba(115,92,228,0) 100%)}
+
+/* ---- C  FLOODLIT: navy-to-charcoal, floodlight bloom + rays from the header's top-right, dust specks, glass top edge ---- */
+.frame[data-tex=c] .hdr{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.16) 0,rgba(255,255,255,0.16) 1px,rgba(255,255,255,0.05) 1px,rgba(255,255,255,0) 22px) 0 0/100% 22px no-repeat,
+    var(--nzd),
+    radial-gradient(ellipse 300px 140px at 100% 0,rgba(205,222,255,0.22) 0,rgba(205,222,255,0.08) 45%,rgba(205,222,255,0) 100%),
+    radial-gradient(ellipse 620px 170px at 100% 0,rgba(26,34,48,0) 0,rgba(26,34,48,0.92) 100%),
+    repeating-conic-gradient(from 195deg at 100% 0,rgba(205,222,255,0.06) 0 5deg,rgba(205,222,255,0) 5deg 12deg),
+    linear-gradient(180deg,#1F2A3C 0,#1A2230 55%,#171C23 100%)}
+.frame[data-tex=c] .tabs{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 18px) 0 0/100% 18px no-repeat,
+    var(--nzd),
+    radial-gradient(ellipse 230px 300px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
+    linear-gradient(180deg,#1C2639 0,#181F2B 50%,#16191F 100%)}
+.frame[data-tex=c] .strip{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.14) 0,rgba(255,255,255,0.14) 1px,rgba(255,255,255,0.04) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
+    var(--nzd),
+    radial-gradient(ellipse 360px 70px at 100% 0,rgba(205,222,255,0.10) 0,rgba(205,222,255,0) 100%),
+    linear-gradient(180deg,#1A2230 0,#161B22 100%)}
+
+/* QPAINTER RECIPE (paintEvent of the panel, rect r, clip rounded radius 3; draw in REVERSE of the CSS order, bottom layer first):
+   A header: fillRect surface; stripes: for x in 0,80,160..: fillRect(x,0,40,h,QColor(29,66,41,56)) + fillRect(x+40,0,40,h,QColor(21,48,31,26));
+             centre circle: pen QColor(255,255,255,41) 1px: drawEllipse(QPointF(w-67.5,h/2),46,46), drawLine at x=w-67.5 full height, spot r2 QColor(255,255,255,36);
+             calm zone: QLinearGradient(0,0,w,0) stops 0:a0 .40:a0 .78:QColor(26,34,38,140) 1:a0 over the whole rect.
+   A strip : fillRect surface; stripes period 44: 22 on QColor(29,66,41,61), 22 off QColor(21,48,31,26).
+   A bar   : fillRect surface; stripes period 80: 40 on (29,66,41,51) / 40 off (21,48,31,20); glow QLinearGradient(0,0,0,12) 0:(82,194,135,46) .5:(82,194,135,13) 1:(82,194,135,0);
+             top line: drawLine y=0 pen QColor(82,194,135,140).  (QSS border-top on the bar stays 1px; just recolour it.)
+   B all 3 : base QLinearGradient(0,0,0,h) 0:#222D32 .55:#1A2226 1:#161D21; drawTiledPixmap(fine-grain tile 128x128: half light px alpha<=9, half dark px alpha<=14);
+             pinstripe: pre-rendered 3x3 ARGB tile with a 135deg 1px line QColor(255,255,255,10) -> drawTiledPixmap;
+             bottom inner shadow QLinearGradient(0,h-12,0,h) 0:(0,0,0,0) 1:(0,0,0,77);
+             top: drawLine y=0 QColor(255,255,255,23) + sheen QLinearGradient(0,1,0,14) (255,255,255,9)->(255,255,255,0).
+     active tab (row rect): fillRect sel #2A1B4A; QLinearGradient left->.75w (115,92,228,51)->a0; bottom 18px QLinearGradient up (115,92,228,87)->a0.
+     primary button: in the bar's paintEvent before children: QRadialGradient centred on button, painter.translate(c); scale(rx/ry ratio) for the ellipse,
+             rx=btn.w/2+18, ry=btn.h/2+12, stops 0:(115,92,228,166) .55:(115,92,228,66) 1:(115,92,228,0); fillRect expanded rect.
+   C header: base QLinearGradient #1F2A3C / .55 #1A2230 / #171C23; rays: loop 360/12 wedges: painter.drawPie/drawPolygon from (w,0), 5deg wedge QColor(205,222,255,15) every 12deg,
+             CSS 'from 195deg' (clockwise from up) starts at Qt angle 90-195 = -105deg (counter-clockwise from 3 o'clock);
+             falloff: QRadialGradient scaled to 620x170 at (w,0) 0:(26,34,48,0) 1:(26,34,48,235); bloom: same centre, 300x140, 0:(205,222,255,56) .45:(…,20) 1:(…,0);
+             drawTiledPixmap(dust tile 128x128: ~0.8% px, white-blue (200,215,255), alpha 30-60);
+             glass top: drawLine y=0 QColor(255,255,255,41) + QLinearGradient(0,1,0,22) (255,255,255,13)->0.
+   C strip : base #1C2639 / .5 #181F2B / #16191F; dust; bloom 230x300 at (w,0) alpha 26->0; glass top 18px.
+   C bar   : base #1A2230 -> #161B22; dust; bloom 360x70 at (w,0) alpha 26->0; glass top 14px.  */
+
 /* ---- PROFILE ---- */
 .p-attr{flex:1;min-width:0}
 .p-cols{display:flex;gap:8px;padding:0 4px 10px}
@@ -229,6 +315,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <div class="rv">
   <h1>Player window</h1>
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
+  <span class="lab">texture</span><div class="rseg" id="texSeg"></div>
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
@@ -309,6 +396,13 @@ Object.values(SAMPLES).forEach(d=>{
    ===================================================================================================================== */
 const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,data:false,tips:false};
 const D=()=>SAMPLES[S.smp];
+/* texture: ?tex=a|b|c|off (query string, before the #) */
+const TEXS=[['off','Off'],['a','A Pitch lines'],['b','B Steel'],['c','C Floodlit']];
+S.tex=(new URLSearchParams(location.search).get('tex')||'off').toLowerCase();if(!TEXS.some(t=>t[0]===S.tex))S.tex='off';
+/* seeded noise tiles (stand-ins for pre-rendered QPixmap tiles): fine grain (dense, alpha<=14/255) and dust (sparse specks) */
+function mkTile(fn){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),im=x.createImageData(128,128);let r=1234567;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;fn(im.data,rnd);x.putImageData(im,0,0);return `url(${c.toDataURL()})`}
+document.documentElement.style.setProperty('--nzf',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){const v=rnd();d[i]=d[i+1]=d[i+2]=v<.5?0:255;d[i+3]=Math.round(rnd()*(v<.5?14:9))}}));
+document.documentElement.style.setProperty('--nzd',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){if(rnd()<.008){d[i]=200;d[i+1]=215;d[i+2]=255;d[i+3]=30+Math.round(rnd()*30)}}}));
 const isGK=()=>D().pos==='GK';
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
 const HEX=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
@@ -483,15 +577,18 @@ const FLAGS=['nums','pot','future','scout','short','inj','hgp','hgc','data','tip
 const TOGGLES=[['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['hgp','HGP set'],['hgc','HGC set'],['data','Real data'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
+  document.getElementById('frame').dataset.tex=S.tex;
   document.getElementById('frame').innerHTML=`<div class="os"><span>${D().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header(t.slot())}
     <div class="main">${tabStrip()}<div class="content">${t.page()}</div></div></div>${actionStrip()}</div>`;
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
   Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;render()};sm.appendChild(b)});
+  const tx=document.getElementById('texSeg');tx.innerHTML='';
+  TEXS.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
   const tg=document.getElementById('tgs');tg.innerHTML='';
   TOGGLES.forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.onclick=()=>{S[k]=!S[k];render()};tg.appendChild(b)});
   const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f])].filter(Boolean);
-  history.replaceState(null,'','#'+S.tab+fl.map(f=>'+'+f).join(''));
+  history.replaceState(null,'',(S.tex==='off'?location.pathname:location.pathname+'?tex='+S.tex)+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
