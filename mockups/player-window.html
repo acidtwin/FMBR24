@@ -19,7 +19,10 @@ HOW TO USE
     qx1 / qx3 (1 / 3 changes queued ELSEWHERE in the save session, added to the 'Changes queued' count)
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
     nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
-    tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip)
+    tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip; on Role Rating it pins the selected dot's tip)
+  Role Rating: rpAML (select that position, any pitch code: rpDC rpST rpGK ...)   weq / wpos / wdir (Settings weight preset: Equal Weight / Possession-Based / Direct Play;
+    default FMScout Community; also the 'weights' segment in the review bar)   fam (review aid: dim positions the player is not familiar with, position rating < 10)
+    e.g.  #role   #role+rpAML+pot   #role+gk   #role+low+nums   #role+rpMC+fam+weq   ?bare=1#role+rpDL+tips
   The review bar has segmented controls HGP / HGC (none | set | queued) and 'queued elsewhere' (0 | 1 | 3) for these states. Click a pill in the window to toggle queued.
   Screenshot mode: ?bare before the # hides the review bar + OS title bar so the window starts at 0,0 (1122x760).
   Profile = layout C 'Dossier' only (chosen; A/B and ?profile removed); ?full (with ?bare) lets the window grow for screenshots.
@@ -30,6 +33,7 @@ HOW TO USE
 
 WHERE TO EDIT (every tab is ONE function in section 4; the header is the same on every tab - there are NO per-tab header slots any more)
   tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
+  Role Rating = section 4.7 (POS_ROLES table, roleList, rolePitch) + generated data section 1b (ROLE_RATINGS) + the ROLE RATING TAB block below.
   Persistent parts (section 3): header() (+ hgPill() = the HGP/HGC pills, queueSlot() = 'Changes queued'), tabStrip(), actionStrip().
   Homegrown state (section 2): S.hgp/S.hgc = set in the save, S.qhgp/S.qhgc = queued, canPatch(k), pillState(k), queuedHere(), queuedTotal().
   Data (section 1) is FICTIONAL sample data.
@@ -82,6 +86,55 @@ HGP / HGC PILLS = THE CONTROLS (no dialogs, no confirmations; changes are QUEUED
   Pill tooltips drop BELOW the pill (the header is at the top edge of the window).
   Keyboard: pills are real buttons (focus ring accent_hover, aria-pressed).
 
+ROLE RATING TAB (section 4.7; designed from FM Genie Scout's Role Rating screen but in OUR language: tokens, panels, TIER_HEX, the Positions-tab pitch)
+  What it shows: LEFT panel = the roles playable at the selected position, grouped by role, one row per duty (Defend / Support / Attack / Cover), sorted best first; RIGHT = the
+  pitch (same field + SLOTS as Positions) with a dot on each of the 15 positions = the BEST role rating there, tier coloured; click a dot to select the position (white ring).
+  Default selection = the player's best position (posr, as the Positions tab). Current | Full Potential = the app-wide `pot` toggle (shown in the pitch panel header, as on
+  Profile and Training); there is NO 'Show potential rating' checkbox. The common persistent header is unchanged (no per-tab slot).
+  Numbers: rating 1-20 (gui.roles.role_rating, active Settings weight preset) shown as a NUMBER with 1 decimal + a 6px bar (value x 5 %), text and bar in the tier colour (like attributes).
+  NOT converted to stars -> the 'Star ratings rule' (stars + numbers mode) does not apply; nothing to add to ability_display. Needs a float variant of role_rating (see PORTING).
+  Goalkeepers: only the GK dot is live; outfielders: the GK dot is dim/dashed with a tooltip. Outfield dots of a keeper are dim, the GK roles of an outfielder are not rated.
+  Left panel footer: 'Weights: <preset name> (Settings)' + 'Rating = weighted mean of the role's key attributes, 1-20.'  Tooltip on a dot (QToolTip, 3 lines):
+    '<Position full name>[ (best position)]' / 'Best role: <FM_ROLES name> <1 decimal>' / 'Position rating: <word> (<posr value>)'.
+  Why the position-rating line + the 'fam' flag: the role rating only looks at attributes, NOT at how well the player can play the position (a centre-back with pace 19 gets
+  15.5 as Raumdeuter on the wing although his position rating there is 3). So with attribute-only ratings the pitch is nearly flat (one tier everywhere for a CB). 'fam' dims the
+  dots whose position rating is < 10 (QPainter setOpacity(0.4), selected dot never dimmed); OFF by default (spec = colour by best role only). Recommendation: turn it ON.
+  Layout (px; content column 914, tab page 592 high; no vertical scrollbar: the longest list MC has 25 px to spare):
+    page = two panels, gap 12, both stretch: left 456 (same as Positions), right = the rest (440 here, max 444).
+    LEFT QFrame#pwPanel: header 36 (pad 0 12): position badge 44x16 (the Positions-tab badge), gap 8, full position name 13px bold white (QFont 13 px, Bold; ellipsis), right: '<n> roles' 11px secondary.
+      Rows start at y=36 inside the border. Role (family) header row 24: fill alt #1E292E, text 12 bold white at x=15 (padding 12 + 3). Duty row 24: text 12 regular white at x=27, label column x 27..227,
+      then gap 8, bar x=235 w=161 h=6 (track #343740, square ends, y centred), gap 8, number x=404 w=38 right aligned, 12 bold, tier colour (TIER_HEX), 1 decimal ('15.2').
+      Bar fill = round(value/20 x 161) wide in the same tier colour; tier = tier(py_round(value)) (half to even) = the integer the Best-by-Role report shows.
+      Single-duty roles (Carrilero, Raumdeuter, Poacher, No-Nonsense ...) are ONE flat row: the alt band, name 12 bold white at x=15 + duty 11 secondary 6px after it (label column 15..227).
+      Groups: 4px gap between groups; groups sorted by their best duty row, rows by rating desc (ties: name, A-Z). BEST row at the position: fill selection_bg #2A1B4A (QColor(42,27,74)) + 3px accent #6933BD
+      bar at the row's left edge (same treatment as the selected tab). Footer: pinned to the bottom, hairline top #343740, pad 6 12 8, 11px / 15px lines, text_secondary, preset name white Medium.
+      Implementation: ONE custom QWidget (RoleList) with paintEvent + a row model [(kind, y, text...)]; height = 36 + sum(rows) + gaps; put it in a QScrollArea (no frame, 6px bar as .content) so a
+      future longer list scrolls instead of clipping (nothing scrolls today).
+    RIGHT QFrame#pwPanel: header 36: 'CHOOSE A POSITION' (11/700 caps, letter-spacing 0.08 em via QFont) + the existing Current | Full Potential segmented control (h24) at the right.
+      Pitch widget = the Positions-tab one (stripes #15301F / #1D4229, 12 bands, lines rgba(255,255,255,.42), field margin 22, SLOTS fractions) but 438 x 526 and WITHOUT its built-in dots:
+      give it a `dots` painter hook (Positions keeps its own). Tier key strip below the pitch: 27 high (1px hairline + 26), pad 0 12, gap 10, swatch 10x10 r2 + 5px + label 11 secondary, last item a 12px ring.
+    DOT (pt = slot x/y on the field): d34 = r17 solid TIER fill, text 11 bold ink #14151A centred, 1 decimal. Tier 1-4 = ghost: r16.5, fill QColor(20,21,26,140), 1px tier-colour outline, text tier colour.
+      Selected: white ring r21, 2px (#FFFFFF), drawn before the dot. Code label (10 bold, QFont) centred at y-26 (baseline): QColor(255,255,255,184); white for the selected and the player's best position.
+      Disabled (GK vs outfield): r15, fill QColor(20,21,26,89), 1px dashed pen QColor(255,255,255,56) pattern [3,3], en dash 12 QColor(255,255,255,89), label alpha 89; not clickable (arrow cursor).
+      Draw order: disabled dots, then ascending value, the selected dot last (it sits on top). Hit radius 22 around the centre, PointingHand cursor on live dots, hover = tooltip (above the dot
+      for the lower 40 % of the pitch, else below). 'fam': painter.setOpacity(0.4) around the dot. Keyboard: Left/Right/Up/Down could step through the live dots (nice to have).
+  POS_ROLES (section 4.7, ONE table; code -> FM_ROLES names, checked at load): FROM MEMORY OF FM24, TO VERIFY IN GAME (screens of the real position role lists needed):
+    GK Goalkeeper D S, Sweeper Keeper D S A | SW Libero D S, Central Defender Cover, Ball-Playing Defender D (the SW position is not a tactical slot in FM24: guess) |
+    DC Ball-Playing Defender D S, Central Defender D S Cover, Libero D S, No-Nonsense Centre-Back, Stopper D | DL/DR Full Back D S A, Wing-Back D S, Complete Wing-Back S A, Inverted Wing-Back D S A,
+    No-Nonsense Full Back, Wide Centre-Back D S A | WBL/WBR Wing-Back D S, Complete Wing-Back S A, Inverted Wing-Back D S A | DM Anchor D, Ball-Winning Midfielder D S, Deep-Lying Playmaker D S,
+    Defensive Midfielder D S, Half-Back D, Segundo Volante S A | MC Box-to-Box S, Carrilero S, Central Midfielder D S A, Mezzala S A, Roaming Playmaker S, Ball-Winning Midfielder D S,
+    Deep-Lying Playmaker D S, Advanced Playmaker S A | ML/MR Defensive Winger D S, Wide Midfielder D S A, Winger S A, Wide Playmaker D S A, Inverted Winger S A |
+    AML/AMR Winger S A, Inside Forward S A, Inverted Winger S A, Raumdeuter A, Wide Playmaker S A, Advanced Playmaker S A | AMC Advanced Playmaker S A, Attacking Midfielder D S A, Enganche S,
+    Shadow Striker A, Trequartista A | ST Advanced Forward A, Complete Forward S A, Deep-Lying Forward S A, False Nine S, Poacher A, Pressing Forward D S A, Target Man S A, Trequartista A.
+    Unsure: SW; Defensive Winger on AML/AMR (Genie shows it there, FM24 probably only on ML/MR); Advanced Playmaker on AML/AMR and MC; Wide Playmaker D at ML/MR; Wing-Back at DL/DR;
+    Wide Centre-Back at DL/DR; the unsuffixed No-Nonsense roles are labelled 'Defend'. Gaps in FM_ROLES itself (cannot show): Wing-Back (A), Stopper (S/Cover), Inverted Full-Back, Regista, Target Forward.
+  DATA: all numbers come from the app's logic (section 1b: how generated). Weight preset caption = Settings > Role weights (fm_editor/weights.py); the review bar 'weights' segment is a review aid.
+  PORTING (proposal): fm_editor/rolepos.py (no Qt): POS_ROLES, role_score(raw_attrs, role, weights) -> float 1..20 (gui/roles.role_rating becomes clamp(round(role_score)) so the report is unchanged),
+    position_roles(pos, attrs, preset) -> [(family, [(duty, name, score)...])] sorted, best_by_position(attrs, preset) -> {pos: (name, score)}; gui/pw_roles.py: RoleList + RolePitchPage widgets;
+    PlayerWindow `_page_role` (TABS 'role') reads the same pot flag as Profile and re-renders on the toggle; attrs for Full Potential = fm_editor.potential.project_attrs (x5), current = person['raw_attrs'].
+    Tests: tests/test_role_tab.py (plain script): every POS_ROLES name exists in FM_ROLES; role_rating == clamp(round(role_score)) for all roles; sorting/best row; GK vs outfield live dots;
+    default selection = best posr; click selects; pot toggle changes values; Equal Weight vs a preset differ; offscreen grab + LOOK; no star widget on the tab.
+
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
      ring only the listed position's dot. Which?
@@ -90,6 +143,8 @@ OPEN QUESTIONS
   4. Positions "Future": DESIGN ONLY (the real button is DISABLED with a tooltip; '+future' still renders the design). A real implementation needs a position-rating recompute from the projected attributes
      (fm_editor/potential.project_attrs -> the same position-weights that produce the 15 current ratings).
   5. Tab strip style follows the current implementation (selection_bg + accent left edge), not the accent-fill of the earlier mock.
+  6. Role Rating: duty names spelled out (Defend / Support / Attack / Cover, as Genie) or the FM letters (D / S / A)? Dim unfamiliar positions (flag fam) by default? Position rating folded
+     into the dot colour instead of a dim? POS_ROLES to verify in game (see the ROLE RATING TAB block). 1-decimal ratings need role_rating's float variant (the report keeps integers).
 =====================================================================================================================
 -->
 <style>
@@ -345,6 +400,32 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .lg span{display:inline-flex;align-items:center;gap:5px}
 .lg i{display:inline-block;width:10px;height:10px;border-radius:2px}
 .o1pitch{flex:1;max-width:444px;min-width:300px;align-self:stretch;overflow:hidden;position:relative;padding:1px}  /* Qt: layout margin 1 inside the 1px border -> pitch widget = panel - 4 */
+
+/* ---- ROLE RATING (tab 4.7). left list = .o1list (456), right = .rpn (flex, <= 444): header 36 | pitch | tier key 27 ---- */
+.rph{display:flex;align-items:center;gap:8px;min-width:0;text-transform:none;letter-spacing:0}
+.rph .rpt{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rg+.rg{margin-top:4px}
+.rh{height:24px;padding:0 12px 0 15px;display:flex;align-items:center;background:var(--alt);font-weight:700;color:#fff;white-space:nowrap}   /* role (family) header: 12 + 3 = text at x 15 */
+.rr{height:24px;padding:0 12px 0 24px;border-left:3px solid transparent;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.rr.flat{padding-left:12px;background:var(--alt)}                                  /* single-duty role: header + row in one (band, bold name, duty muted) */
+.rr .lb{width:200px;flex:none;color:#fff;overflow:hidden;text-overflow:ellipsis}
+.rr.flat .lb{width:212px}
+.rr.flat .lb b{font-weight:700}
+.rr.flat .lb em{font-style:normal;font-size:11px;color:var(--tx2);margin-left:6px}
+.rr .v{width:38px;flex:none;text-align:right;font-weight:700}
+.rr .bar{flex:1}
+.rr.best,.rr.flat.best{background:var(--sel);border-left-color:var(--acc)}         /* best row at this position = the tab-strip accent treatment */
+.rfoot{margin-top:auto;padding:6px 12px 8px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;line-height:15px}
+.rfoot b{color:#fff;font-weight:var(--semi)}
+.rpn{flex:1;max-width:444px;min-width:300px;align-self:stretch;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.rpn .pw{flex:1;min-height:0;background:#15301F;overflow:hidden}
+.rpn .pw svg{width:438px}
+.rlg{height:27px;flex:none;padding:0 12px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;white-space:nowrap}
+.rlg span{display:inline-flex;align-items:center;gap:5px}
+.rlg i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.rlg i.ring{width:12px;height:12px;border-radius:6px;border:2px solid #fff;background:transparent}
+.rdg{outline:none}
+.rtip{position:absolute;display:none;white-space:pre;text-align:left;line-height:15px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:4px 8px;font-size:11px;color:#fff;z-index:20;pointer-events:none}
 </style>
 </head>
 <body>
@@ -354,6 +435,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
   <span class="lab">header</span><div class="rseg" id="hdrSeg"></div>
   <span class="lab">theme</span><div class="rseg" id="texSeg"></div>
+  <span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span class="lab" style="margin-right:0">weights</span><div class="rseg" id="wtSeg"></div></span>
   <span class="lab">HGP</span><div class="rseg" id="hgpSeg"></div>
   <span class="lab">HGC</span><div class="rseg" id="hgcSeg"></div>
   <span class="lab">queued elsewhere</span><div class="rseg" id="qxSeg"></div>
@@ -372,7 +454,8 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <li>Wage rounding for the display is inferred (the 50K step above &pound;300K rests on one player); reputation star boundaries fitted to 9 clubs.</li>
 <li>History: seasons simulated in the save (2025-28) not shown; plain-year season labels for calendar-year leagues are an assumption; History needs the FM install database.</li>
 <li>Not in the save at all: club Region, Founded, Facilities; contract Bonuses &amp; clauses (panel removed).</li>
-<li>General Rating and Role Rating tab contents: need in-game screens.</li>
+<li>General Rating tab content: need in-game screens.</li>
+<li>Role Rating: POS_ROLES (which roles each of the 15 positions offers) is from memory of FM24 and must be verified in game; unsure: SW, Defensive Winger / Advanced Playmaker on AM(L/R), Wide Playmaker (D), Wing-Back / Wide Centre-Back on D(L/R). FM_ROLES lacks e.g. Wing-Back (A), Stopper (S/Cover), Regista. Duty words and the 'fam' dimming are open design questions.</li>
 </ul>
 </details></div>
 
@@ -460,9 +543,53 @@ const POTV={"out":{"Corners":6,"Crossing":9,"Dribbling":11,"Finishing":7,"First 
 Object.entries(SAMPLES).forEach(([k,d])=>{for(const g in d.g)d.g[g].forEach(a=>{a[2]=a[3]?a[1]:(POTV[k][a[0]]||a[1])})});
 
 /* =====================================================================================================================
+   1b. ROLE RATINGS of the 3 samples (Role Rating tab). GENERATED, do not hand edit.
+   Source: the app's own logic. gui/roles.py FM_ROLES key attributes + fm_editor/weights/*.json, run on the sample attributes above
+   (raw_attrs = 5 x the 1-20 value; Current = a[1], Full Potential = a[2] i.e. the POTV values), for the 4 bundled presets
+   (eq = Equal Weight / no weights, fms = FMScout Community (the Settings default), pos = Possession-Based, dir = Direct Play).
+   Value = the weighted mean / 5 BEFORE gui.roles.role_rating rounds it (float, clamped 1..20, 2 decimals): the tab shows 1 decimal and
+   takes the tier from the Python-rounded value (rnd(), half to even), so the integer the Best-by-Role report shows is always the tier colour.
+   Array order = RR_NAMES (unique FM_ROLES names; 'Trequartista (A)' is listed twice in FM_ROLES, once in AM and once in Striker, same attributes).
+   Generator (a throwaway script, not in the repo; run from the repo root, it prints the consts below). For each preset, each sample, cur/pot, each unique role name:
+     raw=[0]*54; raw[IDX[name]]=value*5   (IDX = attribute name -> raw_attrs index, the table in gui/roles.py docstring)
+     w=weights.get_role_weights(preset, role); key=_ROLE_INDEX[role]
+     score=(sum(raw[i]*w.get(i,0) for i in key)/sum(w.get(i,0) for i in key) if w else sum(raw[i] for i in key)/len(key))/5
+     value=clamp(score,1,20);  assert gui.roles.role_rating(person, role, w) == clamp(round(score),1,20)
+   Because the samples' attributes are 1-20 display values, a real player's raw_attrs (finer than 5 x display) shift the numbers by < 0.1.
+   ===================================================================================================================== */
+const WEIGHT_NAMES={"eq":"Equal Weight","fms":"FMScout Community","pos":"Possession-Based","dir":"Direct Play"};
+const RR_NAMES=["Goalkeeper (D)","Goalkeeper (S)","Sweeper Keeper (D)","Sweeper Keeper (S)","Sweeper Keeper (A)","Ball-Playing Defender (D)","Ball-Playing Defender (S)","Central Defender (D)","Central Defender (S)","Central Defender (Cover)","Libero (D)","Libero (S)","No-Nonsense Centre-Back","Stopper (D)","Complete Wing-Back (S)","Complete Wing-Back (A)","Full Back (D)","Full Back (S)","Full Back (A)","Inverted Wing-Back (D)","Inverted Wing-Back (S)","Inverted Wing-Back (A)","No-Nonsense Full Back","Wide Centre-Back (D)","Wide Centre-Back (S)","Wide Centre-Back (A)","Wing-Back (D)","Wing-Back (S)","Anchor (D)","Ball-Winning Midfielder (D)","Ball-Winning Midfielder (S)","Deep-Lying Playmaker (D)","Deep-Lying Playmaker (S)","Defensive Midfielder (D)","Defensive Midfielder (S)","Half-Back (D)","Segundo Volante (S)","Segundo Volante (A)","Box-to-Box Midfielder (S)","Carrilero (S)","Central Midfielder (D)","Central Midfielder (S)","Central Midfielder (A)","Mezzala (S)","Mezzala (A)","Roaming Playmaker (S)","Advanced Playmaker (S)","Advanced Playmaker (A)","Attacking Midfielder (D)","Attacking Midfielder (S)","Attacking Midfielder (A)","Enganche (S)","Shadow Striker (A)","Trequartista (A)","Defensive Winger (D)","Defensive Winger (S)","Inside Forward (S)","Inside Forward (A)","Inverted Winger (S)","Inverted Winger (A)","Raumdeuter (A)","Wide Midfielder (D)","Wide Midfielder (S)","Wide Midfielder (A)","Wide Playmaker (D)","Wide Playmaker (S)","Wide Playmaker (A)","Winger (S)","Winger (A)","Advanced Forward (A)","Complete Forward (S)","Complete Forward (A)","Deep-Lying Forward (S)","Deep-Lying Forward (A)","False Nine (S)","Poacher (A)","Pressing Forward (D)","Pressing Forward (S)","Pressing Forward (A)","Target Man (S)","Target Man (A)"];
+const ROLE_RATINGS={
+ "eq.out.cur":[7.31,7.31,8.13,8.38,8.68,14.15,13.86,14.64,14.64,15.23,14.0,13.69,14.4,14.6,12.64,12.42,14.5,13.7,14.36,13.6,13.3,14.17,14.25,14.15,14.14,14.42,13.89,13.7,14.56,14.12,14.12,12.75,12.75,14.38,14.38,14.33,13.38,13.73,12.44,13.56,13.44,13.44,10.29,10.25,11.9,10.67,10.88,10.88,11.88,11.43,10.62,10.78,13.0,9.5,14.67,14.43,12.0,11.33,11.12,11.89,13.43,12.57,11.88,11.22,11.43,11.43,11.43,12.5,11.67,12.44,12.08,11.71,11.88,11.11,11.2,13.29,14.78,14.78,13.8,13.44,12.8],
+ "eq.out.pot":[7.69,7.69,8.6,8.88,9.21,14.92,14.64,15.45,15.45,15.92,14.75,14.46,15.1,15.3,13.36,13.17,15.3,14.5,15.09,14.4,14.1,14.83,15.0,14.92,14.93,15.17,14.67,14.5,15.33,14.75,14.75,13.62,13.62,15.12,15.12,15.22,14.38,14.55,13.33,14.33,14.22,14.22,11.29,11.25,12.7,11.67,11.62,11.62,12.75,12.29,11.62,11.56,13.75,10.38,15.22,15.0,12.75,12.22,11.88,12.56,14.0,13.43,12.75,12.22,12.29,12.29,12.29,13.12,12.44,13.22,13.0,12.57,12.75,12.11,12.0,14.14,15.33,15.33,14.5,14.11,13.5],
+ "eq.gk.cur":[13.92,13.92,14.0,13.81,12.74,10.69,10.64,10.91,10.91,10.62,9.92,9.38,9.8,9.5,7.73,7.92,10.9,9.3,8.45,10.3,9.9,9.75,10.12,10.69,10.5,9.25,8.78,8.8,10.67,8.62,8.62,11.88,11.88,10.62,10.62,10.11,8.5,8.0,8.67,11.22,10.44,10.44,8.0,7.38,7.7,8.11,9.12,9.12,10.25,9.71,8.75,8.44,10.0,6.88,7.56,9.14,7.0,6.44,6.62,7.0,9.57,9.43,8.5,7.78,9.71,9.71,9.71,7.0,6.44,8.89,7.77,7.57,10.25,9.33,9.0,9.29,10.78,10.78,9.9,10.56,9.7],
+ "eq.gk.pot":[13.92,13.92,14.0,13.81,12.74,10.69,10.64,10.91,10.91,10.62,9.92,9.38,9.8,9.5,7.73,7.92,10.9,9.3,8.45,10.3,9.9,9.75,10.12,10.69,10.5,9.25,8.78,8.8,10.67,8.62,8.62,11.88,11.88,10.62,10.62,10.11,8.5,8.0,8.67,11.22,10.44,10.44,8.0,7.38,7.7,8.11,9.12,9.12,10.25,9.71,8.75,8.44,10.0,6.88,7.56,9.14,7.0,6.44,6.62,7.0,9.57,9.43,8.5,7.78,9.71,9.71,9.71,7.0,6.44,8.89,7.77,7.57,10.25,9.33,9.0,9.29,10.78,10.78,9.9,10.56,9.7],
+ "eq.low.cur":[4.23,4.23,4.73,4.88,5.11,8.38,8.21,8.64,8.64,9.0,8.33,8.15,8.6,8.7,7.45,7.33,8.5,8.1,8.55,8.1,7.9,8.42,8.5,8.38,8.36,8.58,8.22,8.1,8.56,8.38,8.38,7.5,7.5,8.5,8.5,8.44,8.0,8.18,7.33,8.0,7.89,7.89,6.14,6.12,7.1,6.33,6.38,6.38,7.0,6.71,6.25,6.33,7.62,5.62,8.67,8.43,7.12,6.78,6.62,7.11,7.86,7.29,6.88,6.56,6.71,6.71,6.71,7.5,7.0,7.44,7.15,6.93,7.0,6.56,6.6,7.86,8.67,8.67,8.1,8.0,7.6],
+ "eq.low.pot":[4.69,4.69,5.27,5.5,5.95,9.54,9.43,9.64,9.64,10.0,9.58,9.46,9.5,9.6,9.0,8.92,9.5,9.3,9.73,9.4,9.3,9.75,9.38,9.54,9.5,9.67,9.33,9.3,9.56,9.25,9.25,9.0,9.0,9.62,9.62,9.56,9.25,9.45,8.78,9.33,9.22,9.22,8.0,8.0,8.8,8.11,7.88,7.88,8.62,8.43,8.0,7.89,9.12,7.25,9.78,9.57,8.75,8.44,8.5,8.89,8.86,8.71,8.38,8.11,8.43,8.43,8.43,9.0,8.56,8.89,8.69,8.36,8.62,8.22,8.1,9.14,9.56,9.56,9.1,9.11,8.8],
+ "fms.out.cur":[4.63,4.63,8.66,9.24,9.4,14.44,14.21,14.74,14.74,15.15,13.55,13.44,14.24,14.97,13.19,12.8,14.57,14.14,15.27,13.88,13.71,14.9,14.54,14.22,14.2,14.78,13.69,13.46,14.78,14.09,14.09,12.49,12.49,14.57,14.57,14.57,13.6,13.88,12.0,13.17,13.16,13.16,10.65,9.98,11.97,11.23,11.1,11.1,11.71,11.33,10.85,10.85,14.0,9.25,14.7,14.65,12.3,12.0,11.12,12.17,15.49,11.79,10.79,10.34,11.66,11.66,11.35,12.48,11.93,12.38,12.48,12.17,11.98,10.82,11.75,13.93,14.99,14.99,14.33,13.92,13.58],
+ "fms.out.pot":[4.83,4.83,9.19,9.84,10.04,15.25,15.01,15.57,15.57,15.88,14.32,14.22,14.93,15.65,13.9,13.53,15.43,15.0,15.92,14.77,14.61,15.56,15.3,15.1,15.09,15.56,14.57,14.36,15.58,14.68,14.68,13.41,13.41,15.34,15.34,15.42,14.55,14.7,12.98,14.08,14.03,14.03,11.73,11.09,12.81,12.17,11.82,11.82,12.55,12.17,11.77,11.58,14.75,10.2,15.2,15.15,13.08,12.84,11.89,12.81,16.11,12.71,11.73,11.38,12.48,12.48,12.18,13.11,12.66,13.15,13.37,13.05,12.92,11.9,12.67,14.75,15.52,15.52,14.96,14.61,14.29],
+ "fms.gk.cur":[14.64,14.64,14.33,13.91,12.94,9.69,9.66,9.67,9.67,9.64,10.54,10.37,8.57,9.35,7.54,7.82,11.16,10.3,9.85,11.48,11.27,10.68,9.43,10.84,10.45,10.1,9.71,9.61,10.19,8.75,8.75,11.59,11.59,9.67,9.67,9.55,7.9,7.81,9.12,11.9,11.16,11.16,8.87,6.92,7.41,9.1,9.62,9.62,10.09,9.6,9.02,8.84,10.75,6.67,7.93,8.43,6.49,6.28,5.36,5.97,11.43,8.58,7.21,6.72,10.14,10.14,9.6,6.4,6.07,7.04,7.83,7.62,10.2,8.81,9.74,9.68,10.51,10.51,9.95,10.73,10.31],
+ "fms.gk.pot":[14.64,14.64,14.33,13.91,12.94,9.69,9.66,9.67,9.67,9.64,10.54,10.37,8.57,9.35,7.54,7.82,11.16,10.3,9.85,11.48,11.27,10.68,9.43,10.84,10.45,10.1,9.71,9.61,10.19,8.75,8.75,11.59,11.59,9.67,9.67,9.55,7.9,7.81,9.12,11.9,11.16,11.16,8.87,6.92,7.41,9.1,9.62,9.62,10.09,9.6,9.02,8.84,10.75,6.67,7.93,8.43,6.49,6.28,5.36,5.97,11.43,8.58,7.21,6.72,10.14,10.14,9.6,6.4,6.07,7.04,7.83,7.62,10.2,8.81,9.74,9.68,10.51,10.51,9.95,10.73,10.31],
+ "fms.low.cur":[2.61,2.61,5.09,5.42,5.55,8.57,8.45,8.74,8.74,9.0,8.06,7.99,8.51,8.92,7.78,7.57,8.57,8.36,9.06,8.18,8.07,8.79,8.65,8.39,8.36,8.76,8.1,7.96,8.78,8.45,8.45,7.31,7.31,8.66,8.66,8.62,8.17,8.33,7.08,7.73,7.71,7.71,6.31,5.94,7.12,6.65,6.51,6.51,6.91,6.67,6.38,6.39,8.17,5.44,8.7,8.65,7.3,7.14,6.59,7.27,9.09,6.89,6.29,6.08,6.89,6.89,6.7,7.48,7.15,7.31,7.37,7.19,7.02,6.37,6.9,8.26,8.85,8.85,8.46,8.24,8.03],
+ "fms.low.pot":[2.81,2.81,5.67,6.2,6.54,9.67,9.6,9.74,9.74,10.0,9.41,9.36,9.37,9.87,9.26,9.12,9.57,9.46,10.14,9.38,9.32,10.0,9.59,9.51,9.46,9.81,9.24,9.21,9.78,9.27,9.27,8.89,8.89,9.74,9.74,9.66,9.38,9.53,8.65,9.13,9.11,9.11,8.12,7.79,8.77,8.39,7.96,7.96,8.49,8.33,8.08,7.89,9.47,6.95,9.88,9.87,8.92,8.78,8.41,8.95,10.15,8.47,7.96,7.77,8.66,8.66,8.48,9.0,8.71,8.82,8.82,8.61,8.54,7.98,8.49,9.49,9.7,9.7,9.39,9.25,9.1],
+ "pos.out.cur":[4.93,4.93,9.06,9.54,9.67,14.27,13.97,14.7,14.7,14.96,13.45,13.27,14.3,15.06,12.87,12.53,14.59,14.07,14.93,13.61,13.42,14.36,14.7,14.02,14.02,14.69,13.69,13.41,14.74,14.2,14.2,12.44,12.44,14.48,14.48,14.49,13.81,13.78,12.2,13.14,13.12,13.12,10.89,10.19,11.77,11.34,11.12,11.12,11.72,11.38,10.91,10.94,13.59,9.38,14.39,14.27,11.9,11.81,10.89,11.69,15.24,11.91,11.0,10.74,11.74,11.74,11.44,12.03,11.5,11.95,12.29,11.9,12.02,11.04,11.67,13.6,14.87,14.87,14.18,13.77,13.43],
+ "pos.out.pot":[5.16,5.16,9.63,10.17,10.33,15.08,14.77,15.55,15.55,15.75,14.23,14.07,15.01,15.76,13.61,13.28,15.44,14.93,15.62,14.48,14.3,15.07,15.48,14.87,14.88,15.49,14.57,14.31,15.54,14.81,14.81,13.33,13.33,15.27,15.27,15.34,14.72,14.62,13.15,14.05,14.0,14.0,11.89,11.24,12.62,12.25,11.85,11.85,12.58,12.22,11.84,11.69,14.37,10.31,14.94,14.84,12.72,12.65,11.68,12.38,15.92,12.84,11.94,11.74,12.57,12.57,12.27,12.69,12.26,12.75,13.18,12.77,12.94,12.08,12.54,14.49,15.46,15.46,14.88,14.49,14.17],
+ "pos.gk.cur":[14.62,14.62,14.16,13.79,12.61,9.88,9.85,9.91,9.91,9.89,10.8,10.43,8.55,9.52,7.72,7.97,11.13,10.26,9.7,11.33,11.14,10.73,9.46,11.0,10.6,10.33,9.71,9.59,10.41,8.85,8.85,11.48,11.48,9.72,9.72,9.9,8.21,8.0,9.35,11.82,11.09,11.09,9.09,7.22,7.56,9.13,9.61,9.61,10.09,9.62,9.07,8.82,10.81,6.85,8.07,8.64,6.62,6.55,5.81,6.21,11.63,8.95,7.67,7.37,10.28,10.28,9.74,6.28,5.95,7.25,8.24,7.96,10.35,9.16,9.68,9.89,10.84,10.84,10.22,10.96,10.52],
+ "pos.gk.pot":[14.62,14.62,14.16,13.79,12.61,9.88,9.85,9.91,9.91,9.89,10.8,10.43,8.55,9.52,7.72,7.97,11.13,10.26,9.7,11.33,11.14,10.73,9.46,11.0,10.6,10.33,9.71,9.59,10.41,8.85,8.85,11.48,11.48,9.72,9.72,9.9,8.21,8.0,9.35,11.82,11.09,11.09,9.09,7.22,7.56,9.13,9.61,9.61,10.09,9.62,9.07,8.82,10.81,6.85,8.07,8.64,6.62,6.55,5.81,6.21,11.63,8.95,7.67,7.37,10.28,10.28,9.74,6.28,5.95,7.25,8.24,7.96,10.35,9.16,9.68,9.89,10.84,10.84,10.22,10.96,10.52],
+ "pos.low.cur":[2.79,2.79,5.31,5.59,5.71,8.47,8.3,8.7,8.7,8.88,7.99,7.88,8.54,8.97,7.59,7.41,8.59,8.31,8.86,8.03,7.91,8.48,8.74,8.3,8.28,8.71,8.1,7.93,8.74,8.5,8.5,7.3,7.3,8.6,8.6,8.57,8.28,8.26,7.18,7.71,7.69,7.69,6.44,6.06,7.0,6.7,6.53,6.53,6.91,6.69,6.42,6.44,7.95,5.54,8.5,8.41,7.07,7.02,6.47,6.99,8.94,6.95,6.41,6.28,6.93,6.93,6.74,7.23,6.91,7.05,7.24,7.02,7.05,6.5,6.86,8.05,8.75,8.75,8.35,8.14,7.93],
+ "pos.low.pot":[3.02,3.02,5.96,6.4,6.76,9.6,9.51,9.7,9.7,9.88,9.35,9.27,9.42,9.95,9.11,8.99,9.59,9.45,9.97,9.3,9.24,9.76,9.72,9.49,9.45,9.76,9.24,9.21,9.74,9.35,9.35,8.89,8.89,9.72,9.72,9.64,9.48,9.48,8.75,9.12,9.11,9.11,8.26,7.91,8.69,8.44,7.99,7.99,8.52,8.38,8.13,7.95,9.32,7.08,9.69,9.64,8.72,8.68,8.34,8.75,10.0,8.55,8.07,7.96,8.67,8.67,8.5,8.8,8.52,8.61,8.74,8.46,8.6,8.12,8.41,9.29,9.63,9.63,9.31,9.26,9.1],
+ "dir.out.cur":[4.63,4.63,8.37,8.94,9.09,14.61,14.47,14.75,14.75,15.29,13.85,13.81,14.28,14.84,13.4,13.01,14.53,14.0,15.21,14.23,14.13,15.35,14.4,14.43,14.39,14.54,13.47,13.32,14.81,14.09,14.09,12.63,12.63,14.66,14.66,14.65,13.4,13.96,11.86,13.35,13.33,13.33,10.35,9.8,12.09,11.03,11.12,11.12,11.69,11.24,10.67,10.85,14.31,8.9,14.7,14.65,12.38,11.83,11.15,12.39,15.55,11.76,10.68,10.04,11.63,11.63,11.26,12.61,12.02,12.39,12.44,12.23,12.03,10.63,11.97,13.93,14.99,14.99,14.33,13.98,13.62],
+ "dir.out.pot":[4.83,4.83,8.87,9.51,9.7,15.42,15.26,15.56,15.56,15.98,14.6,14.57,14.96,15.51,14.11,13.73,15.4,14.86,15.86,15.15,15.04,16.0,15.14,15.35,15.31,15.33,14.36,14.21,15.6,14.68,14.68,13.57,13.57,15.43,15.43,15.49,14.38,14.77,12.88,14.24,14.18,14.18,11.52,10.96,12.95,12.01,11.85,11.85,12.55,12.08,11.62,11.58,15.07,9.92,15.2,15.15,13.17,12.72,11.91,13.0,16.16,12.68,11.61,11.12,12.46,12.46,12.1,13.25,12.77,13.16,13.37,13.17,13.0,11.77,12.93,14.75,15.52,15.52,14.96,14.65,14.31],
+ "dir.gk.cur":[14.64,14.64,14.52,14.13,13.49,9.86,9.82,9.84,9.84,9.76,10.35,10.35,8.77,9.33,7.52,7.77,11.32,10.05,9.82,11.69,11.46,10.72,9.4,10.67,10.28,9.65,9.42,9.36,10.06,8.75,8.75,11.82,11.82,9.62,9.62,9.19,7.59,7.64,8.77,12.04,11.18,11.18,8.46,6.7,7.3,8.88,9.65,9.65,10.04,9.44,8.76,8.9,10.8,6.22,7.93,8.43,6.19,5.83,4.74,5.56,11.33,8.41,6.95,6.27,10.09,10.09,9.44,6.46,6.11,6.63,7.46,7.31,10.15,8.5,10.02,9.53,10.51,10.51,9.95,10.6,10.16],
+ "dir.gk.pot":[14.64,14.64,14.52,14.13,13.49,9.86,9.82,9.84,9.84,9.76,10.35,10.35,8.77,9.33,7.52,7.77,11.32,10.05,9.82,11.69,11.46,10.72,9.4,10.67,10.28,9.65,9.42,9.36,10.06,8.75,8.75,11.82,11.82,9.62,9.62,9.19,7.59,7.64,8.77,12.04,11.18,11.18,8.46,6.7,7.3,8.88,9.65,9.65,10.04,9.44,8.76,8.9,10.8,6.22,7.93,8.43,6.19,5.83,4.74,5.56,11.33,8.41,6.95,6.27,10.09,10.09,9.44,6.46,6.11,6.63,7.46,7.31,10.15,8.5,10.02,9.53,10.51,10.51,9.95,10.6,10.16],
+ "dir.low.cur":[2.61,2.61,4.93,5.26,5.36,8.67,8.6,8.75,8.75,9.09,8.23,8.2,8.53,8.84,7.89,7.69,8.53,8.29,9.03,8.38,8.3,9.06,8.57,8.49,8.44,8.62,7.98,7.89,8.81,8.45,8.45,7.37,7.37,8.71,8.71,8.67,8.07,8.39,7.02,7.84,7.82,7.82,6.13,5.82,7.18,6.54,6.52,6.52,6.89,6.6,6.27,6.38,8.33,5.22,8.7,8.65,7.34,7.05,6.59,7.39,9.14,6.88,6.23,5.92,6.87,6.87,6.64,7.54,7.19,7.31,7.35,7.23,7.03,6.25,7.02,8.27,8.85,8.85,8.46,8.29,8.07],
+ "dir.low.pot":[2.81,2.81,5.45,5.96,6.22,9.71,9.68,9.75,9.75,10.09,9.53,9.5,9.41,9.77,9.32,9.18,9.53,9.39,10.11,9.48,9.43,10.18,9.48,9.53,9.48,9.7,9.15,9.14,9.81,9.27,9.27,8.9,8.9,9.77,9.77,9.68,9.28,9.58,8.55,9.18,9.16,9.16,7.91,7.64,8.79,8.27,7.95,7.95,8.44,8.24,7.95,7.87,9.56,6.73,9.88,9.87,8.94,8.69,8.37,9.02,10.2,8.41,7.86,7.61,8.63,8.63,8.42,9.03,8.72,8.8,8.76,8.64,8.47,7.83,8.61,9.51,9.7,9.7,9.39,9.2,9.03],
+};
+
+/* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false};
+const S={nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -758,7 +885,7 @@ function tabContract(){
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
    Future = position ratings at full potential. DESIGN ONLY: the real implementation must recompute the 15 position ratings
    from the projected attributes (potential.project_attrs) - `posf` is hand-made sample data here. */
-function pitchSVG(R,W,H,M){
+function pitchSVG(R,W,H,M,dots){   // dots (optional) = fn(pt) -> svg of the dots, pt(code) -> [x,y]; the Role Rating tab draws its own dots on the same field
   const g={boxW:238,boxD:88,sixW:108,sixD:29,circR:54,spotD:58,goalW:43,goalD:6};
   const LN='rgba(255,255,255,0.42)',x0=M,y0=M,w=W-2*M,h=H-2*M,cx=x0+w/2,cy=y0+h/2,y1=y0+h;
   const n=12,bh=H/n;let s=`<rect x="0" y="0" width="${W}" height="${H}" fill="#15301F"/>`;
@@ -773,7 +900,7 @@ function pitchSVG(R,W,H,M){
     s+=`<circle cx="${cx}" cy="${spotY}" r="2" fill="${LN}"/><path d="M${cx-dx},${edgeY} A${g.circR} ${g.circR} 0 0 ${bot?1:0} ${cx+dx},${edgeY}" ${st}/>`;
   });
   // dots: lowest first so the best sit on top. d28 solid tier fill, number 12/700 ink; 1-4 = ghost; 20 = white ring r18
-  s+=POS.slice().sort((a,b)=>R[a]-R[b]).map(p=>{
+  s+=dots?dots(p=>[M+SLOTS[p][0]*w,M+SLOTS[p][1]*h]):POS.slice().sort((a,b)=>R[a]-R[b]).map(p=>{
     const x=M+SLOTS[p][0]*w,y=M+SLOTS[p][1]*h,v=R[p],t=tier(v),c=HEX[t],ghost=t===1;
     return `<g class="dg" data-p="${p}">`+(v>=20?`<circle cx="${x}" cy="${y}" r="18" fill="none" stroke="#FFFFFF" stroke-width="2"/>`:'')
       +(ghost?`<circle cx="${x}" cy="${y}" r="13.5" fill="rgba(20,21,26,0.55)" stroke="${c}" stroke-width="1"/>`:`<circle cx="${x}" cy="${y}" r="14" fill="${c}"/>`)
@@ -797,7 +924,75 @@ function tabPositions(){
 
 /* ---------- 4.5 GENERAL RATING / 4.6 POSITIONAL RATING / 4.7 ROLE RATING (coming soon) ------------------------------ */
 function tabGeneral(){return soonPage('General Rating','Overall rating and a summary of the role ratings.')}
-function tabRole(){return soonPage('Role Rating','Suitability for each tactical role.')}
+/* ---------- 4.7 ROLE RATING -------------------------------------------------------------------------------------------
+   Left: the roles playable at the selected position, grouped by role (family), one row per duty, sorted by rating (best first; the best row has the
+   accent). Right: the pitch (same field and SLOTS as Positions) with one dot per position = the BEST role rating there, tier coloured; click a dot to
+   choose the position. Current | Full Potential is the app-wide `pot` toggle (here in the pitch header); no 'Show potential rating' checkbox.
+   Rating = 1-20 weighted mean of the role's key attributes (gui.roles.role_rating, active weight preset): shown as a NUMBER (1 decimal) + a bar,
+   tier coloured like the attributes. NOT converted to stars, so the star rule (Settings: Stars | Numbers) does not apply to this tab.
+   Goalkeepers: only the GK dot is live; for outfield players the GK dot is dim and not clickable (GK roles are only rated for goalkeepers). */
+const rl=(f,...d)=>d.length?d.map(x=>`${f} (${x})`):[f];       // rl('Winger','S','A') -> ['Winger (S)','Winger (A)']; no duty = the role name alone (FM_ROLES spelling)
+/* POS_ROLES: pitch position code -> roles playable there (names = FM_ROLES names, checked at load). THE ONE TABLE. FROM MEMORY OF FM24, TO VERIFY IN GAME
+   (see the footnote below the window). FM_ROLES has no 'Wing-Back (A)', 'Stopper (S/Cover)', 'Inverted Full-Back', 'Regista'... so those cannot show yet. */
+const POS_ROLES=(()=>{
+  const CD=[...rl('Ball-Playing Defender','D','S'),...rl('Central Defender','D','S','Cover'),...rl('Libero','D','S'),...rl('No-Nonsense Centre-Back'),...rl('Stopper','D')];
+  const WBs=[...rl('Wing-Back','D','S'),...rl('Complete Wing-Back','S','A'),...rl('Inverted Wing-Back','D','S','A')];
+  const FB=[...rl('Full Back','D','S','A'),...WBs,...rl('No-Nonsense Full Back'),...rl('Wide Centre-Back','D','S','A')];
+  const WM=[...rl('Defensive Winger','D','S'),...rl('Wide Midfielder','D','S','A'),...rl('Winger','S','A'),...rl('Wide Playmaker','D','S','A'),...rl('Inverted Winger','S','A')];
+  const AW=[...rl('Winger','S','A'),...rl('Inside Forward','S','A'),...rl('Inverted Winger','S','A'),...rl('Raumdeuter','A'),...rl('Wide Playmaker','S','A'),...rl('Advanced Playmaker','S','A')];
+  return {
+   GK:[...rl('Goalkeeper','D','S'),...rl('Sweeper Keeper','D','S','A')],
+   SW:[...rl('Libero','D','S'),...rl('Central Defender','Cover'),...rl('Ball-Playing Defender','D')],
+   DL:FB, DC:CD, DR:FB,
+   WBL:WBs, WBR:WBs,
+   DM:[...rl('Anchor','D'),...rl('Ball-Winning Midfielder','D','S'),...rl('Deep-Lying Playmaker','D','S'),...rl('Defensive Midfielder','D','S'),...rl('Half-Back','D'),...rl('Segundo Volante','S','A')],
+   ML:WM, MC:[...rl('Box-to-Box Midfielder','S'),...rl('Carrilero','S'),...rl('Central Midfielder','D','S','A'),...rl('Mezzala','S','A'),...rl('Roaming Playmaker','S'),...rl('Ball-Winning Midfielder','D','S'),...rl('Deep-Lying Playmaker','D','S'),...rl('Advanced Playmaker','S','A')], MR:WM,
+   AML:AW, AMC:[...rl('Advanced Playmaker','S','A'),...rl('Attacking Midfielder','D','S','A'),...rl('Enganche','S'),...rl('Shadow Striker','A'),...rl('Trequartista','A')], AMR:AW,
+   ST:[...rl('Advanced Forward','A'),...rl('Complete Forward','S','A'),...rl('Deep-Lying Forward','S','A'),...rl('False Nine','S'),...rl('Poacher','A'),...rl('Pressing Forward','D','S','A'),...rl('Target Man','S','A'),...rl('Trequartista','A')]};
+})();
+Object.entries(POS_ROLES).forEach(([p,l])=>l.forEach(n=>{if(!RR_NAMES.includes(n))throw new Error('POS_ROLES '+p+': unknown role '+n)}));   // self-check
+const DUTY={D:'Defend',S:'Support',A:'Attack',Cover:'Cover','':'Defend'};      // '' = unsuffixed role (No-Nonsense CB / FB: Defend only in FM24)
+const rnd=v=>{const f=Math.floor(v),d=v-f;return d<.5-1e-9?f:d>.5+1e-9?f+1:(f%2?f+1:f)};   // Python round() = half to even, as gui.roles.role_rating
+const wt=()=>S.weq?'eq':S.wpos?'pos':S.wdir?'dir':'fms';                                  // review aid: Settings > Role weights preset
+const rrv=()=>{const a=ROLE_RATINGS[`${wt()}.${S.smp}.${S.pot?'pot':'cur'}`];return n=>a[RR_NAMES.indexOf(n)]};
+const roleOk=p=>(p==='GK')===isGK();                                                       // GK roles only for goalkeepers, outfield roles only for outfielders
+const rolePos=()=>S.rp&&roleOk(S.rp)?S.rp:bestPos(D().posr);                               // default = the player's best position (Positions tab)
+const posBest=(p,rv)=>POS_ROLES[p].reduce((b,n)=>{const v=rv(n);return !b||v>b.v?{n,v}:b},null);
+function famGroups(p,rv){                                                                   // [{f:'Winger', r:[{n,d:'Support',v}, ...desc]}], groups by their best row, best first
+  const m=new Map();
+  POS_ROLES[p].forEach(n=>{const x=/^(.*) \((D|S|A|Cover)\)$/.exec(n),f=x?x[1]:n;if(!m.has(f))m.set(f,[]);m.get(f).push({n,d:DUTY[x?x[2]:''],v:rv(n)})});
+  return [...m].map(([f,r])=>({f,r:r.sort((a,b)=>b.v-a.v)})).sort((a,b)=>b.r[0].v-a.r[0].v||a.f.localeCompare(b.f));
+}
+function roleList(p,rv){
+  const best=posBest(p,rv).n,gs=famGroups(p,rv);
+  const val=v=>{const t=tier(rnd(v));return `<span class="bar"><i class="f${t}" style="width:${v*5}%"></i></span><b class="v c${t}">${v.toFixed(1)}</b>`};
+  const body=gs.map(g=>g.r.length===1
+    ?`<div class="rg"><div class="rr flat${g.r[0].n===best?' best':''}"><span class="lb"><b>${g.f}</b><em>${g.r[0].d}</em></span>${val(g.r[0].v)}</div></div>`
+    :`<div class="rg"><div class="rh">${g.f}</div>${g.r.map(r=>`<div class="rr${r.n===best?' best':''}"><span class="lb">${r.d}</span>${val(r.v)}</div>`).join('')}</div>`).join('');
+  return `<div class="ph"><span class="rph">${badge(p,1)}<span class="rpt">${FULL[p]}</span></span><span class="pnote">${gs.length} roles</span></div>${body}
+    <div class="rfoot">Weights: <b>${WEIGHT_NAMES[wt()]}</b> (Settings)<br>Rating = weighted mean of the role's key attributes, 1–20.</div>`;
+}
+function rolePitch(sel,rv){
+  const d=D(),R=d.posr,bp=bestPos(R),info={};
+  POS.forEach(p=>{info[p]=roleOk(p)?posBest(p,rv):null});
+  const dots=pt=>POS.slice().sort((a,b)=>(a===sel?99:info[a]?info[a].v:-1)-(b===sel?99:info[b]?info[b].v:-1)).map(p=>{        // dim ones first, best next, the selected on top
+    const [x,y]=pt(p),code=CODE[p],lab=(c)=>`<text x="${x}" y="${y-26}" text-anchor="middle" font-size="10" font-weight="700" fill="${c}">${code}</text>`;
+    if(!info[p])return `<g class="rdg dis" data-dis="1" data-p="${p}" data-x="${x}" data-y="${y}" data-t="${FULL[p]}&#10;Not rated: ${p==='GK'?'goalkeeper roles are only rated for goalkeepers':'outfield roles are not rated for goalkeepers'}">`
+      +`<circle cx="${x}" cy="${y}" r="22" fill="transparent"/><circle cx="${x}" cy="${y}" r="15" fill="rgba(20,21,26,0.35)" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 3"/>`
+      +`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="12" fill="rgba(255,255,255,0.35)">–</text>${lab('rgba(255,255,255,0.35)')}</g>`;
+    const {n,v}=info[p],t=tier(rnd(v)),c=HEX[t],ghost=t===1,on=p===sel;
+    return `<g class="rdg${on?' sel':''}"${S.fam&&R[p]<10&&!on?' opacity=".4"':''} data-act="rp" data-v="${p}" data-p="${p}" data-x="${x}" data-y="${y}" style="cursor:pointer" data-t="${FULL[p]}${p===bp?' (best position)':''}&#10;Best role: ${n} ${v.toFixed(1)}&#10;Position rating: ${word(R[p])} (${R[p]})">`
+      +`<circle cx="${x}" cy="${y}" r="22" fill="transparent"/>`+(on?`<circle cx="${x}" cy="${y}" r="21" fill="none" stroke="#FFFFFF" stroke-width="2"/>`:'')
+      +(ghost?`<circle cx="${x}" cy="${y}" r="16.5" fill="rgba(20,21,26,0.55)" stroke="${c}" stroke-width="1"/>`:`<circle cx="${x}" cy="${y}" r="17" fill="${c}"/>`)
+      +`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700" fill="${ghost?c:'#14151A'}">${v.toFixed(1)}</text>${lab(on||p===bp?'#FFFFFF':'rgba(255,255,255,0.72)')}</g>`}).join('');
+  return `<div class="ph"><span>Choose a position</span>${sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur')}</div>
+    <div class="pw">${pitchSVG(R,438,526,22,dots)}</div>
+    <div class="rlg">${tierKey().map(([l,t])=>`<span><i class="f${t}"></i>${l}</span>`).join('')}<span><i class="ring"></i>Selected</span></div>`;
+}
+function tabRole(){
+  const rv=rrv(),p=rolePos();
+  return `<div class="pg"><div class="pn o1list">${roleList(p,rv)}</div><div class="pn rpn">${rolePitch(p,rv)}</div></div>`;
+}
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
 /* Training: Recommended traits (moved here from the Profile rail; follows Current | Full Potential, owned traits ticked) + a coming-soon block. No training data is invented. */
@@ -826,8 +1021,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['fam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['fam','Dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
@@ -835,7 +1030,7 @@ function render(){
     <div class="main">${tabStrip()}<div class="content">${t.page()}</div></div></div>${actionStrip()}</div>`;
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
-  Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;render()};sm.appendChild(b)});
+  Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;S.rp=null;render()};sm.appendChild(b)});
   const tx=document.getElementById('texSeg');tx.innerHTML='';
   Object.entries(THEMES).forEach(([k,t])=>{const b=document.createElement('button');b.textContent=t.name;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
   const hs=document.getElementById('hdrSeg');hs.innerHTML='';
@@ -845,10 +1040,18 @@ function render(){
   /* homegrown demo states: HGP / HGC = none | set | queued, 'queued elsewhere' = 0 | 1 | 3 (fake count for the rest of the save session) */
   const seg=(id,items,cur,pick)=>{const e=document.getElementById(id);e.innerHTML='';items.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(cur===k)b.className='on';b.onclick=()=>{pick(k);render()};e.appendChild(b)})};
   [['hgp','hgpSeg'],['hgc','hgcSeg']].forEach(([k,id])=>seg(id,[['none','Not set'],['set','Set'],['queued','Queued']],S[k]?'set':S['q'+k]?'queued':'none',v=>{S[k]=v==='set';S['q'+k]=v==='queued'}));
+  seg('wtSeg',[['fms','FMScout'],['eq','Equal'],['pos','Possession'],['dir','Direct']],wt(),v=>{S.weq=v==='eq';S.wpos=v==='pos';S.wdir=v==='dir'});
   seg('qxSeg',[[0,'0'],[1,'1'],[3,'3']],S.qx,v=>{S.qx=v});
-  const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null].filter(Boolean);
+  const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null,S.tab==='role'&&S.rp?'rp'+S.rp:null].filter(Boolean);
   const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
+  // Role Rating: dot tooltip bubble (review aid; real app QToolTip). +tips pins the selected dot's tip.
+  const rpn=document.querySelector('.rpn');
+  if(rpn){const tip=document.createElement('div');tip.className='rtip';rpn.appendChild(tip);
+    const place=g=>{const sv=rpn.querySelector('svg').getBoundingClientRect(),pr=rpn.getBoundingClientRect(),x=sv.left-pr.left+ +g.dataset.x,y=sv.top-pr.top+ +g.dataset.y,up=y>pr.height*.6;
+      tip.textContent=g.dataset.t;tip.style.display='block';tip.style.left=Math.max(95,Math.min(pr.width-95,x))+'px';tip.style.top=(y+(up?-26:26))+'px';tip.style.transform=up?'translate(-50%,-100%)':'translateX(-50%)'};
+    rpn.querySelectorAll('.rdg').forEach(g=>{g.onmouseenter=()=>place(g);g.onmouseleave=()=>{tip.style.display='none'}});
+    if(S.tips){const g=rpn.querySelector('.rdg.sel');if(g)place(g)}}
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
     r.onmouseenter=()=>{r.classList.add('hl');const g=document.querySelector(`.dg[data-p="${r.dataset.p}"]`);if(!g)return;const tx=g.querySelector('text');
@@ -857,18 +1060,18 @@ function render(){
   });
 }
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-act],[data-tab]');if(!t||t.disabled)return;
+  const t=e.target.closest('[data-act],[data-tab]');if(!t||t.disabled||t.dataset.dis)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;return render()}
   const a=t.dataset.act,v=t.dataset.v;
-  if(a==='pot')S.pot=v==='pot';else if(a==='future')S.future=v==='future';else if(a==='short')S.short=!S.short;
+  if(a==='pot')S.pot=v==='pot';else if(a==='future')S.future=v==='future';else if(a==='short')S.short=!S.short;else if(a==='rp')S.rp=v;
   else if(a==='q')S['q'+v]=!S['q'+v];else return;      // HGP/HGC pill: toggles queued <-> not queued (nothing is written until the user saves)
   render();
 });
 function fromHash(){
   const h=location.hash.replace('#','').split('+');
   if(TABS.some(t=>t.key===h[0]))S.tab=h[0];
-  FLAGS.forEach(f=>S[f]=false);S.smp='out';S.qx=0;
-  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f;const m=/^qx(\d+)$/.exec(f);if(m)S.qx=+m[1]});
+  FLAGS.forEach(f=>S[f]=false);S.smp='out';S.qx=0;S.rp=null;
+  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f;const m=/^qx(\d+)$/.exec(f);if(m)S.qx=+m[1];const r=/^rp([A-Z]+)$/.exec(f);if(r&&POS.includes(r[1]))S.rp=r[1]});
   render();
 }
 window.addEventListener('hashchange',()=>{const cur=location.hash;fromHash()});
