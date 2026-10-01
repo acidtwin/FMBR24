@@ -30,6 +30,10 @@ assert settings.load() == settings.DEFAULTS
 json.dump({'landing_page': 'nope', 'show_pending': 'yes', 'default_save_dir': 5},
           open(settings.settings_path(), 'w'))
 assert settings.load() == settings.DEFAULTS
+json.dump({'trait_threshold': 99}, open(settings.settings_path(), 'w'))
+assert settings.load()['trait_threshold'] == 11 == settings.DEFAULTS['trait_threshold']
+json.dump({'trait_threshold': 14}, open(settings.settings_path(), 'w'))
+assert settings.load()['trait_threshold'] == 14
 open(settings.settings_path(), 'w').write('[1,2]')
 assert settings.load() == settings.DEFAULTS
 assert settings.save(vals) and settings.load() == vals  # save recovers from a corrupt file

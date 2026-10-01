@@ -388,7 +388,14 @@ class SettingsPage(QWidget):
         self._preset_edit = _btn('Edit Weights…')
         self._preset_import = _btn('Import…')
         self._preset_delete = _btn('Delete…')  # user presets only (kept from the old dialog)
+        self._trait_thr = self._select(220)
+        for n in range(1, 21):
+            self._trait_thr.addItem(f'{n}  (default)' if n == _settings.DEFAULTS['trait_threshold'] else str(n), n)
         self._section(col_l, 'Scouting', [
+            self._row('Trait recommender threshold',
+                      'Minimum average attribute for a trait to be recommended on the player window. '
+                      'About 14-15 for top clubs, 11-12 for smaller sides.',
+                      self._ctl_line(self._trait_thr)),
             self._row('Role weight preset',
                       'Drives the Best by Role report. Replaces the old Settings dialog.',
                       self._ctl_line(self._preset, self._preset_edit, self._preset_import,
@@ -420,7 +427,7 @@ class SettingsPage(QWidget):
         ])
 
     def _build_data(self, col_l):
-        use_cache = self._check(True, disabled=True)
+        self._use_cache = use_cache = self._check(True)
         self._cache_path = self._input(readonly=True)
         self._cache_path.setText(_cache.cache_dir())
         self._cache_path.setAccessibleName('Cache folder')
@@ -431,8 +438,8 @@ class SettingsPage(QWidget):
         self._cache_help = self._last_help
         self._section(col_l, 'Data', [
             self._row('Use parse cache',
-                      'Skips the ~60 s parse when a save has not changed. Read-back is not wired up yet.',
-                      self._ctl_line(use_cache), soon=True),
+                      'Skips the parse on Load when a save has not changed. Reload always re-parses.',
+                      self._ctl_line(use_cache)),
             self._row('Cache folder', 'Read-only. Holds parsed saves.',
                       self._ctl_line(self._cache_path, self._cache_open, stretch_first=True)),
             clear_row,
@@ -521,6 +528,8 @@ class SettingsPage(QWidget):
         self._browse.clicked.connect(self._browse_folder)
         self._landing.currentIndexChanged.connect(self._on_changed)
         self._pending.toggled.connect(self._on_changed)
+        self._use_cache.toggled.connect(self._on_changed)
+        self._trait_thr.currentIndexChanged.connect(self._on_changed)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_edit.clicked.connect(self._edit_weights)
         self._preset_import.clicked.connect(self._import_preset)
@@ -536,6 +545,8 @@ class SettingsPage(QWidget):
             'role_weights_preset': self._preset.currentText(),
             'landing_page': self._landing.currentData(),
             'show_pending': self._pending.isChecked(),
+            'use_cache': self._use_cache.isChecked(),
+            'trait_threshold': self._trait_thr.currentData(),
         }
 
     def is_dirty(self):
@@ -543,13 +554,15 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._preset):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
         self._pending.setChecked(v['show_pending'])
+        self._use_cache.setChecked(v['use_cache'])
+        self._trait_thr.setCurrentIndex(max(0, self._trait_thr.findData(v['trait_threshold'])))
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._preset):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()

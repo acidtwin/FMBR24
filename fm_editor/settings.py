@@ -20,6 +20,8 @@ DEFAULTS = {
     'role_weights_preset': 'FMScout Community',
     'landing_page': 'save_info',       # page opened after a save finishes loading
     'show_pending': True,              # show PENDING chips on the Club page
+    'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
+    'trait_threshold': 11,             # Trait recommender: min average attribute (sheet default, 1-20)
 }
 
 
@@ -51,6 +53,8 @@ def _clean(raw):
         v = raw.get(k, default)
         if isinstance(v, type(default)):
             out[k] = v
+    if isinstance(out['trait_threshold'], bool) or not 1 <= out['trait_threshold'] <= 20:
+        out['trait_threshold'] = DEFAULTS['trait_threshold']
     if out['landing_page'] not in LANDING_PAGES:
         out['landing_page'] = DEFAULTS['landing_page']
     return out
