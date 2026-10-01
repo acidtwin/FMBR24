@@ -20,6 +20,7 @@ from gui.stars import _StarWidget
 from fm_editor.cache import load_cache, save_cache, clear_cache
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
+from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
 from gui.people_model import PeopleModel, num_key
 from gui.player_window import PlayerWindow
@@ -3597,6 +3598,16 @@ class MainWindow(QMainWindow):
             f"font-size: 11px; color: {COLORS['text_dim']}; background: transparent;"
         )
         vbox.addWidget(hint_lbl)
+        vbox.addSpacing(10)
+
+        about_btn = QPushButton('About')
+        about_btn.setFlat(True)
+        about_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        about_btn.setStyleSheet(
+            f"QPushButton {{ color: {COLORS['text_dim']}; font-size: 11px; background: transparent;"
+            f" border: none; }} QPushButton:hover {{ color: {COLORS['accent_hover']}; }}")
+        about_btn.clicked.connect(lambda checked: AboutDialog(self).exec())
+        vbox.addWidget(about_btn, 0, Qt.AlignmentFlag.AlignHCenter)
 
         outer.addWidget(inner)
         return w

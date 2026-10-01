@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 from fm_editor import cache as _cache
 from fm_editor import settings as _settings
 from fm_editor import weights as _weights
+from gui.about_dialog import AboutDialog
 from gui.theme import COLORS
 
 # Extra literals from the mockup (not in COLORS)
@@ -485,8 +486,11 @@ class SettingsPage(QWidget):
         legal.setObjectName('setLegal')
         legal.setWordWrap(True)
         self._legal = legal
+        about_btn = _btn('About FMBR24...')
+        about_btn.clicked.connect(lambda _c: AboutDialog(self.window()).exec())
         self._section(col_l, 'About', [
             self._row(full=ident),
+            self._row('About', 'Credits and legal notice.', self._ctl_line(about_btn)),
             self._row('Source code', None, self._ctl_line(link)),
             self._row(full=legal),
         ])

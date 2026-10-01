@@ -11,7 +11,8 @@ APP_NAME = 'FM Backroom 24 (FMBR24)'
 APP_VERSION = '0.0.0-dev'
 APP_REPO_URL = 'https://github.com/acidtwin/FMBR24'
 LEGAL_LINE = ('Unofficial tool for Football Manager 24 — not affiliated with or '
-              'endorsed by Sports Interactive / SEGA')
+              'endorsed by Sports Interactive / SEGA. Football Manager is a trademark '
+              'of its owners.')
 
 LANDING_PAGES = ('save_info', 'club', 'players')
 ABILITY_DISPLAYS = ('stars', 'numbers')
