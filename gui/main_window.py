@@ -5107,26 +5107,26 @@ class MainWindow(QMainWindow):
         person = next((p for p in self._squad if p.get('id') == pid), None)
         if not person:
             return
-        self._run_player_window(person, self._club_entity_id, in_squad=True)
+        self._run_player_window(person)
 
-    def _run_player_window(self, person, club_entity_id, in_squad):
+    def _run_player_window(self, person, club_entity_id=None, in_squad=None):
         """Show the player window; then run the shortlist / in-memory patch flow it asked for.
-        Patching works on the Squads table selection, so it is only offered when opened from there."""
+        HGP / HGC are offered (visible) only for players of a human-managed club, from any page."""
         pid = person.get('id')
-        dlg = PlayerWindow(person, self._save_data, club_entity_id, self,
+        sd = self._save_data or {}
+        club_id = sd.get('squads', {}).get(pid)
+        can_patch = club_id is not None and club_id in sd.get('human_clubs', ())
+        if club_id is not None:
+            club_entity_id = club_id + 1  # club entity id = club id + 1 (memory fm24-binary-format)
+        dlg = PlayerWindow(person, sd, club_entity_id, self,
                            shortlisted=any(p.get('id') == pid for p in self._shortlist),
-                           can_patch=in_squad)
+                           can_patch=can_patch)
         dlg.exec()
         if dlg._shortlist_added:
             self._add_to_shortlist(person)
-        if dlg._patch_mode in ('hgp', 'hgc'):
-            self._table.clearSelection()
-            for r in range(self._table.rowCount()):
-                if self._table.item(r, 0) and \
-                   self._table.item(r, 0).data(Qt.ItemDataRole.UserRole) == pid:
-                    self._table.selectRow(r)
-                    break
-            (self._do_patch_hgp if dlg._patch_mode == 'hgp' else self._do_patch_hgc)()
+        if can_patch and dlg._patch_mode in ('hgp', 'hgc'):
+            (self._do_patch_hgp if dlg._patch_mode == 'hgp' else self._do_patch_hgc)(
+                [person], club_entity_id)
 
     def _open_player_detail_by_pid(self, pid, person=None):
         """Open the player window for any player by ID (reports/players views)."""
@@ -5136,9 +5136,7 @@ class MainWindow(QMainWindow):
         person = person or next((p for p in people if p.get('id') == pid), None)
         if not person:
             return
-        club_id = self._save_data.get('squads', {}).get(pid)
-        club_entity_id = club_id + 1 if club_id else None  # club entity id = club_id + 1 (memory fm24-binary-format)
-        self._run_player_window(person, club_entity_id, in_squad=False)
+        self._run_player_window(person)
 
     def _on_list_table_context_menu(self, table, pos):
         """Shared context menu for reports and players tables."""
@@ -5301,10 +5299,11 @@ class MainWindow(QMainWindow):
             return False
         return True
 
-    def _do_patch_hgp(self):
-        if not self._save_data or not self._squad:
+    def _do_patch_hgp(self, persons=None, club_entity_id=None):
+        """persons: patch these (player window); default = the Squads table selection."""
+        if not self._save_data or (persons is None and not self._squad):
             return
-        people_to_patch = [p for p in self._get_selected_persons()
+        people_to_patch = [p for p in (self._get_selected_persons() if persons is None else persons)
                            if not p.get('hgp', False)]
         if not people_to_patch:
             QMessageBox.information(self, 'Nothing to patch',
@@ -5326,8 +5325,9 @@ class MainWindow(QMainWindow):
             n += before != _recs(p)
         self._after_patch('HGP', n, False)
 
-    def _do_patch_hgc(self):
-        if not self._save_data or not self._squad or not self._club_entity_id:
+    def _do_patch_hgc(self, persons=None, club_entity_id=None):
+        club_entity_id = club_entity_id or self._club_entity_id
+        if not self._save_data or (persons is None and not self._squad) or not club_entity_id:
             return
         if 'b' not in self._save_data:
             QMessageBox.warning(self, 'Reload required',
@@ -5335,8 +5335,8 @@ class MainWindow(QMainWindow):
             return
         from fm_editor.patch import is_hgc, patch_to_hgc
         b = self._save_data['b']
-        people_to_patch = [p for p in self._get_selected_persons()
-                           if not is_hgc(b, p, self._club_entity_id)]
+        people_to_patch = [p for p in (self._get_selected_persons() if persons is None else persons)
+                           if not is_hgc(b, p, club_entity_id)]
         if not people_to_patch:
             QMessageBox.information(self, 'Nothing to patch',
                                     'All selected players are already HGC.')
@@ -5345,7 +5345,7 @@ class MainWindow(QMainWindow):
             return
         old_len = len(b)
         ordered = sorted(people_to_patch, key=lambda p: p['end'], reverse=True)  # inserts shift later offsets
-        n = patch_to_hgc(b, ordered, self._club_entity_id)
+        n = patch_to_hgc(b, ordered, club_entity_id)
         self._after_patch('HGC', n, len(b) != old_len)
 
     def _confirm_patch_dialog(self, people_to_patch, label):

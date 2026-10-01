@@ -34,6 +34,19 @@ class ParseWorker(QThread):
                 tables.append(X.parse_comp_table(get_member(self.save_path, m)))
         X.add_league_positions(clubs, tables)
 
+    def _human_clubs(self, b, members, save_info, people, clubs):
+        """Human-managed club ids (fm_editor.saveinfo.human_club_ids); cheap, so never cached."""
+        try:
+            from fm_editor.archive import get_member
+            from fm_editor.saveinfo import human_club_ids
+            hm = next((m for m in members if m['name'] == 'humans.dat'), None)
+            return human_club_ids({'save_info': save_info, 'b': b, 'people': people, 'clubs': clubs},
+                                  get_member(self.save_path, hm) if hm else None)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return {(save_info or {}).get('manager_club_id')} - {None}
+
     def run(self):
         try:
             from fm_editor.archive import parse_archive, get_member
@@ -65,6 +78,8 @@ class ParseWorker(QThread):
                     'sub_squads': cached['sub_squads'], 'people': cached['people'],
                     'employment': cached.get('employment', {}), 'club_staff': cached.get('club_staff', {}),
                     'save_info': cached.get('save_info', {}),
+                    'human_clubs': self._human_clubs(b, members, cached.get('save_info', {}),
+                                                     cached['people'], cached['clubs']),
                     'b': b, 'header': header, 'members': members,
                     'index_marker': index_marker, 'archive_name': archive_name,
                     'subdir_count': subdir_count, 'subdirs': subdirs,
@@ -173,6 +188,8 @@ class ParseWorker(QThread):
             except Exception:
                 pass
 
+            human_clubs = self._human_clubs(b, members, save_info, people, clubs)
+
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
                        save_info, sig=sig)
@@ -181,6 +198,7 @@ class ParseWorker(QThread):
             result = {
                 'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
                 'employment': employment, 'club_staff': club_staff, 'save_info': save_info,
+                'human_clubs': human_clubs,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,

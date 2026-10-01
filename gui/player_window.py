@@ -1040,15 +1040,14 @@ class PlayerWindow(QDialog):
         close.setCursor(Qt.CursorShape.PointingHandCursor)
         close.clicked.connect(lambda checked=False: self.reject())
         h.addWidget(close)
-        tips = 'Open from Squads to patch'
         for mode, lab, is_set, ok in (('hgp', 'HGP', self._hgp, True), ('hgc', 'HGC', self._hgc, self._hgc is not None)):
+            if not self._can_patch:  # only players of a human-managed club can be patched
+                break
             btn = QPushButton(f'{lab} set' if is_set else f'Make {lab}')
             btn.setObjectName('pwGhost')
             btn.setFixedHeight(32)
-            btn.setEnabled(bool(ok) and not is_set and self._can_patch)
-            if not is_set and not self._can_patch:
-                btn.setToolTip(tips)
-            elif not is_set and not ok:
+            btn.setEnabled(bool(ok) and not is_set)
+            if not is_set and not ok:
                 btn.setToolTip('Club unknown for this player.')
             btn.clicked.connect(lambda checked=False, m=mode: self._emit_patch(m))
             h.addWidget(btn)

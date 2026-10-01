@@ -168,6 +168,60 @@ def _resolve_club(out, gdb, clubs, people):
         out['manager_club_name'] = chosen['name']
 
 
+def human_pids(humans_dat, known_pids=None):
+    """Person ids of the human managers, from humans.dat.
+
+    Layout (identical in all 6 distinct humans / ~30 saves checked): header, u16 count @8, then one
+    record per human starting with the u32 person id (@10 for the first); every record carries the
+    float -1.0 (00 00 80 bf) exactly 16 bytes after its pid. Only single-human saves were available:
+    for count > 1 the later records are found by that anchor, unverified.
+    """
+    d = humans_dat
+    if not d or len(d) < 14 or bytes(d[:6]) != _MAGIC:
+        return []
+    n = min(_u16(d, 8), 16)
+    out = [_u32(d, 10)] if n >= 1 else []
+    p = 30
+    while len(out) < n:
+        i = bytes(d).find(b'\x00\x00\x80\xbf', p)
+        if i < 16:
+            break
+        pid = _u32(d, i - 16)
+        if pid not in out and (known_pids is None or pid in known_pids):
+            out.append(pid)
+        p = i + 4
+    return out
+
+
+def human_club_ids(save_data, humans_dat=None):
+    """Club ids (not entity ids) managed by a human in this save. Always includes
+    save_info['manager_club_id'] when known. Each human's club is his job link (b10=1, b11=3),
+    whose first u32 is the club entity id (= club id + 1)."""
+    out = set()
+    si = save_data.get('save_info') or {}
+    if si.get('manager_club_id') is not None:
+        out.add(si['manager_club_id'])
+    b, people = save_data.get('b'), save_data.get('people') or []
+    if humans_dat is None or b is None:
+        return out
+    ids = {c['id'] for c in save_data.get('clubs') or []}
+    by_id = {p.get('id'): p for p in people}
+    for pid in human_pids(humans_dat, by_id):
+        p = by_id.get(pid)
+        if not p or 'end' not in p:
+            continue
+        e = p['end']
+        if e + 35 > len(b):
+            continue
+        for k in range(min(b[e + 34], 60)):
+            r = e + 35 + k * 16
+            if r + 16 <= len(b) and b[r + 10] == 0x01 and b[r + 11] == 0x03 \
+                    and _u32(b, r) - 1 in ids:
+                out.add(_u32(b, r) - 1)
+                break
+    return out
+
+
 def parse_save_info(save_path, members, archive_name=None, gdb=None, clubs=None,
                     people=None, get_member_fn=None):
     """Build the Save Info dict.
