@@ -155,6 +155,18 @@ def fmt_wage(w):
     return '£' + t.replace('.0M', 'M').replace('.0K', 'K') + ' p/w'
 
 
+def fmt_value(v):
+    """Stored transfer value (GBP point value, u32 at attributes+54) -> '£241.3M'. The game shows a range around
+    it; 300,000,000 = 'Not for Sale'; 0 or > 300M = no value."""
+    if not v or v > 300_000_000:
+        return None
+    if v == 300_000_000:
+        return 'Not for Sale'
+    if v >= 1_000_000:
+        return ('£%.1fM' % (v / 1e6)).replace('.0M', 'M')
+    return ('£%.0fK' % (v / 1e3)) if v >= 1000 else '£%d' % v
+
+
 def player_extra_data(person, save_data):
     """PLUG IN: per-player data the parser does not decode yet. Return any of these keys (None = unknown,
     shown as PENDING). Strings are displayed as-is.
@@ -166,7 +178,7 @@ def player_extra_data(person, save_data):
     """
     mask = person.get('trait_mask')
     traits = trait_names(mask) if mask is not None else None     # None = old cache / unknown -> PENDING
-    return {'wage': fmt_wage(person.get('wage_week')), 'value': None, 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
+    return {'wage': fmt_wage(person.get('wage_week')), 'value': fmt_value(person.get('value_est')), 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
 
 
 
@@ -756,7 +768,8 @@ class PlayerWindow(QDialog):
     def _header(self):
         from gui import main_window as mw
         p = self._person
-        nation = mw.NATIONS.get(p.get('nation'), f"n={p.get('nation')}")
+        from fm_editor.nations import nation_name as _nn
+        nation = mw.NATIONS.get(p.get('nation')) or _nn(p.get('nation')) or f"n={p.get('nation')}"
         hero = QFrame()
         hero.setObjectName('pwPanel')
         hero.setFixedHeight(80)
@@ -1327,7 +1340,7 @@ class PlayerWindow(QDialog):
         start = self._contract_date('contract_start')
         if start:
             rows.append(('Start', start, False))
-        for label, key in (('Wage', 'wage'), ('Value', 'value')):
+        for label, key in (('Wage', 'wage'),):
             val = d.get(key)
             rows.append((label, val if val else self._pend_chip(), not val))
         for i, (label, right, pend) in enumerate(rows):

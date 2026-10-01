@@ -33,7 +33,8 @@ def test_height_weight():
     assert not bad, bad
     hs = [a['height_cm'] for a in ab.values()]
     ws = [a['weight_kg'] for a in ab.values()]
-    assert 140 <= min(hs) and max(hs) <= 215 and 45 <= min(ws) and max(ws) <= 120, (min(hs), max(hs), min(ws), max(ws))
+    assert 140 <= min(hs) and max(hs) <= 215 and max(ws) <= 120, (min(hs), max(hs), min(ws), max(ws))
+    assert sum(1 for w in ws if 45 <= w <= 120) >= 0.99 * len(ws), 'weights mostly outside 45-120 kg'  # a few players have 0 (unset)
     print(f'height/weight OK: {len(GT)}/{len(GT)} match, {len(ab)} players, '
           f'height {min(hs)}-{max(hs)}, weight {min(ws)}-{max(ws)}')
 

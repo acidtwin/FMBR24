@@ -105,6 +105,7 @@ class ParseWorker(QThread):
                     p['raw_attrs'] = ab['raw_attrs']
                     p['height_cm'] = ab['height_cm']
                     p['weight_kg'] = ab['weight_kg']
+                    p['value_est'] = ab.get('value_est')
 
             self._emit("Scanning employment records...", 91)
             employment = find_employment(b, people)
@@ -123,8 +124,6 @@ class ParseWorker(QThread):
             player_ids = set(abilities.keys())
             self._emit("Parsing coaching attributes...", 94)
             find_coaching_attrs(b, people, player_ids)
-            self._emit("Scanning injuries...", 95)
-            find_injuries(b, people, player_ids)
             self._emit("Parsing staff ability (CA/PA)...", 96)
             find_staff_extras(b, people, player_ids)
 
@@ -151,6 +150,19 @@ class ParseWorker(QThread):
                 import traceback
                 traceback.print_exc()  # untrusted bytes: a bad metadata block must not abort the load
                 save_info = {}
+
+            self._emit("Scanning injuries...", 97)
+            try:  # injuries live in injury_manager.dat (the game_db 0x47 record is NOT an injury)
+                import datetime as _dt
+                from fm_editor.gamedb import parse_injury_manager
+                im = next((m for m in members if m['name'] == 'injury_manager.dat'), None)
+                inj = parse_injury_manager(get_member(self.save_path, im)) if im else None
+                today = _dt.date.fromisoformat(str((save_info or {}).get('in_game_date'))[:10])
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                inj, today = None, None
+            find_injuries(b, people, player_ids, inj, today)
 
             try:  # scouting budget: only the human-managed club carries it
                 from fm_editor.clubextra import find_human_scouting_budget
