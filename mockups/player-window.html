@@ -11,7 +11,7 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 =====================================================================================================================
 
 HOW TO USE
-  Click the left tab strip to switch tabs. Deep links: #profile #contract #transfer #positions #general #positional #role #history
+  Click the left tab strip to switch tabs. Deep links: #profile #contract #transfer #positions #general #role #history
   State flags after '+':   pot (Profile: "At potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
@@ -20,7 +20,7 @@ HOW TO USE
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
 WHERE TO EDIT (every tab is ONE function in section 4; its header slot sits right beside it)
-  tabProfile  tabContract  tabTransfer  tabPositions  tabGeneral  tabPositional  tabRole  tabHistory  -> registry TABS (section 4)
+  tabProfile  tabContract  tabTransfer  tabPositions  tabGeneral   tabRole  tabHistory  -> registry TABS (section 4)
   Persistent parts (section 3): header(), tabStrip(), actionStrip().   Data (section 1) is FICTIONAL sample data.
 
 TOKENS (gui/theme.py COLORS, literal)
@@ -50,7 +50,7 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
   Profile: Dev Rate N | Contract: "Until Jun 2031" + club | Transfer: value range (PENDING) | Positions: best position + rating
-  (switches to "Best at potential" in Future) | History: Apps / Goals (PENDING) | General / Positional / Role: Dev Rate (default).
+  (switches to "Best at potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
@@ -441,7 +441,6 @@ function tabPositions(){
 /* ---------- 4.5 GENERAL RATING / 4.6 POSITIONAL RATING / 4.7 ROLE RATING (coming soon) ------------------------------ */
 const slotDev=slotProfile;
 function tabGeneral(){return soonPage('General Rating','Overall rating and a summary of the role ratings.')}
-function tabPositional(){return soonPage('Positional Rating','Rating per position, over time and across seasons.')}
 function tabRole(){return soonPage('Role Rating','Suitability for each tactical role.')}
 
 /* ---------- 4.8 HISTORY (coming soon) -------------------------------------------------------------------------------- */
@@ -455,7 +454,6 @@ const TABS=[
  {key:'transfer',label:'Transfer',page:tabTransfer,slot:slotTransfer},
  {key:'positions',label:'Positions',page:tabPositions,slot:slotPositions},
  {key:'general',label:'General Rating',page:tabGeneral,slot:slotDev},
- {key:'positional',label:'Positional Rating',page:tabPositional,slot:slotDev},
  {key:'role',label:'Role Rating',page:tabRole,slot:slotDev},
  {key:'history',label:'History',page:tabHistory,slot:slotHistory}];
 

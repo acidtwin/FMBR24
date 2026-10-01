@@ -96,14 +96,12 @@ TABS = [
     ('transfer', 'Transfer', None, '_slot_transfer'),
     ('positions', 'Positions', '_page_positions', '_slot_positions'),
     ('general', 'General Rating', None, '_slot_profile'),
-    ('positional', 'Positional Rating', None, '_slot_profile'),
     ('role', 'Role Rating', None, '_slot_profile'),
     ('history', 'History', None, '_slot_history'),
 ]
 SOON = {
     'transfer': 'Market value, asking price and transfer / loan status.',
     'general': 'Overall rating and a summary of the role ratings.',
-    'positional': 'Rating per position, over time and across seasons.',
     'role': 'Suitability for each tactical role.',
     'history': 'Career stats by season and club.',
 }
