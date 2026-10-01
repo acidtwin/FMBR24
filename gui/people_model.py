@@ -123,7 +123,10 @@ class PeopleModel(QAbstractTableModel):
             return int((Qt.AlignmentFlag.AlignHCenter if c in self.align_center
                         else Qt.AlignmentFlag.AlignLeft) | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.FontRole:
-            return self.big_font_cols.get(c)
+            f = self.big_font_cols.get(c)
+            if f is not None and str(self.rows[self.view[r]][c])[:1].isalpha():
+                return None  # big font is for emoji flags; a text fallback (nation name) stays normal size
+            return f
         if role == Qt.ItemDataRole.ForegroundRole:
             f = self.fg.get(c)
             return f(self.rows[self.view[r]]) if f else None

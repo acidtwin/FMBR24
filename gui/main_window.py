@@ -17,6 +17,7 @@ from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, FM_ROLES, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget
+from fm_editor.nations import nation_name as _nation_name_long
 from fm_editor.cache import load_cache, save_cache, clear_cache
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
@@ -342,7 +343,7 @@ def _contract_expiry_counts(squad, today):
 
 
 def _club_badge(text, bg, fg, font_size=11, padding='2px 6px'):
-    lbl = QLabel(text)
+    lbl = QLabel(text.upper())
     lbl.setStyleSheet(
         f"background:{bg}; color:{fg}; font-weight:bold; font-size:{font_size}px;"
         f" letter-spacing:0.06em; text-transform:uppercase; padding:{padding};"
@@ -397,7 +398,7 @@ def _ordinal(n):
 
 
 def _club_sec_hdr(text, sub=False):
-    lbl = QLabel(text)
+    lbl = QLabel(text.upper())  # QSS text-transform is not honoured
     margin = "margin-top:16px; " if sub else ""
     lbl.setStyleSheet(
         f"{margin}color:#4a5f73; font-size:12px; font-weight:bold;"
@@ -969,6 +970,11 @@ _NATION_FLAG = {
     172: '🇨🇭', 173: '🇹🇷', 175: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
 }
 
+def _nation_cell(nid, default=''):
+    """Flag emoji, else a short name, else the verified long name from fm_editor.nations, else default."""
+    return _NATION_FLAG.get(nid) or NATIONS.get(nid) or _nation_name_long(nid) or default
+
+
 _STAFF_COL_TOOLTIPS = {
     'Age': 'Age', 'Club': 'Club',
     'Atk': 'Attacking', 'Def': 'Defending', 'Fit': 'Fitness',
@@ -1124,8 +1130,9 @@ class StaffDetailDialog(QDialog):
         # Top bar
         topbar = QFrame()
         topbar.setFixedHeight(40)
+        topbar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         topbar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         tb_row = QHBoxLayout(topbar)
         tb_row.setContentsMargins(14, 0, 10, 0)
         tb_row.setSpacing(8)
@@ -1173,8 +1180,9 @@ class StaffDetailDialog(QDialog):
 
         photo = QFrame()
         photo.setFixedSize(190, 120)
+        photo.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         photo.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         photo_inner = QVBoxLayout(photo)
         photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         photo_icon = QLabel()
@@ -1184,8 +1192,9 @@ class StaffDetailDialog(QDialog):
         left_vbox.addWidget(photo)
 
         info_frame = QFrame()
+        info_frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         info_frame.setStyleSheet(
-            f"border-bottom:1px solid {COLORS['border']}; background:transparent;")
+            f"QFrame#qfStrip {{ border-bottom:1px solid {COLORS['border']}; background:transparent; }}")
         info_vbox = QVBoxLayout(info_frame)
         info_vbox.setContentsMargins(12, 8, 12, 8)
         info_vbox.setSpacing(0)
@@ -1328,8 +1337,9 @@ class StaffDetailDialog(QDialog):
 
         # Action strip
         action_frame = QFrame()
+        action_frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         action_frame.setStyleSheet(
-            f"border-top:1px solid {COLORS['border']}; background:transparent;")
+            f"QFrame#qfStrip {{ border-top:1px solid {COLORS['border']}; background:transparent; }}")
         action_row = QHBoxLayout(action_frame)
         action_row.setContentsMargins(0, 8, 0, 4)
         action_row.addStretch()
@@ -3195,8 +3205,9 @@ class MainWindow(QMainWindow):
         self._squad_header_bar = QFrame()
         header_bar = self._squad_header_bar  # keep alive — children referenced as instance attrs
         header_bar.setFixedHeight(44)
+        header_bar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         header_bar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         header_row = QHBoxLayout(header_bar)
         header_row.setContentsMargins(16, 0, 16, 0)
         header_row.setSpacing(12)
@@ -3214,8 +3225,9 @@ class MainWindow(QMainWindow):
         # Squad tab row — shows "First Team" + sub-squads when loaded
         tab_bar = QFrame()
         tab_bar.setFixedHeight(40)
+        tab_bar.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         tab_bar.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         tab_row = QHBoxLayout(tab_bar)
         tab_row.setContentsMargins(12, 3, 12, 0)
         tab_row.setSpacing(0)
@@ -3317,8 +3329,9 @@ class MainWindow(QMainWindow):
         """Elevated 'Quick Filters' strip (caption row above, filter row below).
         Mirrors the Players view; returns (frame, filter_row_layout)."""
         frame = QFrame()
+        frame.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         frame.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         frame_vbox = QVBoxLayout(frame)
         frame_vbox.setContentsMargins(0, 0, 0, 0)
         frame_vbox.setSpacing(0)
@@ -3422,7 +3435,7 @@ class MainWindow(QMainWindow):
         nid = p.get('nation', 0)
         coaching = p.get('coaching', {})
         pers = p.get('personality', [])
-        return (p.get('name', ''), club_name, _NATION_FLAG.get(nid, NATIONS.get(nid, '')),
+        return (p.get('name', ''), club_name, _nation_cell(nid, ''),
                 _age(p),
                 *[coaching.get(_STAFF_COACHING_MAP.get(c, c)) for c in _STAFF_COACHING_COLS],
                 *[pers[i] if i < len(pers) else None for i in range(8)])
@@ -3487,7 +3500,7 @@ class MainWindow(QMainWindow):
                 entity_id = employment.get(pid)
                 club_name = club_by_entity.get(entity_id, '') if entity_id else ''
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
@@ -3735,7 +3748,7 @@ class MainWindow(QMainWindow):
             pid = p.get('id', -1)
             name = p.get('name', '')
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             age = _age(p)
             coaching = p.get('coaching', {})
             coaching_items = []
@@ -3776,8 +3789,9 @@ class MainWindow(QMainWindow):
 
         # Filter bar — same structure as Players' Quick Filters
         filter_hdr = QFrame()
+        filter_hdr.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         filter_hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         filter_vbox = QVBoxLayout(filter_hdr)
         filter_vbox.setContentsMargins(0, 0, 0, 0)
         filter_vbox.setSpacing(0)
@@ -3979,7 +3993,7 @@ class MainWindow(QMainWindow):
             ca = str(p.get('ca', '-')) if is_player else '-'
             pa = str(p.get('pa', '-')) if is_player else '-'
             age = _age(p)
-            nation = NATIONS.get(p.get('nation', 0), '')
+            nation = _nation_cell(p.get('nation', 0))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
             row_items = [
@@ -4377,7 +4391,7 @@ class MainWindow(QMainWindow):
             col4_val = ratings.get(p.get('id'), None) if is_role else _progress_rate(p)
             age = _age(p)
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, ''))
+            flag = _nation_cell(nation_id, '')
             club_id = squads.get(p.get('id'))
             club_name = club_by_id.get(club_id, '') if club_id else ''
             injured = p.get('injured', False)
@@ -4416,7 +4430,8 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
                     f.setPointSize(14)
-                    item.setFont(f)
+                    if not item.text()[:1].isalpha():  # big font is for emoji flags only
+                        item.setFont(f)
                 elif col == 8:
                     text_dim = COLORS.get('text_dim', COLORS.get('text_secondary', '#888'))
                     item.setForeground(QColor('#4caf50') if hgp else QColor(text_dim))
@@ -4504,8 +4519,9 @@ class MainWindow(QMainWindow):
 
         # Header / filter strip
         hdr = QFrame()
+        hdr.setObjectName('qfStrip')  # scoped: a bare QSS would leak the border onto child QLabels
         hdr.setStyleSheet(
-            f"background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']};")
+            f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         hdr_vbox = QVBoxLayout(hdr)
         hdr_vbox.setContentsMargins(0, 0, 0, 0)
         hdr_vbox.setSpacing(0)
@@ -4661,7 +4677,7 @@ class MainWindow(QMainWindow):
         cid = squads.get(p.get('id'))
         return (p.get('name', ''), bool(p.get('injured', False)), pos, p.get('ca'), p.get('pa'),
                 _progress_rate(p), _age(p),
-                _NATION_FLAG.get(nid, NATIONS.get(nid, '')), bool(p.get('hgp', False)),
+                _nation_cell(nid, ''), bool(p.get('hgp', False)),
                 club_by_id.get(cid, '') if cid else '', p.get('contract_end', ''))
 
     def _open_players_view(self, players=None, highlight_name=None):
@@ -5434,7 +5450,7 @@ class MainWindow(QMainWindow):
 
         for row, p in enumerate(squad):
             nation_id = p.get('nation', 0)
-            flag = _NATION_FLAG.get(nation_id, NATIONS.get(nation_id, '?'))
+            flag = _nation_cell(nation_id, '?')
             hgp = p.get('hgp', False)
             hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
             pos = _primary_pos(p['positions']) if p.get('positions') else '?'
@@ -5482,7 +5498,8 @@ class MainWindow(QMainWindow):
                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
                     f = QFont()
                     f.setPointSize(14)
-                    item.setFont(f)
+                    if not item.text()[:1].isalpha():  # big font is for emoji flags only
+                        item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 if col == 8:
