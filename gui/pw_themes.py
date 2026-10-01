@@ -56,7 +56,7 @@ def _tile(kind):
             for x in range(128):
                 if kind == 'fine':
                     v = rnd()
-                    a = round(rnd() * (14 if v < .5 else 9))
+                    a = round(rnd() * (14 if v < .5 else 9) * (STEEL_ALPHA if kind == 'fine' else 1))
                     img.setPixelColor(x, y, QColor(0, 0, 0, a) if v < .5 else QColor(255, 255, 255, a))
                 elif rnd() < .008:
                     img.setPixelColor(x, y, QColor(200, 215, 255, 30 + round(rnd() * 30)))
@@ -89,6 +89,16 @@ def _ellipse_glow(p, w, h, cx, cy, rx, ry, stops):
 
 
 # ---- STEEL --------------------------------------------------------------------------------------
+STEEL_ALPHA = 0.75  # ONE knob: multiplies the alpha of every translucent Steel layer (grain, pinstripe, shadow, sheen, tab glow,
+#                    halo); the opaque base gradient and the selected-tab fill are untouched. 1.0 = original look. Mirrors
+#                    STEEL_ALPHA in mockups/player-window.html.
+
+
+def _sa(a):
+    """Scale an 0-255 alpha by STEEL_ALPHA."""
+    return int(a * STEEL_ALPHA + .5)
+
+
 def _steel(sheen_h=14):
     def paint(p, w, h):
         _fill(p, w, h, _vgrad(0, h, (0, _c(0x22, 0x2D, 0x32)), (.55, _c(0x1A, 0x22, 0x26)), (1, _c(0x16, 0x1D, 0x21))))
@@ -97,15 +107,15 @@ def _steel(sheen_h=14):
         s = 3 / math.sqrt(2)
         g = QLinearGradient(0, 0, s, s)
         g.setSpread(QLinearGradient.Spread.RepeatSpread)
-        g.setColorAt(0, _c(255, 255, 255, 10))
-        g.setColorAt(1 / 3 - .001, _c(255, 255, 255, 10))
+        g.setColorAt(0, _c(255, 255, 255, _sa(10)))
+        g.setColorAt(1 / 3 - .001, _c(255, 255, 255, _sa(10)))
         g.setColorAt(1 / 3, _c(255, 255, 255, 0))
         g.setColorAt(1, _c(255, 255, 255, 0))
         _fill(p, w, h, g)
-        _fill(p, w, h, _vgrad(h - 12, h, (0, _c(0, 0, 0, 0)), (1, _c(0, 0, 0, 77))), h - 12, 12)
+        _fill(p, w, h, _vgrad(h - 12, h, (0, _c(0, 0, 0, 0)), (1, _c(0, 0, 0, _sa(77)))), h - 12, 12)
         f = 1 / sheen_h
-        p.fillRect(QRectF(-1, 0, w + 2, sheen_h), _vgrad(0, sheen_h, (0, _c(255, 255, 255, 23)), (f, _c(255, 255, 255, 23)),
-                                                         (f, _c(255, 255, 255, 9)), (1, _c(255, 255, 255, 0))))
+        p.fillRect(QRectF(-1, 0, w + 2, sheen_h), _vgrad(0, sheen_h, (0, _c(255, 255, 255, _sa(23))), (f, _c(255, 255, 255, _sa(23))),
+                                                         (f, _c(255, 255, 255, _sa(9))), (1, _c(255, 255, 255, 0))))
     return paint
 
 
@@ -114,10 +124,10 @@ def _steel_tab_glow(p, rect):
     x, y, w, h = rect.x(), rect.y(), rect.width(), rect.height()
     p.fillRect(rect, SEL)
     g = QLinearGradient(x, 0, x + w * .75, 0)
-    g.setColorAt(0, _c(115, 92, 228, 51))
+    g.setColorAt(0, _c(115, 92, 228, _sa(51)))
     g.setColorAt(1, _c(115, 92, 228, 0))
     p.fillRect(QRectF(x, y, w, h), g)
-    p.fillRect(QRectF(x, y + h - 18, w, 18), _vgrad(y + h, y + h - 18, (0, _c(115, 92, 228, 87)), (1, _c(115, 92, 228, 0))))
+    p.fillRect(QRectF(x, y + h - 18, w, 18), _vgrad(y + h, y + h - 18, (0, _c(115, 92, 228, _sa(87))), (1, _c(115, 92, 228, 0))))
 
 
 def _steel_halo(p, btn):
@@ -125,8 +135,8 @@ def _steel_halo(p, btn):
     c = btn.center()
     rx, ry = btn.width() / 2 + 18, btn.height() / 2 + 12
     g = QRadialGradient(0, 0, rx)
-    g.setColorAt(0, _c(115, 92, 228, 166))
-    g.setColorAt(.55, _c(115, 92, 228, 66))
+    g.setColorAt(0, _c(115, 92, 228, _sa(166)))
+    g.setColorAt(.55, _c(115, 92, 228, _sa(66)))
     g.setColorAt(1, _c(115, 92, 228, 0))
     p.save()
     p.translate(c)

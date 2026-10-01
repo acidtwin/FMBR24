@@ -258,7 +258,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
    pitch tabs  : fillRect surface; stripes period 44: 22 on QColor(29,66,41,61), 22 off QColor(21,48,31,26).
    pitch bar   : fillRect surface; stripes period 80: 40 on (29,66,41,51) / 40 off (21,48,31,20); glow QLinearGradient(0,0,0,12) 0:(82,194,135,46) .5:(82,194,135,13) 1:(82,194,135,0);
              top line: drawLine y=0 pen QColor(82,194,135,140).  (QSS border-top on the bar stays 1px; just recolour it.)
-   steel all 3 : base QLinearGradient(0,0,0,h) 0:#222D32 .55:#1A2226 1:#161D21; drawTiledPixmap(fine-grain tile 128x128: half light px alpha<=9, half dark px alpha<=14);
+   steel all 3 : base QLinearGradient(0,0,0,h) 0:#222D32 .55:#1A2226 1:#161D21; drawTiledPixmap(fine-grain tile 128x128: half light px alpha<=9, half dark px alpha<=14; all alphas below x STEEL_ALPHA = 0.75, i.e. _sa(a)=int(a*0.75+.5), the grain tile max alphas become 7 / 10; base colours stay opaque);
              pinstripe: pre-rendered 3x3 ARGB tile with a 135deg 1px line QColor(255,255,255,10) -> drawTiledPixmap;
              bottom inner shadow QLinearGradient(0,h-12,0,h) 0:(0,0,0,0) 1:(0,0,0,77);
              top: drawLine y=0 QColor(255,255,255,23) + sheen QLinearGradient(0,1,0,14) (255,255,255,9)->(255,255,255,0).
@@ -470,25 +470,27 @@ if(new URLSearchParams(location.search).has('bare'))document.documentElement.cla
 const HDRS=[['a','A Calm'],['b','B Inline'],['c','C Split']];
 const qs0=new URLSearchParams(location.search);
 S.hdr=(qs0.get('hdr')||'a').toLowerCase();if(!HDRS.some(h=>h[0]===S.hdr))S.hdr='a';
+/* STEEL_ALPHA: ONE knob, multiplies the alpha of every translucent Steel layer (grain, pinstripe, shadow, sheen, tab glow, halo); opaque base + selected-tab fill untouched. 1 = original look. Mirror: STEEL_ALPHA in gui/pw_themes.py. */
+const STEEL_ALPHA=0.75,sa=a=>+(a*STEEL_ALPHA).toFixed(4);
 /* seeded noise tiles (stand-ins for pre-rendered QPixmap tiles): fine grain (dense, alpha<=14/255) and dust (sparse specks) */
 function mkTile(fn){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),im=x.createImageData(128,128);let r=1234567;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;fn(im.data,rnd);x.putImageData(im,0,0);return `url(${c.toDataURL()})`}
-document.documentElement.style.setProperty('--nzf',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){const v=rnd();d[i]=d[i+1]=d[i+2]=v<.5?0:255;d[i+3]=Math.round(rnd()*(v<.5?14:9))}}));
+document.documentElement.style.setProperty('--nzf',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){const v=rnd();d[i]=d[i+1]=d[i+2]=v<.5?0:255;d[i+3]=Math.round(rnd()*(v<.5?14:9)*STEEL_ALPHA)}}));
 document.documentElement.style.setProperty('--nzd',mkTile((d,rnd)=>{for(let i=0;i<d.length;i+=4){if(rnd()<.008){d[i]=200;d[i+1]=215;d[i+2]=255;d[i+3]=30+Math.round(rnd()*30)}}}));
 
 /* ---- THEME REGISTRY (the Settings 'Player window theme' dropdown lists these, in this order; the default is DEFAULT_THEME) ----
    {name, hdr, tabs, bar: CSS `background` values (layers TOP first); barBorder: border-top colour of the action bar; extra(sel): extra CSS for the theme}.
    Surfaces: hdr = header panel (.hdr), tabs = left tab strip (.tabs), bar = bottom action bar (.strip).  'plain' has no layers (flat surface). */
-const STEEL_BG=`linear-gradient(180deg,rgba(255,255,255,0.09) 0,rgba(255,255,255,0.09) 1px,rgba(255,255,255,0.035) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
-  linear-gradient(0deg,rgba(0,0,0,0.30) 0,rgba(0,0,0,0) 12px) 0 100%/100% 12px no-repeat,
-  repeating-linear-gradient(135deg,rgba(255,255,255,0.040) 0 1px,rgba(255,255,255,0) 1px 3px),
+const STEEL_BG=`linear-gradient(180deg,rgba(255,255,255,${sa(0.09)}) 0,rgba(255,255,255,${sa(0.09)}) 1px,rgba(255,255,255,${sa(0.035)}) 1px,rgba(255,255,255,0) 14px) 0 0/100% 14px no-repeat,
+  linear-gradient(0deg,rgba(0,0,0,${sa(0.30)}) 0,rgba(0,0,0,0) 12px) 0 100%/100% 12px no-repeat,
+  repeating-linear-gradient(135deg,rgba(255,255,255,${sa(0.040)}) 0 1px,rgba(255,255,255,0) 1px 3px),
   var(--nzf),
   linear-gradient(180deg,#222D32 0,#1A2226 55%,#161D21 100%)`;
 const THEMES={
  steel:{name:'Steel',hdr:STEEL_BG,tabs:STEEL_BG,bar:STEEL_BG,barBorder:'var(--border2)',
    extra:s=>`${s} .strip{isolation:isolate}
-${s} .tab.on,${s} .tab.on:hover{background:linear-gradient(0deg,rgba(115,92,228,0.34) 0,rgba(115,92,228,0) 18px) 0 100%/100% 18px no-repeat,linear-gradient(90deg,rgba(115,92,228,0.20) 0,rgba(115,92,228,0) 75%),var(--sel)}
+${s} .tab.on,${s} .tab.on:hover{background:linear-gradient(0deg,rgba(115,92,228,${sa(0.34)}) 0,rgba(115,92,228,0) 18px) 0 100%/100% 18px no-repeat,linear-gradient(90deg,rgba(115,92,228,${sa(0.20)}) 0,rgba(115,92,228,0) 75%),var(--sel)}
 ${s} .strip .b1{position:relative}
-${s} .strip .b1::before{content:"";position:absolute;left:-18px;right:-18px;top:-12px;bottom:-12px;z-index:-1;background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(115,92,228,0.65) 0,rgba(115,92,228,0.26) 55%,rgba(115,92,228,0) 100%)}`},
+${s} .strip .b1::before{content:"";position:absolute;left:-18px;right:-18px;top:-12px;bottom:-12px;z-index:-1;background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(115,92,228,${sa(0.65)}) 0,rgba(115,92,228,${sa(0.26)}) 55%,rgba(115,92,228,0) 100%)}`},
  pitch:{name:'Pitch lines',
    hdr:`linear-gradient(90deg,rgba(26,34,38,0) 0,rgba(26,34,38,0) 40%,rgba(26,34,38,0.55) 78%,rgba(26,34,38,0) 100%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='80'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'%3E%3Cline x1='232.5' y1='0' x2='232.5' y2='80'/%3E%3Ccircle cx='232.5' cy='40' r='46'/%3E%3C/g%3E%3Ccircle cx='232.5' cy='40' r='2' fill='rgba(255,255,255,0.14)'/%3E%3C/svg%3E") right top no-repeat,
