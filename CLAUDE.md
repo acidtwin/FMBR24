@@ -51,3 +51,7 @@ FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, la
 ## Button order rule
 
 A Close button is ALWAYS the last (far-right) button of any button row or action strip (player window: Make HGP / Make HGC / Add to Shortlist / Close). Apply it to every dialog and mockup you touch.
+
+## Mockup first
+
+Every VISUAL change to the player window (and other designed surfaces) is made and approved in `mockups/player-window.html` (or that surface's mockup) BEFORE any app code changes. Show the user mockup screenshots, wait for their pick, then build the app mechanically from the mockup. Exception: pure bug fixes with no visual design decision.
