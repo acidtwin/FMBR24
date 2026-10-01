@@ -259,9 +259,10 @@ def word(v):
 
 
 def foot_word(v):
-    """Foot words are assumed (mockup open question 3)."""
-    return ('Very Weak' if v <= 5 else 'Weak' if v <= 9 else 'Reasonable' if v <= 14
-            else 'Fairly Strong' if v <= 17 else 'Strong' if v <= 19 else 'Very Strong')
+    """Verified vs in-game screens (24 players): Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16,
+    Very Strong 20. UNVERIFIED: Very Weak (<=5 assumed), Strong 17-19 (assumed)."""
+    return ('Very Weak' if v <= 5 else 'Weak' if v <= 8 else 'Reasonable' if v <= 11
+            else 'Fairly Strong' if v <= 14 else 'Strong' if v <= 19 else 'Very Strong')
 
 
 _FUTURE_TIP = ('Not available yet: position ratings are stored in the save, not calculated from attributes, '
