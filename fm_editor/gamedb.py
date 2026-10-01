@@ -649,38 +649,45 @@ def _find_coaching_magic(b, records_end):
     return -1
 
 
-def find_injuries(b, people, player_ids):
+def parse_injury_manager(d):
+    """Current injuries from the injury_manager.dat member: {person_id: (earliest_return, latest_return)} (date).
+
+    Layout (verified, session 19): u32 row count at +12, then 14-byte rows from +16:
+    01 | A u16 | year u16 | B u16 | year u16 | person id u32 | flag.  A/B = earliest/latest return,
+    day-of-year = u16 & 0x1ff (high bits shared per row, meaning unknown). Rows are dropped once B has passed.
+    """
+    import datetime as _dt
+    out = {}
+    if len(d) < 16:
+        return out
+    n = _u32(d, 12)
+    for i in range(min(n, (len(d) - 16) // 14)):
+        o = 16 + i * 14
+        if d[o] != 1:
+            break
+        try:
+            a = _dt.date(_u16(d, o + 3), 1, 1) + _dt.timedelta((_u16(d, o + 1) & 0x1ff) - 1)
+            z = _dt.date(_u16(d, o + 7), 1, 1) + _dt.timedelta((_u16(d, o + 5) & 0x1ff) - 1)
+        except (ValueError, OverflowError):
+            continue
+        out[_u32(d, o + 9)] = (a, z)
+    return out
+
+
+def find_injuries(b, people, player_ids, injuries=None, today=None):
     """Set p['injured'] and p['injury_days'] for each player in player_ids.
 
-    b11=0x47 is the injury record type (confirmed against save with known injuries).
-    Days remaining: b[roff+12] (trail byte 0).
+    `injuries` = parse_injury_manager(injury_manager.dat); without it nobody is marked injured. The old
+    game_db b11=0x47 linked record is NOT an injury (human-club countdown, see memory file).
+    injury_days = days until the latest return date (needs `today`, a datetime.date; else 0).
     """
-    _INJURY_RECORD_TYPE = 0x47
+    injuries = injuries or {}
     for p in people:
         if p.get('id', -1) not in player_ids:
             continue
-        end = p['end']
-        count = b[end + 34] if end + 34 < len(b) else 0
-        for k in range(min(count, 60)):
-            roff = end + 35 + k * 16
-            if roff + 16 > len(b):
-                break
-            if b[roff + 11] == _INJURY_RECORD_TYPE:
-                days = b[roff + 12]
-                trail2 = b[roff + 14]
-                # trail[2]==0x00 → long-term injury (204-206 day range confirmed)
-                # trail[2]==0x03 AND days<=11 → short-term injury (Sávio: 5 days confirmed)
-                # trail[2]==0x03 AND days>=12 → non-injury record (fitness/condition metric)
-                if (trail2 == 0x00 and days > 0) or (trail2 == 0x03 and 0 < days <= 11):
-                    p['injured'] = True
-                    p['injury_days'] = days
-                    break
-        else:
-            p['injured'] = False
-            p['injury_days'] = 0
-        if 'injured' not in p:
-            p['injured'] = False
-            p['injury_days'] = 0
+        row = injuries.get(p['id'])
+        p['injured'] = row is not None
+        p['injury_days'] = max(1, (row[1] - today).days) if row and today else 0
 
 
 def find_staff_extras(b, people, player_ids):
