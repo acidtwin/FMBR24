@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QStyledItemDelegate, QSpinBox,
     QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication,
 )
-from PyQt6.QtCore import Qt, QTimer, QSize, QRectF
+from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
 from gui.theme import COLORS
@@ -212,6 +212,38 @@ class _SortItem(QTableWidgetItem):
                 return str(a) < str(b)
         except Exception:
             return False
+
+
+class _BusyVeil(QWidget):
+    """Dim, click-blocking layer over the main content while a save / reload / load is running.
+    Child of `target`, resizes with it. (Plain QWidget paints nothing by itself: we fill it.)"""
+    ALPHA = 140  # 0-255; window_bg (#14151A) at ~55%
+
+    def __init__(self, target):
+        super().__init__(target)
+        self._target = target
+        target.installEventFilter(self)
+        self.setCursor(Qt.CursorShape.BusyCursor)
+        self.hide()
+
+    def eventFilter(self, obj, ev):
+        if obj is self._target and ev.type() == QEvent.Type.Resize:
+            self.setGeometry(self._target.rect())
+        return False
+
+    def show_veil(self, on):
+        if on:
+            self.setGeometry(self._target.rect())
+            self.raise_()
+        self.setVisible(on)
+
+    def paintEvent(self, _ev):
+        QPainter(self).fillRect(self.rect(), QColor(20, 21, 26, self.ALPHA))
+
+    def mousePressEvent(self, ev):  # swallow clicks / wheel so nothing underneath reacts
+        ev.accept()
+
+    mouseReleaseEvent = mouseDoubleClickEvent = mouseMoveEvent = wheelEvent = mousePressEvent
 
 
 class _SidebarFrame(QFrame):
@@ -1718,6 +1750,7 @@ class MainWindow(QMainWindow):
         self._settings_page.message.connect(lambda m: self._status.showMessage(m, 4000))
         self._main_stack.addWidget(self._settings_page)           # 10
         right_vbox.addWidget(self._main_stack)
+        self._busy_veil = _BusyVeil(self._main_stack)
 
         self._status = QStatusBar()
         self._status.setSizeGripEnabled(False)
@@ -5831,6 +5864,8 @@ class MainWindow(QMainWindow):
             self._load_btn.setText('Load')
             self._welcome_load_btn.setText('Load Save')
         self._progress.setVisible(busy)
+        self._main_stack.setEnabled(not busy)   # no keyboard / clicks into the lists while loading
+        self._busy_veil.show_veil(busy)
         self._load_btn.setEnabled(not busy)
         self._welcome_load_btn.setEnabled(not busy)
         self._reload_btn.setEnabled(not busy and bool(self._save_path))
