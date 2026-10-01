@@ -1360,11 +1360,16 @@ class _HeaderHeroWidget(QWidget):
         'squad':      'squad.webp',
         'staff':      'staff.webp',
         'shortlist':  'shortlist.webp',
-        'staff_shortlist': 'shortlist.webp',
+        'staff_shortlist': 'staff_shortlist.webp',
         'reports':    'reports.webp',
         'players':    'players.webp',
         'club_staff': 'club_staff.webp',
-        'settings':   'stadium.webp',
+        'settings':   'settings.webp',
+        'save_info':  'save_info.webp',
+        'prospects':  'prospects.webp',
+        'wonderkids': 'wonderkids.webp',
+        'best_pos':   'best_pos.webp',
+        'best_role':  'best_role.webp',
     }
     _FALLBACK = 'stadium.webp'
 
@@ -1911,7 +1916,8 @@ class MainWindow(QMainWindow):
         return w
 
     def _update_header_for_view(self, key: str):
-        self._hero.set_page(key)
+        # each Player Report has its own header image (falls back to the shared reports image)
+        self._hero.set_page(self._current_report_key if key == 'reports' and self._current_report_key in self._hero._PAGE_IMAGE else key)
         self._settings_btn.setChecked(key == 'settings')
         club = self._current_club
         club_name = club['name'] if club else ''
