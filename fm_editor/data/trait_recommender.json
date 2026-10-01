@@ -140,7 +140,7 @@
   },
   {
    "name": "Likes to Switch Ball to Other Flank",
-   "id": 26,
+   "id": null,
    "category": "Passing",
    "attrs": [
     "anticipation",
