@@ -16,6 +16,9 @@ Display only: never feed results to patch/save code.
 import json
 import os
 
+from fm_editor.potential import display_value
+from fm_editor.traits import TRAIT_TABLE
+
 # attribute name (sheet spelling, lower case) -> index into person['raw_attrs'] (raw = 5 x the 1-20 value)
 ATTR_IDX = {
     'corners': 27, 'crossing': 0, 'dribbling': 1, 'finishing': 2, 'first touch': 22, 'heading': 3,
@@ -34,6 +37,15 @@ def _data():
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'trait_recommender.json'),
                   encoding='utf-8') as f:
             _DATA = json.load(f)
+        # Display names come from TRAIT_TABLE (verified against in-game screenshots), not the sheet's wording
+        # (e.g. bit 47: sheet 'Likes to Switch Ball to Other Flank'); the sheet name is kept as t['sheet_name'].
+        ren = {}
+        for t in _DATA['traits']:
+            t['sheet_name'] = t['name']
+            tn = TRAIT_TABLE.get(t['id'], (None,))[0]
+            if tn:
+                ren[t['name']] = t['name'] = tn
+        _DATA['conflicts'] = [[ren.get(a, a), ren.get(b, b)] for a, b in _DATA['conflicts']]
     return _DATA
 
 
@@ -43,7 +55,7 @@ def default_threshold():
 
 def attrs_from_raw(raw_attrs):
     """Raw save attributes (x5) -> 1-20 ints as shown in the player window."""
-    return [max(1, min(20, round(v / 5))) for v in raw_attrs[:54]]
+    return [display_value(v / 5) for v in raw_attrs[:54]]
 
 
 class Rec:

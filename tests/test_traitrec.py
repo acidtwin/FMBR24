@@ -10,6 +10,8 @@ for t in d['traits']:
     assert t['attrs'] and len(t['attrs']) == len(set(t['attrs'])), t['name']
     assert all(a in tr.ATTR_IDX for a in t['attrs']), t['name']
     assert t['id'] is None or t['id'] in TRAIT_TABLE, t['name']
+for t in d['traits']:  # Recommended list shows the verified TRAIT_TABLE name for the same bit
+    assert t['name'] == TRAIT_TABLE[t['id']][0], (t['id'], t['name'], TRAIT_TABLE[t['id']])
 names = {t['name'] for t in d['traits']}
 assert all(a in names and b in names for a, b in d['conflicts'])
 assert tr.ATTR_IDX['pace'] == 38 and len(set(tr.ATTR_IDX.values())) == len(tr.ATTR_IDX)
@@ -32,7 +34,7 @@ sc = [y.score for y in tr.recommend(a, 11)]
 assert sc == sorted(sc, reverse=True) and len(tr.recommend(a, 11, top=5)) == 5
 # owned trait marked; its conflicts removed (Stays Back owned -> no Gets Forward)
 r = tr.recommend([15] * 54, 11, have_ids={33})
-assert next(y for y in r if y.name == 'Stays Back at All Times').has
+assert next(y for y in r if y.name == 'Stays Back At All Times').has
 assert 'Gets Forward Whenever Possible' not in {y.name for y in r}
 assert 'Runs With Ball Rarely' not in {y.name for y in tr.recommend([15] * 54, 11)} or \
     'Runs With Ball Often' not in {y.name for y in tr.recommend([15] * 54, 11)}

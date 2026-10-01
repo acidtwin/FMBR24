@@ -14,6 +14,8 @@ assert trait_names(VDV) == ['Tries Long Range Passes', 'Brings Ball Out Of Defen
 for i, (n, g) in TRAIT_TABLE.items():
     if g in 'C?':
         assert trait_names(1 << i) == [f'Trait #{i}'], i
+for i in (49, 61, 62):  # X grade: not shown in game, hidden from the labels
+    assert TRAIT_TABLE[i][1] == 'X' and trait_names(1 << i) == [], i
 assert read_trait_mask(b'\0' * 4, 3) == 0           # offset < 8 must not raise
 assert read_trait_mask((VDV).to_bytes(8, 'little') + b'xyz', 8) == VDV
 
@@ -28,5 +30,5 @@ if os.path.exists(pk):
         if p:
             print(nm, trait_names(read_trait_mask(b, p['offset'])))
 else:
-    print('(real-save checks skipped)')
+    print('SKIPPED (scratchpad pickle not found): test_traits real-save checks')
 print('OK')
