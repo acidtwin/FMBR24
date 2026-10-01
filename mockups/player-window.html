@@ -12,7 +12,7 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 
 HOW TO USE
   Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #history
-  State flags after '+':   pot (Profile: "At potential")   future (Positions: "Future")   gk (goalkeeper sample)
+  State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: Make HGP/HGC disabled)   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown set)   data (show sample wage/value/height/weight instead of PENDING)
     nums (CA/PA/Dev Rate as numbers instead of stars)
@@ -43,7 +43,7 @@ METRICS (px)
   Header panel 80: pad 0 16, avatar 48, name 20/700, row2 12 secondary, row3 chips h20 (pills r10), CA/PA boxes 104x52 (label, 20/700 value,
     6px bar), tab slot 172 wide behind a 1px border divider (label 10/700 caps, value 20/700, sub 11 secondary).
   Tab strip QFrame panel 150: rows 34, inset 6; selected = selection_bg + 3px accent left border + white 700; hover = elevated.
-  Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | At potential).
+  Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | Full Potential).
   Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  Fonts: Noto Sans fallback; 10/11/12, headings 20, numerals 20-36.
 
 QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hover and tooltip bubbles here are review aids only
@@ -51,7 +51,7 @@ QSS / PyQt6 RULES: no blur, box-shadow, opacity, transition, grid, ::after. Hove
 
 HEADER TAB SLOT (right end, the core header never moves; the slot is the only part that changes per tab)
   Profile: Dev Rate N | Contract & Transfer: "Until Jun 2031" + club | Positions: best position + rating
-  (switches to "Best at potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
+  (switches to "Best at full potential" in Future) | History: Apps / Goals (PENDING) | General / Role: Dev Rate (default).
 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
@@ -136,7 +136,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .b2{background:var(--surface);border-color:var(--border2);color:#fff}.b2:hover{background:var(--elev)}
 .b2.on{border-color:var(--acc2);color:var(--pot);background:var(--sel)}
 .b2[disabled],.b2[disabled]:hover{color:var(--tx3);border-color:var(--border);background:var(--elev)}
-/* segmented control (Current | At potential, Current | Future) */
+/* segmented control (Current | Full Potential, Current | Future) */
 .sg{display:inline-flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden;background:var(--bg)}
 .sg button{white-space:nowrap;height:22px;padding:0 12px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
 .sg button.on{background:var(--acc);color:#fff}
@@ -368,12 +368,12 @@ function tabProfile(){
   const d=D(),g=d.g;
   const cols=isGK()?[['Goalkeeping',g.gk,['Footedness',g.foot]],['Mental',g.ment],['Physical',g.phys,['Hidden',g.hid]],['Technical',g.tech]]
                    :[['Technical',g.tech],['Mental',g.ment],['Physical',g.phys,['Footedness',g.foot]],['Hidden',g.hid]];
-  // "At potential" shows ONLY the projected value in the tile (no "current / potential" pair)
+  // "Full Potential" shows ONLY the projected value in the tile (no "current / potential" pair)
   const grp=(t,l)=>`<div class="ch">${t.toUpperCase()}</div>`+l.map(a=>{const v=S.pot?a[2]:a[1],t=tier(a[3]?21-v:v);
     return `<div class="tr2"><span class="an">${a[0]}</span><span class="tile k${t} c${t}">${v}</span></div>`}).join('');
   const grid=cols.map(([t,l,x])=>`<div class="col">${grp(t,l)}${x?'<div style="height:10px"></div>'+grp(x[0],x[1]):''}</div>`).join('');
   const note=S.pot&&d.potNote?`<span class="pnote">${d.potNote}</span>`:'';
-  const attrs=`<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','At potential']],S.pot?'pot':'cur'))}
+  const attrs=`<div class="pn p-attr">${ph('Attributes',note+sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}
     <div class="p-cols" style="padding-top:2px">${grid}</div>
     ${S.pot?'<div class="cp">Projection from CA weights; real growth depends on training, playing time and personality.</div>':''}</div>`;
   const pers=d.pers.map(([n,v])=>`<div class="prs"><span class="an">${n}</span><span class="bar"><i class="f${tier(v)}" style="width:${v*5}%"></i></span><b class="c${tier(v)}">${v}</b></div>`).join('');
@@ -401,7 +401,7 @@ function tabContract(){
    from the projected attributes (potential.project_attrs) - `posf` is hand-made sample data here. */
 function slotPositions(){
   const d=D(),R=S.future?d.posf:d.posr,b=bestPos(R),v=R[b];
-  return slot(S.future?'Best at potential':'Best position',`${badge(b,1)}<span class="c${tier(v)}">${v}</span>`,word(v));
+  return slot(S.future?'Best at full potential':'Best position',`${badge(b,1)}<span class="c${tier(v)}">${v}</span>`,word(v));
 }
 function pitchSVG(R,W,H,M){
   const g={boxW:238,boxD:88,sixW:108,sixD:29,circR:54,spotD:58,goalW:43,goalD:6};

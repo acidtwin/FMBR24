@@ -1119,7 +1119,7 @@ class PlayerWindow(QDialog):
         rh.setSpacing(8)
         self._note = _lab('', 'pwNote')
         rh.addWidget(self._note)
-        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'Potential')
+        seg, self._seg_cur, self._seg_pot = self._seg('Current', 'Full Potential')
         self._seg_group = seg._grp
         p = self._person
         _enabled, tip = _pot.availability(p.get('ca'), p.get('pa'), person_age(p))
@@ -1214,7 +1214,7 @@ class PlayerWindow(QDialog):
             layout.addWidget(row)
 
     def _tile(self, cur, new, lower_better):
-        # "At potential" replaces the current value with the projected one (toggle back to compare)
+        # "Full Potential" replaces the current value with the projected one (toggle back to compare)
         v = new if self._pot_on else cur
         return self._tile_label(v, tier(21 - v if lower_better else v))
 
@@ -1237,7 +1237,7 @@ class PlayerWindow(QDialog):
         return w
 
     def _rec_panel(self):
-        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | Potential
+        """Top trait recommendations (fm_editor/traitrec.py; source GuideToFM). Follows the Current | Full Potential
         toggle. Owned traits are ticked; a quiet line when nothing reaches the Settings threshold."""
         thr = _settings.load()['trait_threshold']
         raw = self._person.get('raw_attrs') or []
