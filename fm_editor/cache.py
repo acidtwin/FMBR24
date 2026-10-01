@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 25  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 26  # bump when schema changes to auto-invalidate old caches
 
 
 def load_cache(save_path):
@@ -90,6 +90,10 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
                 entry['staff_pa'] = p['staff_pa']
         if 'contract_end' in p:
             entry['contract_end'] = p['contract_end']
+        if 'contract_start' in p:
+            entry['contract_start'] = p['contract_start']
+        if 'wage_week' in p:
+            entry['wage_week'] = p['wage_week']
         slim_people.append(entry)
     data = {
         'version': _CACHE_VERSION,

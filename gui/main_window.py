@@ -847,11 +847,12 @@ class ParseWorker(QThread):
             employment = find_employment(b, people)
 
             self._emit("Scanning contract dates...", 92)
-            contracts = find_contracts(b, people)
+            from fm_editor.gamedb import find_contract_blocks
+            contracts = find_contract_blocks(b, people)  # real block (old 0x6a record = last evaluation month)
             for p in people:
-                ce = contracts.get(p.get('id', -1))
-                if ce:
-                    p['contract_end'] = ce
+                c = contracts.get(p.get('id', -1))
+                if c:
+                    p.update(c)
 
             self._emit("Scanning club staff arrays...", 93)
             club_staff = find_club_staff(b, clubs, people, abilities, names_start)

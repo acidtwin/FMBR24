@@ -1,4 +1,5 @@
 """Parse game_db.dat: name pools, clubs, squad memberships, people, identities."""
+import re
 import struct
 
 
@@ -349,6 +350,65 @@ def find_contracts(b, people):
                 yr, mo = b[roff + 13], b[roff + 14]
                 if 1 <= mo <= 12 and yr <= 50:  # sanity: year 2001-2050
                     result[pid] = f'{2000 + yr:04d}-{mo:02d}'
+    return result
+
+
+_CONTRACT_RE = re.compile(rb'\xff\x03\x04\x00{7}..\x00\x00....\xff{8}(..)(..)(..)(..)', re.S)
+
+
+def _date_ymd(doy_word, year):
+    """(year, month) from a date field: low 9 bits = 1-based day of year, u16 year; None if invalid/null."""
+    doy = doy_word & 0x1FF
+    if not (1 <= doy <= 366 and 2000 <= year <= 2100):
+        return None
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    mdays = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    for mo, nd in enumerate(mdays, 1):
+        if doy <= nd:
+            return year, mo
+        doy -= nd
+    return None
+
+
+def find_contract_blocks(b, people):
+    """Return {person_id: {'contract_end': 'YYYY-MM', 'contract_start': 'YYYY-MM' (optional)}}.
+
+    The real contract block lies BEFORE the person record (VERIFIED 18/18 vs in-game Jan 2028):
+      ff 03 04 00*7 <u16> 00 00 <u32>  ff*8  <end date> <start date>
+    date = u16 (low 9 bits = day of year, high bits flags) + u16 year; 1900 = null. Searched between
+    the previous person's end and this person's end; the LAST block wins (current contract). A null or
+    invalid end date -> no entry (free agent / no contract). The old b11=0x6a record is only a
+    last-evaluation month, NOT the contract end.
+    """
+    result = {}
+    prev_end = 0
+    for p in people:
+        end = p['end']
+        lo = max(prev_end, end - 800)
+        prev_end = end
+        pid = p.get('id', -1)
+        if pid == -1:
+            continue
+        m = None
+        for m in _CONTRACT_RE.finditer(b, lo, end - 40):
+            pass
+        if m is None:
+            continue
+        ed = _date_ymd(_u16(m.group(1), 0), _u16(m.group(2), 0))
+        if not ed:
+            continue
+        r = {'contract_end': f'{ed[0]:04d}-{ed[1]:02d}'}
+        # weekly wage: u32 at +12 of the person-id backlink `.. 6c 07 <flag> <pid> <u32> 00000000 <wage> 01 ..`
+        # (matches the in-game wage within 2% for 18/18, exact for some; the game rounds for display)
+        i = b.find(struct.pack('<I', pid), m.end(), end - 40)
+        if i > 3 and b[i - 3:i - 1] == b'\x6c\x07' and not any(b[i + 8:i + 12]) and b[i + 18] == 0:
+            w = _u32(b, i + 12)
+            if 0 < w < 5_000_000:
+                r['wage_week'] = w
+        sd = _date_ymd(_u16(m.group(3), 0), _u16(m.group(4), 0))
+        if sd and sd <= ed:
+            r['contract_start'] = f'{sd[0]:04d}-{sd[1]:02d}'
+        result[pid] = r
     return result
 
 

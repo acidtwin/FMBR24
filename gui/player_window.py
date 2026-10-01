@@ -110,6 +110,17 @@ _LAST_TAB = 'profile'     # last opened tab, remembered for the session
 CAPTION = 'Projection from CA weights; real growth depends on training, playing time and personality.'
 
 
+def fmt_wage(w):
+    """Weekly wage (int GBP) as the game shows it: '£110K p/w'. The game rounds by magnitude; the steps here
+    (500 <50K, 1K <130K, 5K <300K, 50K above) are inferred from 18 in-game wages (350K tier from ONE point)."""
+    if not w:
+        return None
+    step = 1 if w < 1000 else 500 if w < 50000 else 1000 if w < 130000 else 5000 if w < 300000 else 50000
+    w = int(w / step + 0.5) * step
+    t = f'{w / 1e6:.1f}M' if w >= 1e6 else f'{w / 1e3:.1f}K' if w >= 1000 else str(w)
+    return '£' + t.replace('.0M', 'M').replace('.0K', 'K') + ' p/w'
+
+
 def player_extra_data(person, save_data):
     """PLUG IN: per-player data the parser does not decode yet. Return any of these keys (None = unknown,
     shown as PENDING). Strings are displayed as-is.
@@ -120,7 +131,7 @@ def player_extra_data(person, save_data):
     """
     mask = person.get('trait_mask')
     traits = trait_names(mask) if mask is not None else None     # None = old cache / unknown -> PENDING
-    return {'wage': None, 'value': None, 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
+    return {'wage': fmt_wage(person.get('wage_week')), 'value': None, 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
 
 
 
