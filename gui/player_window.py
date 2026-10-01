@@ -28,6 +28,7 @@ from fm_editor import potential as _pot
 from fm_editor import settings as _settings
 from fm_editor.abilitystars import ability_stars, dev_stars
 from gui.stars import _StarWidget
+from gui.pw_themes import ActiveTabButton, ThemedFrame, apply_active_theme
 from gui.pw_widgets import FeetWidget, RadarWidget
 from fm_editor import traitrec as _tr
 from fm_editor.agecalc import person_age
@@ -198,19 +199,20 @@ QDialog#playerWindow QScrollBar::add-line:vertical, QDialog#playerWindow QScroll
 QDialog#playerWindow QScrollBar::add-page:vertical, QDialog#playerWindow QScrollBar::sub-page:vertical {{ background:transparent; }}
 QDialog#playerWindow QWidget#pwBody {{ background:{c['window_bg']}; }}
 QDialog#playerWindow QLabel {{ background:transparent; color:{c['text_primary']}; font-size:12px; }}
-QDialog#playerWindow QFrame#pwPanel, QDialog#playerWindow QFrame#pwHeader {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
+QDialog#playerWindow QFrame#pwPanel {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
+QDialog#playerWindow QFrame#pwHeader {{ background:transparent; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QFrame#pwRowAlt {{ background:{C_ALT}; }}
 QDialog#playerWindow QFrame#pwRowNat {{ background:{c['selection_bg']}; }}
 QDialog#playerWindow QFrame#pwRow {{ background:transparent; }}
-QDialog#playerWindow QFrame#pwTabStrip {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
+QDialog#playerWindow QFrame#pwTabStrip {{ background:transparent; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwTab {{ background:transparent; border:none; border-left:3px solid transparent;
     color:{c['text_secondary']}; text-align:left; padding:0 2px 0 9px; font-size:12px; font-weight:600; border-radius:0; }}
 QDialog#playerWindow QFrame#pwTabSep {{ background:{c['border']}; border:none; margin:0 6px; }}
 QDialog#playerWindow QPushButton#pwTab:hover {{ background:{c['elevated']}; color:{c['text_primary']};
     border-left:3px solid {c['border_bright']}; }}
-QDialog#playerWindow QPushButton#pwTab:checked {{ background:{c['selection_bg']}; color:{c['text_primary']};
+QDialog#playerWindow QPushButton#pwTab:checked {{ background:transparent;  /* ActiveTabButton paints selection_bg + glow */ color:{c['text_primary']};
     font-weight:bold; border-left:3px solid {c['accent']}; }}
-QDialog#playerWindow QFrame#actionStrip {{ background:{c['surface']}; border:none; border-top:1px solid {c['border']}; }}
+QDialog#playerWindow QFrame#actionStrip {{ background:transparent; border:none; border-top:1px solid {c['border']}; }}
 QDialog#playerWindow QWidget#pwSlot {{ border:none; border-left:1px solid {c['border']}; }}
 QDialog#playerWindow QFrame#pwCab {{ background:{c['window_bg']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QLabel#pwSoonT {{ font-size:20px; font-weight:bold; }}
@@ -529,7 +531,7 @@ class PlayerWindow(QDialog):
         bl.addWidget(self._header())
         main = QHBoxLayout()
         main.setSpacing(12)
-        strip = QFrame()
+        strip = ThemedFrame('strip')
         strip.setObjectName('pwTabStrip')
         strip.setFixedWidth(172)
         sv = QVBoxLayout(strip)
@@ -549,7 +551,7 @@ class PlayerWindow(QDialog):
                 sv.addSpacing(2)
                 sv.addWidget(sep)
                 sv.addSpacing(2)
-            btn = QPushButton(label.replace('&', '&&'))
+            btn = ActiveTabButton(label.replace('&', '&&'))
             btn.setObjectName('pwTab')
             btn.setFixedHeight(40)
             btn.setIcon(_tab_icon(key))
@@ -570,6 +572,7 @@ class PlayerWindow(QDialog):
         outer.addWidget(self._action_strip())
         QShortcut(QKeySequence('Ctrl+Tab'), self, activated=lambda: self._step_tab(1))
         QShortcut(QKeySequence('Ctrl+Shift+Tab'), self, activated=lambda: self._step_tab(-1))
+        apply_active_theme(self)
         self._select_tab('profile')  # always open on the Profile tab (user preference)
 
     def _select_tab(self, key):
@@ -834,7 +837,7 @@ class PlayerWindow(QDialog):
         from fm_editor.nations import nation_name as _nn, nation_flag
         p = self._person
         nation = _nn(p.get('nation')) or mw.NATIONS.get(p.get('nation')) or f"n={p.get('nation')}"
-        hero = QFrame()
+        hero = ThemedFrame('header')
         hero.setObjectName('pwHeader')
         hero.setFixedHeight(80)
         hl = QHBoxLayout(hero)
@@ -1079,7 +1082,7 @@ class PlayerWindow(QDialog):
 
     # -- action strip (persistent) -----------------------------------------------------------------
     def _action_strip(self):
-        strip = QFrame()
+        strip = ThemedFrame('bar')
         strip.setObjectName('actionStrip')
         strip.setFixedHeight(52)
         h = QHBoxLayout(strip)
@@ -1109,6 +1112,7 @@ class PlayerWindow(QDialog):
         sl.setFixedHeight(32)
         sl.setMinimumWidth(164)
         h.addWidget(sl)
+        strip.halo_for = sl
         close = QPushButton('Close')          # ALWAYS the last (far-right) button
         close.setObjectName('pwGhost')
         close.setFixedHeight(32)

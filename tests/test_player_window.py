@@ -8,7 +8,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 os.environ.setdefault('FMBR24_CONFIG_DIR', '/tmp/fmbr24_test_pw')
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QScrollArea  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QFrame, QLabel, QPushButton, QScrollArea  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 from gui.player_window import TABS, PlayerWindow, _ElideLabel  # noqa: E402
@@ -52,6 +52,11 @@ def check(gk):
     # header: club/nation labels are not elided when they fit
     for lb in w.findChildren(_ElideLabel):
         assert lb._full == lb.text() or lb.fontMetrics().horizontalAdvance(lb._full) > lb.width(), lb._full
+    # themed surfaces are wired (pw_themes)
+    from gui.pw_themes import ActiveTabButton, ThemedFrame
+    assert {type(w.findChild(QFrame, n)) for n in ('pwHeader', 'pwTabStrip', 'actionStrip')} == {ThemedFrame}
+    assert all(isinstance(b, ActiveTabButton) for b in w._tab_btns.values())
+    assert w.findChild(QFrame, 'actionStrip').halo_for.text() == 'Add to Shortlist'
     w.close()
 
 
