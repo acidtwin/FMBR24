@@ -3836,6 +3836,9 @@ class MainWindow(QMainWindow):
         filter_row2.addWidget(self._report_name_filter)
 
         self._report_pos_bar = QWidget()
+        self._report_pos_bar.setObjectName('rptBar')
+        self._report_pos_bar.setStyleSheet('QWidget#rptBar{background:transparent;}')  # plain QWidget would paint the app bg over the strip
+        self._report_pos_bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         pos_row = QHBoxLayout(self._report_pos_bar)
         pos_row.setContentsMargins(0, 0, 0, 0)
         pos_row.setSpacing(6)
@@ -3856,6 +3859,9 @@ class MainWindow(QMainWindow):
 
         # Role picker bar (best_role mode)
         self._report_role_bar = QWidget()
+        self._report_role_bar.setObjectName('rptBar')
+        self._report_role_bar.setStyleSheet('QWidget#rptBar{background:transparent;}')
+        self._report_role_bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         role_row = QHBoxLayout(self._report_role_bar)
         role_row.setContentsMargins(0, 0, 0, 0)
         role_row.setSpacing(6)
