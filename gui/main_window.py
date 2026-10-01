@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QSpinBox,
-    QInputDialog, QGridLayout, QBoxLayout, QTableView,
+    QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QRectF
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
@@ -24,7 +24,7 @@ from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
 from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
-from gui.people_model import PeopleModel, num_key
+from gui.people_model import PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT
 from gui.player_window import PlayerWindow
 from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref
 
@@ -794,7 +794,20 @@ _REPORT_LABELS = {
 }
 
 
-class _PosBadgeDelegate(QStyledItemDelegate):
+class _RowMarkDelegate(QStyledItemDelegate):
+    """Default delegate of the player lists (the badge delegates build on it): a player with any queued edit
+    (ROWQ_ROLE of the row's column 0) gets a faint yellow tint under every cell and a 3px yellow bar at the
+    left edge of the Name cell. Painted here, not via BackgroundRole: the app QSS item rule ignores that."""
+    def paint(self, painter, option, index):
+        marked = bool(index.siblingAtColumn(0).data(ROWQ_ROLE))
+        if marked:
+            painter.fillRect(option.rect, ROW_TINT)
+        super().paint(painter, option, index)
+        if marked and index.column() == 0:
+            painter.fillRect(option.rect.x(), option.rect.y(), 3, option.rect.height(), QColor(COLORS['queued']))
+
+
+class _PosBadgeDelegate(_RowMarkDelegate):
     def paint(self, painter, option, index):
         try:
             super().paint(painter, option, index)
@@ -833,6 +846,103 @@ class _PosBadgeDelegate(QStyledItemDelegate):
             import traceback
             traceback.print_exc()
             return QSize(68, 28)
+
+
+class _HGBadgeDelegate(_RowMarkDelegate):
+    """HGP / HGC pill, same size and radius as the Pos badge. HG_ROLE: 'set' = green (HGP dark, HGC darker),
+    'queued' = yellow outline + faint fill with a '+' prefix; anything else paints the cell normally (empty)."""
+    def __init__(self, kind, parent=None):
+        super().__init__(parent)
+        self._kind = kind
+
+    def paint(self, painter, option, index):
+        try:
+            state = index.data(HG_ROLE) or ''
+            text = index.data(Qt.ItemDataRole.DisplayRole) or ''
+            if state not in ('set', 'queued') or not text:
+                super().paint(painter, option, index)
+                return
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            opt.text = ''  # row background / selection only; the pill is the content
+            if index.siblingAtColumn(0).data(ROWQ_ROLE):
+                painter.fillRect(option.rect, ROW_TINT)
+            style = opt.widget.style() if opt.widget else QApplication.style()
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+            painter.save()
+            try:
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                font = QFont(painter.font())
+                font.setPixelSize(10)
+                font.setBold(True)
+                painter.setFont(font)
+                bw = painter.fontMetrics().horizontalAdvance(text) + 10
+                bh = 16
+                r = QRectF(option.rect.x() + 8, option.rect.y() + (option.rect.height() - bh) // 2, bw, bh)
+                if state == 'set':
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QColor(COLORS['hgp_badge' if self._kind == 'hgp' else 'hgc_badge']))
+                    fg = QColor('#FFFFFF')
+                else:
+                    fg = QColor(COLORS['queued'])
+                    painter.setPen(QPen(fg, 1))
+                    painter.setBrush(QColor(234, 217, 92, 36))  # rgba(234,217,92,.14), as the player-window pill
+                    r = r.adjusted(0.5, 0.5, -0.5, -0.5)
+                painter.drawRoundedRect(r, 2, 2)
+                painter.setPen(fg)
+                painter.drawText(r, Qt.AlignmentFlag.AlignCenter, text)
+            finally:
+                painter.restore()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def sizeHint(self, option, index):
+        return QSize(62, option.rect.height() or 28)  # fits '+ HGP'
+
+
+def _hg_apply(item, kind, set_, queued):
+    """Style one QTableWidget HGP/HGC cell. set_ = value in the save (True / False / None unknown); the
+    sort key puts set and queued first, then unset, then unknown (HGC of a player with no club)."""
+    label = kind.upper()
+    state = 'set' if set_ else 'queued' if queued else ''
+    item.setData(HG_BASE_ROLE, set_)
+    item.setData(HG_ROLE, state)
+    item.setText(label if state == 'set' else f'+ {label}' if state else '?' if set_ is None else '')
+    item._sk = 0 if state else 2 if set_ is None else 1
+    item.setForeground(QColor(COLORS['text_dim']))
+    item.setToolTip('Queued: written when you click Save Changes' if state == 'queued' else '')
+
+
+def _queue_map(queue):
+    qm = {}
+    for pid, kind in queue:
+        qm.setdefault(pid, set()).add(kind)
+    return qm
+
+
+def _mark_rows(table, qm, hg_cols):
+    """QTableWidget: refresh HG cells (hg_cols: col -> kind) and mark (ROWQ_ROLE on col 0) the rows whose player
+    (UserRole of col 0) has a queued edit. Tables here are small (squad / 200-row report / shortlist)."""
+    rc = table.rowCount()
+    if not rc:
+        return
+    was = table.isSortingEnabled()
+    table.setSortingEnabled(False)
+    try:
+        for row in range(rc):
+            it0 = table.item(row, 0)
+            if it0 is None:
+                continue
+            kinds = qm.get(it0.data(Qt.ItemDataRole.UserRole), ())
+            for col, kind in hg_cols.items():
+                it = table.item(row, col)
+                if it is not None:
+                    _hg_apply(it, kind, it.data(HG_BASE_ROLE), kind in kinds)
+            it0.setData(ROWQ_ROLE, bool(kinds))
+    finally:
+        table.setSortingEnabled(was)
+    table.viewport().update()  # the tint is painted per cell by the delegates; only column 0's item changed
 
 
 class StaffDetailDialog(QDialog):
@@ -2877,6 +2987,9 @@ class MainWindow(QMainWindow):
         self._pos_delegate = _PosBadgeDelegate(self._table)
         self._table.setItemDelegateForColumn(1, self._inj_delegate)
         self._table.setItemDelegateForColumn(2, self._pos_delegate)
+        self._table.setItemDelegate(_RowMarkDelegate(self._table))
+        self._table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._table))
+        self._table.setItemDelegateForColumn(9, _HGBadgeDelegate('hgc', self._table))
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 
@@ -3466,6 +3579,7 @@ class MainWindow(QMainWindow):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         for i, cw in {0: 150, 1: 160, 2: 55, 3: 55, 4: 45, 5: 45, 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
+        self._shortlist_table.setItemDelegate(_RowMarkDelegate(self._shortlist_table))
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(True)
@@ -3567,6 +3681,7 @@ class MainWindow(QMainWindow):
             for col, item in enumerate(row_items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._shortlist_table.setItem(row, col, item)
+        _mark_rows(self._shortlist_table, _queue_map(self._queue), {})
         self._shortlist_table.setSortingEnabled(True)
         for c in range(self._shortlist_table.columnCount()):
             self._shortlist_table.resizeColumnToContents(c)
@@ -3838,6 +3953,8 @@ class MainWindow(QMainWindow):
         self._reports_pos_delegate = _PosBadgeDelegate(self._reports_table)
         self._reports_table.setItemDelegateForColumn(1, self._reports_inj_delegate)
         self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
+        self._reports_table.setItemDelegate(_RowMarkDelegate(self._reports_table))
+        self._reports_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._reports_table))
 
         rhdr = self._reports_table.horizontalHeader()
         rhdr.setHighlightSections(False)
@@ -3850,7 +3967,7 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}
         for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
         for i in range(11, len(cols)):
@@ -3964,6 +4081,8 @@ class MainWindow(QMainWindow):
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
+            hgp_item = _SortItem('')
+            _hg_apply(hgp_item, 'hgp', bool(hgp), False)
             items = [
                 name_item,
                 inj_item,
@@ -3974,7 +4093,7 @@ class MainWindow(QMainWindow):
                           col4_val if col4_val is not None else -1),
                 _SortItem(str(age), age),
                 _SortItem(flag),
-                _SortItem('HGP' if hgp else '-'),
+                hgp_item,
                 _SortItem(club_name),
                 _SortItem(contract_end),
             ]
@@ -3990,13 +4109,10 @@ class MainWindow(QMainWindow):
                     f.setPointSize(14)
                     if not item.text()[:1].isalpha():  # big font is for emoji flags only
                         item.setFont(f)
-                elif col == 8:
-                    text_dim = COLORS.get('text_dim', COLORS.get('text_secondary', '#888'))
-                    item.setForeground(QColor('#4caf50') if hgp else QColor(text_dim))
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._reports_table.setItem(row, col, item)
+        _mark_rows(self._reports_table, _queue_map(self._queue), {8: 'hgp'})
         self._reports_table.setSortingEnabled(True)
         self._reports_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         # Same as Players; safe here because reports are capped at 200 rows.
@@ -4186,12 +4302,14 @@ class MainWindow(QMainWindow):
         # Players table: virtualised QTableView + PeopleModel (all players, no cap)
         self._players_model, self._players_table = self._make_scouting_view(
             self._make_players_model(), _COL_TT,
-            {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45, 9: 160, 10: 65}, 35,
+            {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}, 35,
             sort=(2, Qt.SortOrder.AscendingOrder))
         self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
         self._players_table.setItemDelegateForColumn(1, self._players_inj_delegate)
         self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
+        self._players_table.setItemDelegate(_RowMarkDelegate(self._players_table))
+        self._players_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._players_table))
         self._players_table.horizontalHeader().setStretchLastSection(True)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -4210,7 +4328,7 @@ class MainWindow(QMainWindow):
             (str, lambda v: _POS_SORT_ORDER.get(v, 99)),                   # 2 pos
             (opt, num_key), (opt, num_key), (opt, num_key),                # 3-5 CA PA Dev
             (str, None), (str, None),                                      # 6 age, 7 flag
-            (lambda v: 'HGP' if v else '-', None),                         # 8 hgp
+            (lambda v: 'HGP' if v else '', None),                          # 8 hgp (badge; sort key set by hg_cols)
             (str, None), (str, None),                                      # 9 club, 10 contract end
         ]
         def attr(p, c):  # columns 11+: raw_attrs[c-11] shown on the 1-20 scale
@@ -4222,10 +4340,11 @@ class MainWindow(QMainWindow):
         f = QFont()
         f.setPointSize(14)
         m.big_font_cols = {7: f}
-        green, dim = QColor(COLORS['hgp_green']), QColor(COLORS['text_dim'])
-        m.fg = {8: lambda r: green if r[8] else dim}
+        m.hg_cols = {8: 'hgp'}
         m.tooltip_fn = lambda p, c: (f"Out for {p.get('injury_days', 0)} days"
-                                     if c == 1 and p.get('injured') and p.get('injury_days', 0) > 0 else None)
+                                     if c == 1 and p.get('injured') and p.get('injury_days', 0) > 0
+                                     else 'Queued: written when you click Save Changes'
+                                     if c == 8 and 'hgp' in m.queued.get(p.get('id'), ()) and not p.get('hgp') else None)
         return m
 
     @staticmethod
@@ -4465,8 +4584,8 @@ class MainWindow(QMainWindow):
         self._table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 45,
-                        9: 45, 10: 65}  # 1=INJ, 10=CtrE
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62,
+                        9: 62, 10: 65}  # 1=INJ, 8/9=HGP/HGC badges ('+ HGP' fits), 10=CtrE
         for i, cw in fixed_widths.items():
             self._table.setColumnWidth(i, cw)
         # Attr columns: 35px each
@@ -4569,7 +4688,7 @@ class MainWindow(QMainWindow):
         self._current_club = None
         self._table.setRowCount(0)
         self._squad_info.setText('')
-        self._queue.clear()
+        self._clear_queue()
         self._dirty = False
         self._pending = []
         self._status_ready_lbl.setText(
@@ -4726,7 +4845,7 @@ class MainWindow(QMainWindow):
     def _finish_load(self, result):
         self._save_data = result
         self._reset_session_state(result)
-        self._queue.clear()
+        self._clear_queue()
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
@@ -5007,8 +5126,9 @@ class MainWindow(QMainWindow):
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
-            hgp_text, hgp_col = self._squad_hg_cell('hgp', bool(hgp), self.queue_has(p, 'hgp'))
-            hgc_text, hgc_col = self._squad_hg_cell('hgc', hgc, self.queue_has(p, 'hgc'))
+            hgp_item, hgc_item = _SortItem(''), _SortItem('')
+            _hg_apply(hgp_item, 'hgp', bool(hgp), False)
+            _hg_apply(hgc_item, 'hgc', hgc, False)
             injured = p.get('injured', False)
             injury_days = p.get('injury_days', 0)
 
@@ -5027,8 +5147,8 @@ class MainWindow(QMainWindow):
                 _SortItem(str(dev) if dev is not None else '?', dev if dev is not None else -1),
                 _SortItem(str(age), age),
                 _SortItem(flag),
-                _SortItem(hgp_text),
-                _SortItem(hgc_text),
+                hgp_item,
+                hgc_item,
                 _SortItem(contract_end),
             ]
             # Append 54 attribute columns (display value = max(1, min(20, round(raw/5))))
@@ -5049,12 +5169,9 @@ class MainWindow(QMainWindow):
                         item.setFont(f)
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                if col == 8:
-                    item.setForeground(QColor(hgp_col))
-                elif col == 9:
-                    item.setForeground(QColor(hgc_col))
                 self._table.setItem(row, col, item)
 
+        _mark_rows(self._table, _queue_map(self._queue), {8: 'hgp', 9: 'hgc'})  # queued cells + row tint
         self._table.setSortingEnabled(True)
         self._table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         for c in range(self._table.columnCount()):
@@ -5339,42 +5456,24 @@ class MainWindow(QMainWindow):
         self._dirty = bool(self._queue)
         self._pending = [f'{k.upper()}: {v} player(s)' for k, v in n.items() if v]
         self._update_ui_state()
-        self._refresh_queue_cells()
+        self._refresh_queue_marks()
         if self._pw_open is not None:
             self._pw_open.refresh_queue()
 
-    @staticmethod
-    def _squad_hg_cell(kind, set_, queued):
-        """Squads table HGP/HGC cell: text + colour (queued = yellow tier-5 with a '+' marker)."""
-        label = kind.upper()
-        if set_:
-            return label, COLORS['hgp_green']
-        if queued:
-            return f'+ {label}', '#EAD95C'
-        return ('-' if set_ is not None else '?'), COLORS['text_dim']
+    def _refresh_queue_marks(self):
+        """Queue changed (or cleared): HGP/HGC badges + row marking in every list. Only the cheap parts run:
+        QTableWidget tables are small, the Players model repaints just the affected rows."""
+        qm = _queue_map(self._queue)
+        self._players_model.set_queue(qm)
+        if self._table_mode == 'squad' and self._squad and self._save_data:
+            _mark_rows(self._table, qm, {8: 'hgp', 9: 'hgc'})
+            self._on_selection_changed()
+        _mark_rows(self._reports_table, qm, {8: 'hgp'})
+        _mark_rows(self._shortlist_table, qm, {})
 
-    def _refresh_queue_cells(self):
-        """Squads table: re-mark the HGP/HGC cells of queued players (cheap; no repopulate, selection kept)."""
-        t = self._table
-        if self._table_mode != 'squad' or not self._squad or not self._save_data:
-            return
-        from fm_editor.patch import is_hgc
-        b = self._save_data.get('b')
-        by_id = {p.get('id'): p for p in self._squad}
-        t.setSortingEnabled(False)
-        for row in range(t.rowCount()):
-            it = t.item(row, 0)
-            p = by_id.get(it.data(Qt.ItemDataRole.UserRole)) if it else None
-            if p is None:
-                continue
-            hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
-            for col, kind, set_ in ((8, 'hgp', bool(p.get('hgp', False))), (9, 'hgc', hgc)):
-                text, colour = self._squad_hg_cell(kind, set_, self.queue_has(p, kind))
-                cell = t.item(row, col)
-                cell.setText(text)
-                cell.setForeground(QColor(colour))
-        t.setSortingEnabled(True)
-        self._on_selection_changed()
+    def _clear_queue(self):
+        self._queue.clear()
+        self._refresh_queue_marks()
 
     def _entity_of(self, person):
         """Club entity id of a player's club (club id + 1), or None."""
@@ -5469,7 +5568,7 @@ class MainWindow(QMainWindow):
         self._worker.wait()  # run() returns right after emitting; lets close-after-save proceed
         n_hgp, n_hgc = self._last_applied
         asked = {k: sum(1 for _pid, kk in self._queue if kk == k) for k in ('hgp', 'hgc')}
-        self._queue.clear()
+        self._clear_queue()
         self._dirty = False
         self._pending = []
         clear_cache(self._save_path)  # cache is keyed by path+mtime; drop the entry for the old layout

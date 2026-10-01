@@ -43,6 +43,10 @@ COLORS = {
     # squad status colours (from fm colours.xml status_* tokens)
     'hgp_green':     '#5AA0D1',  # status_homegrown_club rgb(90,160,209)
     'non_hgp_red':   '#D14343',  # status_cannot_play rgb(209,67,67)
+    # list badges for HGP / HGC set in the save (white text), and the queued-change yellow (tier-5 of the mockups)
+    'hgp_badge':     '#2B7A4B',  # dark green
+    'hgc_badge':     '#1B4D31',  # darker green
+    'queued':        '#EAD95C',
     'warning':       '#FF501E',  # FM orange
     'selection_bg':  '#2A1B4A',  # dark purple row selection
 }

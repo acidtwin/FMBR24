@@ -130,8 +130,11 @@ assert sorted(pid for pid, k in w._queue if k == 'hgp') == [0, 2, 4], 'P1, P3 al
 w._queue_selected('hgc')
 assert sorted(pid for pid, k in w._queue if k == 'hgc') == [0, 1, 4], 'P2, P3 already HGC'
 assert not hasattr(w, '_patch_both_btn') and not hasattr(w, '_do_patch_both') and not hasattr(w, '_patch_allowed')
-assert M.MainWindow._squad_hg_cell('hgp', False, True) == ('+ HGP', '#EAD95C')
-assert M.MainWindow._squad_hg_cell('hgc', True, False)[0] == 'HGC'
+it = M._SortItem('')
+M._hg_apply(it, 'hgp', False, True)
+assert (it.text(), it.data(M.HG_ROLE)) == ('+ HGP', 'queued')
+M._hg_apply(it, 'hgc', True, False)
+assert (it.text(), it.data(M.HG_ROLE)) == ('HGC', 'set')
 w._queue.clear()
 w._queue_changed()
 
