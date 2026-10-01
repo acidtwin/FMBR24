@@ -120,7 +120,7 @@ def player_extra_data(person, save_data):
     """
     mask = person.get('trait_mask')
     traits = trait_names(mask) if mask is not None else None     # None = old cache / unknown -> PENDING
-    return {'wage': None, 'value': None, 'height_cm': None, 'weight_kg': None, 'traits': traits, 'history': None}
+    return {'wage': None, 'value': None, 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
 
 
 

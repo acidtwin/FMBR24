@@ -299,7 +299,7 @@ def find_abilities(b, names_end):
     abilities = {}
     blen = len(b)
     p = names_end + 57
-    while p < blen - 54:
+    while p < blen - 90:
         at = p
         p += 1
         if b[at - 37] != 0 or b[at - 35] != 0:
@@ -318,7 +318,9 @@ def find_abilities(b, names_end):
             continue
         owner_id = _u32(b, at - 57) + 1
         if owner_id not in abilities:
-            abilities[owner_id] = {'ca': ca, 'pa': pa, 'positions': positions, 'raw_attrs': attrs}
+            # weight kg = b[at+82], height cm = b[at+84] (u16 LE each, high byte 0; 18/18 vs in-game Jan 2028)
+            abilities[owner_id] = {'ca': ca, 'pa': pa, 'positions': positions, 'raw_attrs': attrs,
+                                   'weight_kg': b[at + 82], 'height_cm': b[at + 84]}
         p = at + 54
     return abilities
 

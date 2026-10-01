@@ -840,6 +840,8 @@ class ParseWorker(QThread):
                     p['pa'] = ab['pa']
                     p['positions'] = ab['positions']
                     p['raw_attrs'] = ab['raw_attrs']
+                    p['height_cm'] = ab['height_cm']
+                    p['weight_kg'] = ab['weight_kg']
 
             self._emit("Scanning employment records...", 91)
             employment = find_employment(b, people)
