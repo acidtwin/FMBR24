@@ -2187,7 +2187,25 @@ class MainWindow(QMainWindow):
         outer.addLayout(content_row)
         return hero
 
-    def _set_header(self, title: str, subtitle: str = '', right_widget=None):
+    _PAGE_ICONS = {}   # name -> QPixmap cache for the header badge icons (resources/icons/pages/<name>.png)
+    _PAGE_ICON_PX = 46  # logical size of the icon CELL; the glyph fills ~62 % of it (about 28 px) inside the 56 px badge circle
+
+    def _page_icon(self, name):
+        px = self._PAGE_ICONS.get(name)
+        if px is None:
+            path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'icons', 'pages', name + '.png')
+            src = QPixmap(path)
+            if src.isNull():
+                px = QPixmap()
+            else:
+                dpr = self.devicePixelRatioF()
+                px = src.scaled(round(self._PAGE_ICON_PX * dpr), round(self._PAGE_ICON_PX * dpr),
+                                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                px.setDevicePixelRatio(dpr)
+            self._PAGE_ICONS[name] = px
+        return px
+
+    def _set_header(self, title: str, subtitle: str = '', right_widget=None, icon=None):
         self._header_title_lbl.setText(title)
         self._header_subtitle_lbl.setText(subtitle)
         self._header_subtitle_lbl.setVisible(bool(subtitle))
@@ -2200,6 +2218,10 @@ class MainWindow(QMainWindow):
             self._header_badge_lbl.setPixmap(QPixmap())
             self._header_badge_lbl.setStyleSheet(self._header_badge_ss)
             self._header_badge_lbl.setText(title[0].upper() if title else '')
+            ipx = self._page_icon(icon) if icon else None
+            if ipx is not None and not ipx.isNull():   # page icon instead of the initial (falls back to the letter)
+                self._header_badge_lbl.setText('')
+                self._header_badge_lbl.setPixmap(ipx)
 
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
@@ -2254,10 +2276,11 @@ class MainWindow(QMainWindow):
             pos = f"{_ordinal(lg['pos'])} of {lg['of']}" if lg else None
             club_sub = ' · '.join(x for x in (country, pos) if x)
             self._set_header(club_name or 'Club', club_sub,
-                             self._make_header_rep_widget(rep_stars((club or {}).get('rep')), (club or {}).get('rep')))
+                             self._make_header_rep_widget(rep_stars((club or {}).get('rep')), (club or {}).get('rep')),
+                             icon='club')
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
-            self._set_header('Squads', f"{club_name} · {n} players")
+            self._set_header('Squads', f"{club_name} · {n} players", icon='squads')
         elif key == 'staff':
             self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'))
         elif key == 'reports':
@@ -2271,18 +2294,18 @@ class MainWindow(QMainWindow):
             self._set_header('All Players', self._scouting_count_text(self._players_model, 'players'))
         elif key == 'shortlist':
             n = len(self._shortlist)
-            self._set_header('Player Shortlist', f"{n} players")
+            self._set_header('Player Shortlist', f"{n} players", icon='player_shortlist')
         elif key == 'staff_shortlist':
             n = len(self._staff_shortlist)
-            self._set_header('Staff Shortlist', f"{n} staff")
+            self._set_header('Staff Shortlist', f"{n} staff", icon='staff_shortlist')
         elif key == 'club_staff':
             n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
-            self._set_header('Club Staff', sub)
+            self._set_header('Club Staff', sub, icon='club_staff')
         elif key == 'save_info':
             info = (self._save_data or {}).get('save_info') or {}
             self._set_header('Save Info', info.get('game_name')
-                             or (os.path.basename(self._save_path) if self._save_path else ''))
+                             or (os.path.basename(self._save_path) if self._save_path else ''), icon='save_info')
         elif key == 'welcome':
             self._set_header('FM Backroom 24', 'Load a save to begin')
         elif key == 'settings':
@@ -5419,7 +5442,7 @@ class MainWindow(QMainWindow):
         _stats_lbl.setTextFormat(Qt.TextFormat.RichText)
         _stats_lbl.setStyleSheet("background: transparent; font-size: 12px;")
         club_name = self._current_club['name'] if self._current_club else ''
-        self._set_header('Squads', f"{club_name} · {len(squad)} players", _stats_lbl)
+        self._set_header('Squads', f"{club_name} · {len(squad)} players", _stats_lbl, icon='squads')
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
