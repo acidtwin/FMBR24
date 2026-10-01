@@ -95,12 +95,21 @@ def _rm(path):
         pass
 
 
+def _rm_quiet(path):
+    """Cleanup that must never mask the real error."""
+    try:
+        _rm(path)
+    except OSError:
+        pass
+
+
 def backup_state(path):
-    """Return (first_save, previous_bk1_path_or_None). first_save = no bk1 (new or legacy) exists."""
-    bk1, _ = backup_paths(path)
+    """Return (first_save, previous_bk1_path_or_None). first_save = NO backup exists (no bk1, old-style
+    bk1-<name>.fm or bk2). A lone bk2 (bk1 deleted) is the pristine original: never treat it as a first save."""
+    bk1, bk2 = backup_paths(path)
     legacy = legacy_bk1_path(path)
     prev = bk1 if os.path.isfile(bk1) else (legacy if os.path.isfile(legacy) else None)
-    return prev is None, prev
+    return prev is None and not os.path.isfile(bk2), prev
 
 
 def prepare_backups(path, progress_cb=None):
@@ -113,7 +122,7 @@ def prepare_backups(path, progress_cb=None):
         if progress_cb:
             progress_cb('Backing up current file (bk1)...')
         digest = _copy_verified(path, st['tmp1'])
-        if prev != bk1:  # first save, or only an old-style bk1-<name>.fm exists: copy for bk2
+        if first or (prev is not None and prev != bk1):  # first save, or an old-style bk1-<name>.fm: copy for bk2
             if progress_cb:
                 progress_cb('Backing up (bk2)...')
             st['tmp2'] = bk2 + '.tmp'
@@ -126,19 +135,20 @@ def prepare_backups(path, progress_cb=None):
 
 
 def discard_backups(st):
-    _rm(st['tmp1'])
+    _rm_quiet(st['tmp1'])
     if st['tmp2']:
-        _rm(st['tmp2'])
+        _rm_quiet(st['tmp2'])
 
 
 def commit_backups(st):
     """Rename-only rotation; call AFTER the save was replaced, so a failed replace never
     costs the older backup. Returns {'first': bool}."""
     bk1, bk2 = backup_paths(st['path'])
-    if st['prev'] == bk1:
-        os.replace(bk1, bk2)  # previous bk1 becomes bk2
-    else:
+    if st['tmp2']:
         os.replace(st['tmp2'], bk2)
+    elif st['prev'] == bk1:
+        os.replace(bk1, bk2)  # previous bk1 becomes bk2
+    # else: bk1 was deleted but bk2 (the original) exists: keep bk2 as it is
     os.replace(st['tmp1'], bk1)
     _fsync_dir(os.path.dirname(st['path']))
     return {'first': st['first']}
@@ -197,8 +207,9 @@ def save_in_place(save_data, path, progress_cb=None):
         if file_signature(path) != sig:
             raise SaveError('The save file changed on disk while saving. Nothing was replaced.')
     size = os.path.getsize(path)
-    first, _prev = backup_state(path)
-    copies = 3 if first else 2  # tmp + bk1.tmp (+ bk2.tmp on first save); +16 MB headroom
+    first, prev = backup_state(path)
+    copies = 3 if first or (prev is not None and prev != backup_paths(path)[0]) else 2
+    # tmp + bk1.tmp (+ bk2.tmp on a first save or from a legacy bk1-<name>.fm); +16 MB headroom
     free = shutil.disk_usage(os.path.dirname(path)).free
     if free < copies * size + 16 * 1024 * 1024:
         raise SaveError(f'Not enough free disk space: need about {copies * size // 1024 ** 2} MB '
@@ -234,7 +245,11 @@ def save_in_place(save_data, path, progress_cb=None):
     except BaseException:
         _rm(tmp)
         raise
-    info = commit_backups(bst)
+    try:
+        info = commit_backups(bst)
+    except OSError as e:  # the save itself is already in place: report, do not claim it failed
+        discard_backups(bst)
+        info = {'first': bst['first'], 'backup_error': str(e)}
     _fsync_dir(os.path.dirname(path))
 
     header, nmembers, marker, aname, sdc, subdirs = parse_archive(path)
