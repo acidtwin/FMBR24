@@ -26,7 +26,7 @@ from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
 from gui.people_model import PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT
 from gui.player_window import PlayerWindow
-from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref
+from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref, get_ref as _get_age_ref
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c'
@@ -2915,7 +2915,7 @@ class MainWindow(QMainWindow):
             _club_hide_row(self._club_best_staff_ca_val)
 
         # -- Col 3 right: contracts + homegrown --------------------------------
-        n6, n12, longest = _contract_expiry_counts(squad, date.today())
+        n6, n12, longest = _contract_expiry_counts(squad, _get_age_ref())  # in-game date, not wall clock
         self._club_exp6_val.setText(str(n6))
         self._club_exp1yr_val.setText(str(n12))
         self._club_longest_val.setText(longest or '—')
