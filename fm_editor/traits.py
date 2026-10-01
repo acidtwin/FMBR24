@@ -6,6 +6,7 @@ Staff carry the field too. See memory/fm24-binary-format.md for the evidence.
 TRAIT_TABLE is the ONE place that decides what is shown. Grades:
   A = verified (fmsave enum / in-game screenshot / >=3 change-log agreements)
   B = mapped from the save's change-log PMxx tags and consistent with mutual exclusions
+  X = bit is set on real players but the game shows NO trait for it (Aursnes 49, de la Cruz 62): never displayed
   C = educated guess (name kept as a candidate only)   ? = unknown (name None)
 Only A/B names are displayed; C/? bits show as 'Trait #n'. To promote a bit, edit its line
 (fix the name if needed, set the grade to 'A' or 'B').
@@ -37,7 +38,7 @@ TRAIT_TABLE = {
     21: ('Likes To Lob Keeper', 'C'),
     22: ('Dictates Tempo', 'A'),
     23: (None, '?'),
-    24: ('Looks For Pass Rather Than Attempting To Score', 'B'),
+    24: ('Looks For Pass Rather Than Attempting To Score', 'A'),
     25: ('Plays No Through Balls', 'A'),
     26: ('Likes To Switch Ball To Other Flank', 'C'),
     27: ('Knocks Ball Past Opponent', 'A'),
@@ -62,12 +63,12 @@ TRAIT_TABLE = {
     46: ('Likes To Beat Opponent Repeatedly', 'B'),
     47: (None, '?'),
     48: ('Attempts To Develop Weaker Foot', 'C'),
-    49: (None, '?'),
+    49: (None, 'X'),
     50: ('Possesses Long Flat Throws', 'C'),
     51: ('Runs With Ball Often', 'A'),
     52: ('Runs With Ball Rarely', 'B'),
     53: (None, '?'),
-    54: (None, '?'),
+    54: ('Does Not Move Into Channels', 'A'),
     55: ('Uses Long Throw To Start Counter Attacks', 'C'),
     56: (None, '?'),
     57: ('Cuts Inside From Left', 'B'),
@@ -75,7 +76,7 @@ TRAIT_TABLE = {
     59: ('Crosses Early', 'A'),
     60: ('Brings Ball Out Of Defence', 'A'),
     61: (None, '?'),
-    62: (None, '?'),
+    62: (None, 'X'),
     63: (None, '?'),
 }
 
@@ -98,5 +99,5 @@ def trait_label(i):
 
 
 def trait_names(mask):
-    """Display labels for a mask: A/B real names, everything else 'Trait #n'."""
-    return [trait_label(i) for i in trait_ids(mask)]
+    """Display labels for a mask: A/B real names, C/? 'Trait #n'; X bits (not shown in game) are skipped."""
+    return [trait_label(i) for i in trait_ids(mask) if TRAIT_TABLE[i][1] != 'X']

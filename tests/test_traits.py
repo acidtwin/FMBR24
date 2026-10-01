@@ -6,7 +6,7 @@ from fm_editor.traits import TRAIT_TABLE, trait_ids, trait_names, read_trait_mas
 assert sorted(TRAIT_TABLE) == list(range(64))
 shown = [n for n, g in TRAIT_TABLE.values() if g in 'AB']
 assert all(shown) and len(shown) == len(set(shown)), 'A/B names must exist and be unique'
-assert all(g in 'ABC?' for _, g in TRAIT_TABLE.values())
+assert all(g in 'ABCX?' for _, g in TRAIT_TABLE.values())
 assert trait_ids(0) == [] and trait_names(0) == []
 VDV = 0x1000080000000000
 assert trait_ids(VDV) == [43, 60]
