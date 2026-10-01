@@ -634,21 +634,65 @@ function bestPositions(n){const d=D(),R=d.posr;return POS.slice().sort((a,b)=>R[
 const mins=n=>n.toLocaleString('en-GB');
 const row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
 
-/* ATTRIBUTE GROUPS radar of the group averages (1-20), panel 206 wide (204 inner). QPainter: 4 ring polygons (drawPolygon, pen white a=.10, outer .22),
-   axis lines (drawLine, a=.10), data polygon (brush QColor(115,92,228,77), pen #735CE4 1.5 round join), dots r3.5 tier-coloured, drawText labels.
-   Axes: outfield 4 (Technical/Mental/Physical/Hidden, start -135deg), GK 5 (adds Goalkeeping on top, start -90deg). Hidden uses 21-v for lower-is-better rows.
-   Data: attribute groups of the player (g.tech/ment/phys/hid/gk), value = mean of good(a) (Current or Full Potential), colour = tier(round(mean)). */
-function radar(){const G=GRP();
-  const ax=(isGK()?['Goalkeeping','Technical','Mental','Physical','Hidden']:['Technical','Mental','Physical','Hidden']).map(n=>({n,v:G[n].reduce((s,a)=>s+good(a),0)/G[n].length}));
-  const W=204,H=176,cx=102,n=ax.length,cy=n===4?88:92,R=n===4?66:56,a0=n===4?-135:-90,pt=(i,k)=>{const t=(a0+i*360/n)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=k=>ax.map((_,i)=>pt(i,k).map(x=>x.toFixed(1)).join(',')).join(' ');
+/* ATTRIBUTE GROUPS radar = SIX axes of OUR OWN scouting groups (user-approved; NOT the game's Technical/Mental/Physical/Hidden, which the attribute GRID beside it keeps).
+   Axis value = mean of good(a) over the axis' attributes (Current or Full Potential per the toggle; lower-is-better attributes use 21-v), 1-20; dot colour = tier(round(mean)).
+   OUTFIELD (36 non-hidden attributes once each + the 5 hidden ones in Reliability; wheel clockwise from the top, opposites 3 apart):
+     Attacking   Finishing, Long Shots, Dribbling, Penalties, Free Kick, Off the Ball, Flair
+     Creativity  Passing, Vision, Technique, First Touch, Crossing, Corners, Long Throws
+     Athleticism Pace, Acceleration, Agility, Balance, Stamina, Strength, Jumping Reach, Natural Fitness
+     Defending   Tackling, Marking, Heading, Positioning, Anticipation, Bravery
+     Reliability Consistency, Important Matches, Injury Prone (21-v), Dirtiness (21-v), Versatility
+     Mentality   Aggression, Composure, Concentration, Decisions, Determination, Leadership, Teamwork, Work Rate
+   WHY THIS ORDER (differs from the first suggestion Att/Cre/Men/Rel/Ath/Def, which put Attacking NEXT to Defending): Attacking top vs Defending bottom (pitch metaphor, true
+     opposites); Mentality vs Athleticism (mind vs body) and Creativity vs Reliability (flair vs steadiness) are the other two opposites. Neighbours that belong together:
+     Attacking-Creativity (final third), Athleticism-Defending (physical defenders), Reliability-Mentality (consistency/temperament), Mentality-Attacking (off the ball, composure, flair).
+   GOALKEEPER (PROPOSAL, same scouting-group idea, 13 GK attributes + shared ones):
+     Shot-stopping Reflexes, Handling, One on Ones, Punching
+     Command       Aerial Reach, Command of Area, Communication, Rushing Out
+     Distribution  Kicking, Throwing, Passing, First Touch
+     Athleticism   same 8 as outfield
+     Reliability   Consistency, Important Matches, Injury Prone (21-v), Dirtiness (21-v), Eccentricity (21-v)   (Versatility left out: meaningless for a keeper)
+     Mentality     outfield Mentality 8 + Anticipation, Positioning, Bravery (they are Defending for outfielders, core for a keeper)   Not used: all attacking/creative outfield attributes.
+   Wheel GK (clockwise from the top): Shot-stopping, Command, Athleticism, Distribution, Reliability, Mentality. Opposites: Shot-stopping-Distribution (stopping vs playing the ball),
+     Command-Reliability, Athleticism-Mentality. Shot-stopping + Distribution are the two longest names, so they sit at the top/bottom where a centred label has room.
+   Hover (SVG <title>) on an axis lists its attributes; the panel header tooltip says these are our own groupings, not from the game.
+   QPainter (panel 206 wide / 204 inner svg, 204 x 176, origin = svg top-left): centre (102, 88), R = 40, hexagon pointy-top, vertex i at angle -90 + 60*i deg (i = 0 top, clockwise),
+     vertex = (102 + R*k*cos t, 88 + R*k*sin t).  4 ring polygons at k = .25 .5 .75 1 (drawPolygon, pen white a=.10, outer a=.22, width 1); 6 spokes centre -> vertex (a=.10);
+     data polygon at k = mean/20 (brush QColor(115,92,228,77), pen #735CE4 1.5 round join); dot r 3.5 tier colour at each data vertex.
+     LABELS: two lines per axis, NAME 9/700 CAPS no letter-spacing (the six-axis wheel leaves ~60 px beside the side vertices; 10 px caps with spacing .8 clipped 'ATHLETICISM' 75 px) colour #8B96A8,
+       MEAN (1 decimal) 12/700 tier colour, line gap 13. Anchor on the OUTER vertex (k = 1):
+       top (i=0):    centred, name baseline y_v - 20, mean baseline y_v - 7
+       bottom (i=3): centred, name baseline y_v + 13, mean baseline y_v + 26
+       right (i=1,2): left-aligned at x_v + 5, name baseline y_v - 1, mean baseline y_v + 12   (Qt.AlignLeft)
+       left (i=4,5):  right-aligned at x_v - 5, same baselines (Qt.AlignRight)
+     Widest names (Noto Sans 9/700 caps): ATHLETICISM 59, RELIABILITY 55, CREATIVITY 52 -> right edge 141.6+59 = 200.6 of 204 (3 px margin). Do not grow R above 40 or the font above 9 without re-checking.
+     Outer vertices: i0 (102,48) i1 (136.6,68) i2 (136.6,108) i3 (102,128) i4 (67.4,108) i5 (67.4,68).  Hover (mockup: SVG <title> per axis) = the attribute list; in the app a QToolTip on the dot + label rect.
+*/
+const RADAR_OUT=[['Attacking',['Finishing','Long Shots','Dribbling','Penalties','Free Kick','Off the Ball','Flair']],
+ ['Creativity',['Passing','Vision','Technique','First Touch','Crossing','Corners','Long Throws']],
+ ['Athleticism',['Pace','Acceleration','Agility','Balance','Stamina','Strength','Jumping Reach','Natural Fitness']],
+ ['Defending',['Tackling','Marking','Heading','Positioning','Anticipation','Bravery']],
+ ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Versatility']],
+ ['Mentality',['Aggression','Composure','Concentration','Decisions','Determination','Leadership','Teamwork','Work Rate']]];
+const RADAR_GK=[['Shot-stopping',['Reflexes','Handling','One on Ones','Punching']],
+ ['Command',['Aerial Reach','Command of Area','Communication','Rushing Out']],
+ ['Athleticism',RADAR_OUT[2][1]],
+ ['Distribution',['Kicking','Throwing','Passing','First Touch']],
+ ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Eccentricity']],
+ ['Mentality',RADAR_OUT[5][1].concat(['Anticipation','Positioning','Bravery'])]];
+function radar(){const all=[].concat(...Object.values(D().g)),A=n=>all.find(a=>a[0]===n);
+  const ax=(isGK()?RADAR_GK:RADAR_OUT).map(([n,names])=>{const at=names.map(A);return{n,at,v:at.reduce((s,a)=>s+good(a),0)/at.length}});
+  const W=204,H=176,cx=102,cy=88,R=40,N=6,f1=x=>x.toFixed(1),pt=(i,k)=>{const t=(-90+i*60)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=k=>ax.map((_,i)=>pt(i,k).map(f1).join(',')).join(' ');
   let s=[.25,.5,.75,1].map(k=>`<polygon points="${poly(k)}" fill="none" stroke="rgba(255,255,255,${k===1?.22:.10})" stroke-width="1"/>`).join('');
-  s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="rgba(255,255,255,.10)"/>`}).join('');
-  s+=`<polygon points="${ax.map((a,i)=>pt(i,a.v/20).map(x=>x.toFixed(1)).join(',')).join(' ')}" fill="rgba(115,92,228,.30)" stroke="#735CE4" stroke-width="1.5" stroke-linejoin="round"/>`;
-  s+=ax.map((a,i)=>{const p=pt(i,a.v/20),q=pt(i,1),up=q[1]<cy,ty=up?q[1]-17:q[1]+13;
-    return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="${HEX[tier(Math.round(a.v))]}"/>
-      <text x="${q[0].toFixed(1)}" y="${ty}" text-anchor="middle" font-size="10" font-weight="700" fill="#8B96A8" letter-spacing=".8">${a.n.toUpperCase()}</text>
-      <text x="${q[0].toFixed(1)}" y="${ty+13}" text-anchor="middle" font-size="12" font-weight="700" fill="${HEX[tier(Math.round(a.v))]}">${a.v.toFixed(1)}</text>`}).join('');
-  return `<div class="pn">${ph('Attribute groups',modeNote())}<svg class="rd" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg></div>`}
+  s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${f1(p[0])}" y2="${f1(p[1])}" stroke="rgba(255,255,255,.10)"/>`}).join('');
+  s+=`<polygon points="${ax.map((a,i)=>pt(i,a.v/20).map(f1).join(',')).join(' ')}" fill="rgba(115,92,228,.30)" stroke="#735CE4" stroke-width="1.5" stroke-linejoin="round"/>`;
+  s+=ax.map((a,i)=>{const p=pt(i,a.v/20),q=pt(i,1),c=HEX[tier(Math.round(a.v))],side=i%3?(i<3?'start':'end'):'middle',
+      x=side==='middle'?q[0]:q[0]+(side==='start'?5:-5),y1=i===0?q[1]-20:i===3?q[1]+13:q[1]-1,
+      tip=`${a.n} = mean of ${a.at.length}: ${a.at.map(t=>t[0]+(t[3]?' (21-v)':'')).join(', ')}`;
+    return `<g><title>${tip}</title><circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="3.5" fill="${c}"/>
+      <text x="${f1(x)}" y="${f1(y1)}" text-anchor="${side}" font-size="9" font-weight="700" fill="#8B96A8">${a.n.toUpperCase()}</text>
+      <text x="${f1(x)}" y="${f1(y1+13)}" text-anchor="${side}" font-size="12" font-weight="700" fill="${c}">${a.v.toFixed(1)}</text></g>`}).join('');
+  return `<div class="pn"><div class="ph" title="Six scouting groups of this app's own - not taken from the game. Axis = mean of its attributes (1-20); hover an axis for the list."><span>Attribute groups</span><span class="r">${modeNote()}</span></div><svg class="rd" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg></div>`}
 
 /* FOOTEDNESS panel (same 206 x 248 as the radar). Two stylised soles (top-down, toes up). Copy the geometry into QPainterPath.
    FOOT_SOLE = right foot in a 64 x 128 box (big toe on the left = inner side); FOOT_TOES = 5 ellipses (cx, cy, rx, ry) ADDED to the same QPainterPath (addEllipse).
