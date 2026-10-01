@@ -2086,6 +2086,10 @@ class MainWindow(QMainWindow):
         nav_row.addWidget(self._search_box, 1)
         # autocomplete: >=3 chars, debounced; index built lazily per loaded save
         self._sg_idx = None
+        self._report_timer = QTimer(self)
+        self._report_timer.setSingleShot(True)
+        self._report_timer.setInterval(150)
+        self._report_timer.timeout.connect(self._apply_report_filters)
         self._sg_timer = QTimer(self)
         self._sg_timer.setSingleShot(True)
         self._sg_timer.setInterval(130)
@@ -4444,7 +4448,11 @@ class MainWindow(QMainWindow):
             players = self._get_report_players('best_role', role_name=role)
             self._populate_reports_table(players)
 
-    def _on_report_age_changed(self):
+    def _on_report_age_changed(self, *_):
+        # debounce: Best-by-Role rates all ~130k people (0.25-0.36 s) so spin ticks must coalesce
+        self._report_timer.start()
+
+    def _apply_report_filters(self):
         # Despite the name, this re-derives the report for every quick-filter
         # field (name/CA/PA/age/dev), not just age — kept as-is to avoid
         # touching every connect() call site.
@@ -4480,7 +4488,8 @@ class MainWindow(QMainWindow):
         self._report_age_min.blockSignals(False)
         self._report_age_max.blockSignals(False)
         self._report_dev_filter.blockSignals(False)
-        self._on_report_age_changed()
+        self._report_timer.stop()
+        self._apply_report_filters()
 
     def _on_reports_table_dblclick(self, index):
         item = self._reports_table.item(index.row(), 0)
