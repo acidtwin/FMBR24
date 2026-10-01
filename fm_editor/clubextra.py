@@ -112,13 +112,32 @@ def parse_comp_table(d):
     return rows
 
 
-def add_league_positions(clubs, tables):
+def fixture_pairs(fix):
+    """{frozenset({home, away})} of every scheduled fixture in rgman/fix_man.dat (any competition)."""
+    return {frozenset((_u32(m.group(2), 0), _u32(m.group(3), 0))) for m in _FIX_RX.finditer(fix)}
+
+
+def is_league_table(tab, pairs, min_density=0.9):
+    """A domestic league is one round robin: every pair of its teams has a fixture. A cup group stage (several groups
+    flattened into one file) only has fixtures inside each group: density ~0.1-0.3 (Scottish League Cup 0.10, 24 clubs).
+    Leagues measure 1.0 (England, Scotland Premiership, Spain, ...); 0.9 leaves room for a missing fixture or two."""
+    ts = list(tab)
+    n = len(ts)
+    return n >= 2 and sum(frozenset((a, b)) in pairs for i, a in enumerate(ts) for b in ts[i + 1:]) >= min_density * n * (n - 1) / 2
+
+
+def add_league_positions(clubs, tables, fix=None):
     """tables = [ {team: row} per comp ]. club['league'] = {pos, of, P, W, D, L, GF, GA, PTS, comp}
-    from the comp where the club has played most games (= its league, not a cup/euro phase)."""
+    from the round-robin table (see is_league_table; needs the fix_man.dat bytes, else every table counts) where the
+    club has played most games. A club whose division has no table in the save (e.g. Scottish Championship and below,
+    which the game does not simulate in detail) gets no 'league' rather than a cup group's."""
+    pairs = fixture_pairs(fix) if fix else None
+    if pairs is not None and not any(is_league_table(t, pairs) for t in tables):
+        pairs = None  # no fixtures to judge by (e.g. between seasons): keep the old most-games rule rather than drop everything
     by_team = {c['team']: c for c in clubs if 'team' in c}
     best = {}
     for ci, tab in enumerate(tables):
-        if len(tab) < 2:
+        if len(tab) < 2 or (pairs is not None and not is_league_table(tab, pairs)):
             continue
         ranked = sorted(tab.items(), key=lambda kv: (-kv[1][6], -(kv[1][4] - kv[1][5]), -kv[1][4]))
         for pos, (t, r) in enumerate(ranked, 1):

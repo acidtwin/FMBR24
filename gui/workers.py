@@ -26,13 +26,14 @@ class ParseWorker(QThread):
         X.add_club_status(b, clubs)
         by_name = {m['name']: m for m in members}
         fm = by_name.get('rgman/fix_man.dat')
-        if fm:
-            X.add_club_stadiums(b, clubs, get_member(self.save_path, fm))
+        fix = get_member(self.save_path, fm) if fm else None
+        if fix:
+            X.add_club_stadiums(b, clubs, fix)
         tables = []
         for n, m in by_name.items():
             if re.fullmatch(r'rgman/comp_\d+\.dat', n):
                 tables.append(X.parse_comp_table(get_member(self.save_path, m)))
-        X.add_league_positions(clubs, tables)
+        X.add_league_positions(clubs, tables, fix)
 
     def _human_clubs(self, b, members, save_info, people, clubs):
         """Human-managed club ids (fm_editor.saveinfo.human_club_ids); cheap, so never cached."""
