@@ -3,7 +3,13 @@
 Run: python3 tests/test_parse_golden.py   (skips if the save is absent; ~40 s)
 First run creates tests/golden_parse.json from the current code; later runs compare.
 Delete the json to re-baseline after an INTENDED output change. The save is only read.
+
+The hashes cover offset-INDEPENDENT fields only (ids, names, nation, birth, ca/pa, attributes, hgp, ...) so a
+re-save by the app (an HGC/HGP insert shifts every later byte offset) does not break them. Offsets
+(offset / end / identity_offset / he) are not pinned; offset_problems() checks they are self-consistent instead.
+FMBR24_GOLDEN_SAVE=<path> runs the same check on another copy of the save.
 """
+import copy
 import hashlib
 import json
 import os
@@ -14,18 +20,60 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 GOLDEN = os.path.join(ROOT, 'tests', 'golden_parse.json')
 
-SAVE = os.path.expanduser(
+SAVE = os.environ.get('FMBR24_GOLDEN_SAVE') or os.path.expanduser(
     '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
     'Documents/Sports Interactive/Football Manager 2024/games/'
     '2026-27 START - Acid Twin Spurs.fm')
+OFFSET_KEYS = {'offset', 'end', 'identity_offset', 'he'}  # byte positions: drift after any insert, never hashed
+
+
+def _strip(v):
+    """Drop OFFSET_KEYS from a dict / list of dicts / dict of dicts (offset-independent view)."""
+    if isinstance(v, dict):
+        return {k: _strip(x) for k, x in v.items() if k not in OFFSET_KEYS}
+    if isinstance(v, (list, tuple)):
+        return [_strip(x) for x in v]
+    return v
+
+
+def fingerprint(raw):
+    """{stage: [count, hash]} over offset-independent fields only."""
+    out = {}
+    for k, v in raw.items():
+        if k == 'identities':
+            v = [(i, u) for i, u, _off in v]
+        elif isinstance(v, dict):
+            v = {str(a): _strip(x) for a, x in v.items()}
+        else:
+            v = _strip(v)
+        out[k] = [len(v), _h(v)]
+    return out
+
+
+def offset_problems(b, people):
+    """Self-consistency of the byte offsets instead of pinning them: every record must still look like
+    find_people's own shape (name block length, birth day/year, nation at `end`), in strictly increasing order."""
+    import struct
+    bad, last = [], -1
+    for p in people:
+        o, e = p['offset'], p['end']
+        ok = (o > last and e == o + 19 + struct.unpack_from('<I', b, o + 15)[0]
+              and struct.unpack_from('<H', b, e)[0] == p['birth_day']
+              and struct.unpack_from('<H', b, e + 2)[0] == p['birth_year']
+              and struct.unpack_from('<H', b, e + 9)[0] == p['nation']
+              and (p.get('identity_offset') is None or p['identity_offset'] >= e))
+        if not ok:
+            bad.append(p['id'])
+        last = o
+    return bad
 
 
 def _h(obj):
     return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
-def run_stages(save=SAVE, timings=None):
-    """Run the parser stages in GUI order; return {stage: (count, hash)}."""
+def collect(save=SAVE, timings=None):
+    """Run the parser stages in GUI order; return (b, {stage: raw structure})."""
     from fm_editor.archive import parse_archive, get_member
     from fm_editor import gamedb as G
     from fm_editor.patch import is_homegrown
@@ -42,7 +90,7 @@ def run_stages(save=SAVE, timings=None):
     clubs = G.find_clubs(b, ns)
     G.add_club_finance(b, clubs, ns)
     people = t('find_people', G.find_people, b, fn, ln, ne)
-    people_snap = _h(people)  # before identities / abilities mutate the dicts
+    people_snap_obj = copy.deepcopy(people)  # snapshot before identities / abilities mutate the dicts
     t('match_identities', G.match_identities, b, people, ne)
     identities = [(p['id'], p.get('uid'), p.get('identity_offset')) for p in people]
     squads, sub = t('find_squads', G.find_squads, b, clubs, ns, people)
@@ -70,33 +118,25 @@ def run_stages(save=SAVE, timings=None):
     ps = next((m for m in members if m['name'] == 'rgman/player_stats.dat'), None)
     stats = parse_player_stats(get_member(save, ps), {p['id'] for p in people if p['id'] != -1}) if ps else {}
 
-    sq = {str(k): v for k, v in squads.items()}
-    sb = {str(k): {str(kk): vv for kk, vv in v.items()} for k, v in sub.items()}
-    out = {
-        'people_raw': (len(people), people_snap),
-        'identities': (len(identities), _h(identities)),
-        'abilities': (len(abil), _h({str(k): v for k, v in abil.items()})),
-        'clubs': (len(clubs), _h([{k: v for k, v in c.items() if k != 'he'} for c in clubs])),
-        'squads': (len(sq), _h(sq)), 'sub_squads': (len(sb), _h(sb)),
-        'employment': (len(emp), _h({str(k): v for k, v in emp.items()})),
-        'contracts': (len(contracts), _h({str(k): v for k, v in contracts.items()})),
-        'club_staff': (len(staff), _h({str(k): v for k, v in staff.items()})),
-        'people_final': (len(people), _h(people)),
-        'stats': (len(stats), _h({str(k): v for k, v in stats.items()})),
-    }
-    return {k: list(v) for k, v in out.items()}
+    raw = dict(people_raw=people_snap_obj, identities=identities, abilities=abil, clubs=clubs, squads=squads,
+               sub_squads=sub, employment=emp, contracts=contracts, club_staff=staff, people_final=people,
+               stats=stats)
+    return b, raw
 
 
 def test_golden():
     if not os.path.exists(SAVE):
-        print('SKIP: save not found'); return
+        print('SKIPPED (save not found): test_parse_golden'); return
     tm = {}
-    got = run_stages(timings=tm)
+    b, raw = collect(timings=tm)
     print({k: round(v, 1) for k, v in tm.items()})
+    bad_off = offset_problems(b, raw['people_final'])
+    assert not bad_off, f'{len(bad_off)} people with inconsistent offsets, e.g. ids {bad_off[:5]}'
+    got = fingerprint(raw)
     if not os.path.exists(GOLDEN):
         with open(GOLDEN, 'w') as f:
             json.dump(got, f, indent=1, sort_keys=True)
-        print('golden created'); return
+        print('golden CREATED (tests/golden_parse.json did not exist): nothing was compared'); return
     want = json.load(open(GOLDEN))
     bad = {k: (want.get(k), got.get(k)) for k in set(want) | set(got) if want.get(k) != got.get(k)}
     assert not bad, bad

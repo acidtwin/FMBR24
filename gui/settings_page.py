@@ -609,7 +609,7 @@ class SettingsPage(QWidget):
         n, size = _cache.cache_info()
         if n:
             txt = f"{n} save{'s' if n != 1 else ''} · {_fmt_size(size)}. " \
-                  "Saves parse again on next load (~60 s each)."
+                  "Saves parse again on next load (about 15 s each)."
         else:
             txt = 'Cache is empty.'
         _set_help(self._cache_help, txt)
@@ -751,7 +751,7 @@ class SettingsPage(QWidget):
         if QMessageBox.question(
                 self.window(), 'Clear cache',
                 f"Delete {n} cached save{'s' if n != 1 else ''}? "
-                "They will be parsed again on next load (~60 s each).",
+                "They will be parsed again on next load (about 15 s each).",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         ) != QMessageBox.StandardButton.Yes:
             return

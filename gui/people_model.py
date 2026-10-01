@@ -106,7 +106,8 @@ class PeopleModel(QAbstractTableModel):
 
     def set_queue(self, qmap):
         """qmap: person id -> set of queued kinds. Only the rows whose state changed are repainted
-        (never a walk over every row); a list sorted by an HGP/HGC column is re-sorted."""
+        (the diff is O(queue size); the first call builds an id -> row map, and a changed row costs one pass over the view); a list sorted by
+        an HGP/HGC column is re-sorted."""
         old, self.queued = self.queued, qmap
         changed = [pid for pid in old.keys() | qmap.keys() if old.get(pid) != qmap.get(pid)]
         if not changed:

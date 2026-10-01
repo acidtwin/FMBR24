@@ -1,6 +1,7 @@
 """Pos column sorts by _POS_SORT_ORDER (GK, D, M, ST), not alphabetically, in the player lists.
 Plain script, synthetic rows, no save needed."""
 import os, sys
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtWidgets import QApplication

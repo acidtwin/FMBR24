@@ -74,4 +74,6 @@ if os.path.exists(PICKLE):
     for p in P[::37]:
         check(p['raw_attrs'], p['ca'], p['pa'], age_on(p, ref), p['positions'])
         n += 1
+else:
+    print('SKIPPED (scratchpad pickle not found): test_potential real-player checks')
 print('OK', n, 'real players')

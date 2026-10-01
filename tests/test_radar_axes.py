@@ -3,7 +3,7 @@ import os
 import sys
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('FMBR24_CONFIG_DIR', '/tmp/fmbr24_test_radar')
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from PyQt6.QtWidgets import QApplication  # noqa: E402
@@ -80,6 +80,7 @@ from PyQt6.QtWidgets import QToolTip  # noqa: E402
 w = PlayerWindow(person(False), {'squads': {}, 'clubs': []}, 0, None, can_patch=True, data={})
 w.show()
 rd = w._radar
+assert rd.hasMouseTracking(), 'tooltips on hover need mouse tracking'
 r0 = rd._rects[0][4]
 QApplication.sendEvent(rd, QHelpEvent(QEvent.Type.ToolTip, QPoint(int(r0.center().x()), int(r0.center().y())), QPoint(5, 5)))
 assert QToolTip.text().startswith('Attacking = mean of 7:'), QToolTip.text()

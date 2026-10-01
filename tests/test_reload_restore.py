@@ -46,7 +46,7 @@ def make_save(club_ids=CLUBS):
 w = M.MainWindow()
 w.resize(1300, 560)
 w.show()
-PATH = '/tmp/fake_reload_restore.fm'
+PATH = os.path.join(tempfile.mkdtemp(), 'fake_reload_restore.fm')
 w._save_path = PATH
 
 
@@ -159,7 +159,7 @@ assert view() == 'save_info', view()
 # -- Loading a different file ignores the snapshot ------------------------------------------------------------
 w._show_squad(w._save_data['clubs'][0])
 assert view() == 'club'
-reload_with(path='/tmp/another_save.fm')
+reload_with(path=os.path.join(os.path.dirname(PATH), 'another_save.fm'))
 assert view() == 'save_info', view()
 
 # -- First load of a save (Load button path: _save_data cleared) never restores ----------------------------------

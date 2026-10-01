@@ -5,6 +5,7 @@ Ground truth = the user's in-game Squad screen and Micky van de Ven's player pro
 (the real-save part skips politely if the save is absent).
 """
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -128,7 +129,7 @@ if __name__ == '__main__':
     test_overall_block_and_rating()
     test_club_top_players()
     if not os.path.exists(SAVE):
-        print('SKIP (real save): save file not found')
+        print('SKIPPED (save not found): test_player_stats real-save part')
     else:
         test_spurs_stats_vs_game()
     print('OK')

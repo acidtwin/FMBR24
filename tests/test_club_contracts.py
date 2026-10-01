@@ -4,6 +4,7 @@
 Run directly: python3 tests/test_club_contracts.py
 """
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import sys
 from datetime import date
 
@@ -30,6 +31,17 @@ def test_contract_expiry_counts():
     assert (n6, n12, longest) == (0, 0, ''), "empty squad should yield zero counts, no longest deal"
 
 
+def test_uses_ingame_date():
+    from fm_editor import agecalc
+    agecalc.set_ref('2028-01-12')
+    squad = [{'contract_end': '2028-06'}, {'contract_end': '2028-12'}, {'contract_end': '2030-06'}]
+    assert _contract_expiry_counts(squad, agecalc.get_ref()) == (1, 2, '2030-06')
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'gui', 'main_window.py')).read()
+    assert 'date.today()' not in src, 'wall-clock date used; use agecalc.get_ref()'
+
+
 if __name__ == '__main__':
     test_contract_expiry_counts()
+    test_uses_ingame_date()
     print('OK: _contract_expiry_counts')

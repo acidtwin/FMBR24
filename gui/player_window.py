@@ -52,6 +52,11 @@ def tier(v):
     return 1 if v <= 4 else 2 if v <= 8 else 3 if v <= 11 else 4 if v <= 13 else 5 if v <= 16 else 6
 
 
+def tier_rounded(x):
+    """Colour tier of a float 1-20 score, rounded half up (one rule for the radar and the trait scores)."""
+    return tier(int(x + 0.5))
+
+
 def _rgba(t, a=TILE_ALPHA):
     r, g, b = TIER_RGB[t]
     return f'rgba({r},{g},{b},{a})'
@@ -71,7 +76,6 @@ GKA = [('Aerial Reach', 12), ('Command of Area', 13), ('Communication', 14), ('E
        ('Rushing Out', 32), ('Throwing', 16)]
 HIDD = [('Consistency', 44), ('Dirtiness', 41), ('Important Matches', 47), ('Injury Prone', 48),
         ('Versatility', 49)]
-FOOT = [('Left Foot', 24), ('Right Foot', 25)]
 _GROUPS = {'Technical': TECH, 'Mental': MENT, 'Physical': PHYS, 'Goalkeeping': GKA, 'Hidden': HIDD}
 LOWER_BETTER = {31, 41, 48}   # Eccentricity, Dirtiness, Injury Prone: coloured on 21 - v
 PERS = ['Adaptability', 'Ambition', 'Loyalty', 'Pressure', 'Professionalism', 'Sportsmanship', 'Temperament']
@@ -147,8 +151,6 @@ def _tab_icon(key):
         ic.addPixmap(px, mode, state)
     return ic
 
-
-_LAST_TAB = 'profile'     # last opened tab, remembered for the session
 
 TRAINING_SOON = 'Training focus, schedules and development notes will live here.'
 
@@ -495,13 +497,15 @@ class PlayerWindow(QDialog):
         self._proj = None
         self._data = {**player_extra_data(person, save_data), **(data or {})}
         self._init_state()
-        _enabled, self._pot_note = _pot.availability(person.get('ca'), person.get('pa'), person_age(person))
+        # the Full Potential toggle is always selectable (session-17 decision): availability()'s `enabled` flag is
+        # advisory, only its note is used (tooltip + header note)
+        _, self._pot_note = _pot.availability(person.get('ca'), person.get('pa'), person_age(person))
         self._build()
 
     # -- data helpers ------------------------------------------------------------------------
     @staticmethod
     def _disp(raw_v):
-        return max(1, min(20, round(raw_v / 5)))
+        return _pot.display_value(raw_v / 5)
 
     def _show_pending(self):
         from gui import main_window as mw
@@ -532,7 +536,6 @@ class PlayerWindow(QDialog):
 
     # -- shell: header / (tab strip | pages) / action strip ---------------------------------------
     def _build(self):
-        global _LAST_TAB
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -588,8 +591,6 @@ class PlayerWindow(QDialog):
         self._select_tab('profile')  # always open on the Profile tab (user preference)
 
     def _select_tab(self, key):
-        global _LAST_TAB
-        _LAST_TAB = key
         self._tab_btns[key].setChecked(True)
         self._stack.setCurrentIndex(self._tab_keys.index(key))
 
@@ -1256,13 +1257,14 @@ class PlayerWindow(QDialog):
             note = self._pot_note
             pr = self._projection()
             if pr.saturated:
-                note = (note + ' ' if note else '') + f'Reaches about CA {pr.reaches(self._person["ca"])}.'
+                note = (note + ' ' if note else '') + f'Reaches about CA {pr.reaches(self._person.get("ca") or 0)}.'
         self._note.setText(note)
 
     def _projection(self):
         if self._proj is None:
             p = self._person
-            self._proj = _pot.project_attrs(p['raw_attrs'], p['ca'], p['pa'], person_age(p), p['positions'])
+            raw = p.get('raw_attrs') or [0] * 54
+            self._proj = _pot.project_attrs(raw, p.get('ca'), p.get('pa'), person_age(p), p.get('positions') or [1] * 15)
         return self._proj
 
     def _group_rows(self, attrs):
@@ -1317,7 +1319,7 @@ class PlayerWindow(QDialog):
     def _radar_axes(self):
         """[(axis name, mean, tier QColor, tooltip)] from the ONE table in gui/pw_widgets.py (follows Current | Full Potential)."""
         vals = {n: v for g in _GROUPS.values() for n, _i, v, _l in self._group_rows(g)}
-        return [(n, m, QColor(TIER_HEX[tier(int(m + 0.5))]), tip) for n, m, tip in radar_axes(vals, self._is_gk)]
+        return [(n, m, QColor(TIER_HEX[tier_rounded(m)]), tip) for n, m, tip in radar_axes(vals, self._is_gk)]
 
     def _refresh_radar(self):
         self._radar.set_axes(self._radar_axes())
@@ -1470,7 +1472,7 @@ class PlayerWindow(QDialog):
             h.addWidget(n, 1)
             sc = _lab(f'{r.score:.1f}', 'pwKvR', Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             sc.setFixedWidth(30)
-            sc.setStyleSheet(f'QLabel#pwKvR {{ color:{TIER_HEX[tier(round(r.score))]}; font-weight:bold; }}')
+            sc.setStyleSheet(f'QLabel#pwKvR {{ color:{TIER_HEX[tier_rounded(r.score)]}; font-weight:bold; }}')
             h.addWidget(sc)
             v.addWidget(row)
         if note:

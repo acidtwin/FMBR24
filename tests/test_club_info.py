@@ -69,7 +69,7 @@ def test_club_info():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('SKIP: save file not found')
+        print('SKIPPED (save not found): test_club_info')
     else:
         test_club_info()
         print('OK')

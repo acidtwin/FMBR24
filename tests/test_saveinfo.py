@@ -43,7 +43,7 @@ def test_save_info():
 
 if __name__ == '__main__':
     if not os.path.exists(SAVE):
-        print('SKIP: save file not found')
+        print('SKIPPED (save not found): test_saveinfo')
         sys.exit(0)
     test_save_info()
     print('OK: parse_save_info')

@@ -2,6 +2,7 @@
 PlayerWindow HGP/HGC pill states (skipped if the save is absent). Plain script: python3 tests/test_human_clubs.py
 """
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import struct
 import sys
 import tempfile
@@ -83,4 +84,4 @@ if __name__ == '__main__':
         test_real_save()
         print('OK: real save + PlayerWindow')
     else:
-        print('SKIP: save file not found')
+        print('SKIPPED (save not found): test_human_clubs real-save part')

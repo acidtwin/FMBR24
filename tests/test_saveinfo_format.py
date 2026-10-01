@@ -1,5 +1,6 @@
 """Formatting helpers for the Save Info page. Run: python3 tests/test_saveinfo_format.py"""
 import os
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
