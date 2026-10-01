@@ -98,7 +98,7 @@ TABS = [
     ('positions', 'Positions', '_page_positions', '_slot_positions'),
     ('general', 'General Rating', None, '_slot_profile'),
     ('role', 'Role Rating', None, '_slot_profile'),
-    ('history', 'History', None, '_slot_history'),
+    ('history', 'History', '_page_history', '_slot_history'),
 ]
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
@@ -127,7 +127,8 @@ def player_extra_data(person, save_data):
         wage       e.g. '£100K p/w'          value      e.g. '£88M - £97M'
         height_cm  int                        weight_kg  int
         traits     list[str] of trait labels from person['trait_mask'] (A/B names, else 'Trait #n')
-        history    reserved (career history is not shown in layout B yet)
+        history    optional override of the History tab (dict like fm_editor.history.career_for_person); None = the
+                   window computes it lazily from the install DB + save (fm_editor/history.py)
     """
     mask = person.get('trait_mask')
     traits = trait_names(mask) if mask is not None else None     # None = old cache / unknown -> PENDING
@@ -848,8 +849,98 @@ class PlayerWindow(QDialog):
         v = R[best]
         return 'Best position', [self._badge(best, True), self._slot_val(str(v), TIER_HEX[tier(v)])], word(v)
 
+    def _career(self):
+        """Career rows of this player (fm_editor.history.career_for_person), computed once on first use;
+        data['history'] (same shape) overrides. Status: ok / no_install / none / no_uid / error."""
+        if getattr(self, '_career_c', None) is None:
+            c = self._data.get('history')
+            if c is None:
+                try:
+                    from fm_editor import history as _hist
+                    c = _hist.career_for_person(self._person, self._save_data)
+                except Exception:
+                    c = {'status': 'error', 'rows': []}
+            self._career_c = c
+        return self._career_c
+
     def _slot_history(self):
-        return 'Apps · Goals', [self._pend_chip()], 'Not in the save yet'
+        c = self._career()
+        rows = c.get('rows') or []
+        if not rows:
+            sub = 'FM install database not found' if c.get('status') == 'no_install' else 'No history found'
+            return 'Apps · Goals', [self._pend_chip()], sub
+        apps = sum(r['apps'] or 0 for r in rows)
+        goals = sum(r['goals'] or 0 for r in rows)
+        return 'Apps · Goals', [self._slot_val(f'{apps} · {goals}')], 'career, league'
+
+    @staticmethod
+    def _fmt_fee(n):
+        if n is None:
+            return ''
+        if n == 0:
+            return 'Free'
+        t = f'{n / 1e6:.1f}M' if n >= 1e6 else f'{n / 1e3:.0f}K'
+        return '£' + t.replace('.0M', 'M')
+
+    def _page_history(self):
+        c = self._career()
+        rows = c.get('rows') or []
+        panel, v = self._panel('Career history')
+        if not rows:
+            if c.get('status') == 'no_install':
+                msg = ('Career history is read from the Football Manager 24 install database, which was not found '
+                       '(Steam library of this save, or the FMBR24_FM_DB folder).')
+            else:
+                msg = 'No career history is stored for this player.'
+            note = _lab(msg, 'pwNote')
+            note.setWordWrap(True)
+            note.setContentsMargins(12, 10, 12, 0)
+            v.addWidget(note)
+            chip = QWidget()
+            cl = QHBoxLayout(chip)
+            cl.setContentsMargins(12, 10, 12, 14)
+            cl.addWidget(self._pend_chip())
+            cl.addStretch()
+            v.addWidget(chip)
+            return self._page(panel, stretch={0: 1})
+        cols = (('Season', 78, 'l'), ('Club', 0, 'l'), ('', 52, 'l'), ('Apps', 44, 'r'), ('Goals', 44, 'r'),
+                ('Fee', 70, 'r'))
+
+        def line(vals, name, tips=None):
+            row = QFrame()
+            row.setObjectName(name)
+            row.setFixedHeight(26)
+            h = QHBoxLayout(row)
+            h.setContentsMargins(12, 0, 12, 0)
+            h.setSpacing(8)
+            for (title, w, al), (text, obj) in zip(cols, vals):
+                lab = _ElideLabel(text, obj) if w == 0 else _lab(text, obj)
+                if w:
+                    lab.setFixedWidth(w)
+                if al == 'r':
+                    lab.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                h.addWidget(lab, 1 if w == 0 else 0)
+            if tips:
+                row.setToolTip(tips)
+            return row
+
+        v.addWidget(line([(t, 'pwColHead') for t, _w, _a in cols], 'pwRow'))
+        for i, r in enumerate(rows):
+            club = r.get('club') or 'Unknown club'
+            kind = {'loan': 'Loan', 'youth': 'Youth', 'youth loan': 'Youth loan'}.get(r.get('kind'), '')
+            vals = [(r['season'], 'pwKvR'), (club, 'pwKvR' if r.get('club') else 'pwKvL'), (kind, 'pwKvL'),
+                    ('-' if r['apps'] is None else str(r['apps']), 'pwKvR'),
+                    ('-' if r['goals'] is None else str(r['goals']), 'pwKvR'),
+                    (self._fmt_fee(r.get('fee')), 'pwKvL')]
+            tip = None if r.get('club') else f"Club id {r['club_raw']} is not in the club tables"
+            v.addWidget(line(vals, 'pwRowAlt' if i % 2 else 'pwRow', tip))
+        note = _lab('League appearances and goals per season. Rows up to the last season of the FM install '
+                    'database come from it; later seasons come from this save. Fee = transfer fee paid for the move '
+                    'at the end of that row.', 'pwNote')
+        note.setWordWrap(True)
+        note.setContentsMargins(12, 8, 12, 12)
+        v.addWidget(note)
+        return self._page(panel, stretch={0: 1})
 
     def _best_pos(self, R):
         """Highest rating; ties -> the listed (primary) position, then mockup list order."""
