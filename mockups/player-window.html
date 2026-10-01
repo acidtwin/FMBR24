@@ -375,7 +375,7 @@ const OUT={
  /* Recommended traits (fm_editor/traitrec.py; ticked = player already has it): [name, score, has]; recP = at Full Potential */
  rec:[['Does Not Dive Into Tackles',15.4,0],['Marks Opponent Tightly',14.8,1],['Knocks Ball Past Opponents',14.5,0],['Likes to Beat Opponent Repeatedly',14.2,0],['Stays Back at All Times',14.0,0]],
  recP:[['Does Not Dive Into Tackles',15.9,0],['Marks Opponent Tightly',15.4,1],['Knocks Ball Past Opponents',15.0,0],['Likes to Beat Opponent Repeatedly',14.8,0],['Stays Back at All Times',14.8,0]],
- pers:[['Adaptability',13],['Ambition',17],['Loyalty',9],['Pressure',14],['Professionalism',15],['Sportsmanship',12],['Temperament',14]],persLabel:'Ambitious',
+ pers:[['Adaptability',13],['Ambition',17],['Loyalty',9],['Pressure',14],['Professionalism',15],['Sportsmanship',12],['Temperament',14]],
  posr:{GK:1,SW:14,DL:18,DC:20,DR:9,WBL:16,WBR:7,DM:10,ML:5,MC:8,MR:3,AML:3,AMC:4,AMR:2,ST:4},
  posf:{GK:1,SW:16,DL:19,DC:20,DR:11,WBL:17,WBR:9,DM:12,ML:6,MC:10,MR:4,AML:3,AMC:5,AMR:3,ST:4},
  g:{
@@ -391,7 +391,7 @@ const GKP={
  stats:{apps:30,starts:30,subs:0,goals:0,assists:0,min:2700,potm:3,avg:7.05},
  potNote:'PA is rarely reached after 26.',
  traits:[],recNote:'Not applicable to goalkeepers.',
- pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],persLabel:'Professional',
+ pers:[['Adaptability',12],['Ambition',13],['Loyalty',11],['Pressure',15],['Professionalism',14],['Sportsmanship',15],['Temperament',13]],
  posr:{GK:20,SW:2,DL:1,DC:1,DR:1,WBL:1,WBR:1,DM:1,ML:1,MC:1,MR:1,AML:1,AMC:1,AMR:1,ST:1},
  posf:{GK:20,SW:3,DL:1,DC:1,DR:1,WBL:1,WBR:1,DM:1,ML:1,MC:1,MR:1,AML:1,AMC:1,AMR:1,ST:1},
  g:{
@@ -408,7 +408,7 @@ const LOW={
  until:'Jun 2028',wage:'£4K p/w',value:'£900K',height:'181 cm',weight:'72 kg',
  potNote:'',
  traits:[],recNote:'No trait reaches an average of 11.',
- pers:[['Adaptability',11],['Ambition',14],['Loyalty',8],['Pressure',9],['Professionalism',13],['Sportsmanship',10],['Temperament',11]],persLabel:'Determined',
+ pers:[['Adaptability',11],['Ambition',14],['Loyalty',8],['Pressure',9],['Professionalism',13],['Sportsmanship',10],['Temperament',11]],
  posr:{GK:1,SW:3,DL:4,DC:5,DR:5,WBL:6,WBR:5,DM:11,ML:9,MC:13,MR:9,AML:6,AMC:10,AMR:6,ST:4},
  posf:{GK:1,SW:5,DL:7,DC:8,DR:8,WBL:9,WBR:8,DM:16,ML:13,MC:18,MR:13,AML:10,AMC:15,AMR:10,ST:7},
  g:scaleG(OUT.g,.6)};
@@ -648,7 +648,7 @@ function profC(){const d=D(),R=d.posr,b=bestPos(R),oth=bestPositions(4).filter(p
   const tp=`<div class="pn" style="width:236px;flex:none">${ph('Player traits')}<div class="tcw">${(d.traits.length?d.traits:['None']).map(x=>`<span class="chip${x.startsWith('Trait #')||!d.traits.length?' mute':''}"${x.startsWith('Trait #')?' data-tip="Name not confirmed yet"':''}>${x}</span>`).join('')}</div></div>`;
   return `<div class="pcol"><div class="prow st">${pos}${form}${fit}</div>
     <div class="prow st">${attrPanel()}<div class="p-side">${radar()}${feet()}</div></div>
-    <div class="prow st"><div class="pn fl">${ph('Personality',d.persLabel?`<span class="chip pers">${d.persLabel}</span>`:'')}<div class="pmg">${pm}</div></div>${tp}</div></div>`}
+    <div class="prow st"><div class="pn fl">${ph('Personality','')}<div class="pmg">${pm}</div></div>${tp}</div></div>`}
 
 function tabProfile(){return profC()}
 
