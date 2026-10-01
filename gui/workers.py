@@ -81,7 +81,7 @@ class ParseWorker(QThread):
                 self._club_extras(b, members, clubs, get_member)
             except Exception:
                 import traceback
-                traceback.print_exc()  # reputation/stadium/table are optional: Club page shows PENDING
+                traceback.print_exc()  # reputation/stadium/table are optional: Club page hides the row
 
             self._emit("Finding people and matching identities...", 65)
             people = find_people(b, first_names, last_names, names_end)

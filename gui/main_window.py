@@ -16,7 +16,7 @@ from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget
-from fm_editor.nations import nation_name as _nation_name_long
+from fm_editor.nations import nation_name as _nation_name_long, nation_flag as _nation_flag
 from fm_editor.cache import clear_cache
 from gui.workers import ParseWorker, SaveWorker
 from gui.search_suggest import _SearchSuggest, _SuggestDelegate, _SG_MAX  # noqa: F401 (re-exported)
@@ -337,15 +337,21 @@ def _club_pending_chip(text='PENDING'):
     return lbl
 
 
-def _club_set_pending(lbl):
-    lbl.setText('PENDING')
-    lbl.setStyleSheet(_CLUB_PENDING_QSS)
-    _club_pending_vis(lbl, True)
+def _club_hide_row(lbl):
+    """No data for this Club-page row in the save: hide the whole row (never a placeholder)."""
+    lbl.setVisible(False)
+    row = lbl.parentWidget()
+    if row is not None and row.objectName() == 'clubKvRow':
+        row.setVisible(False)
 
 
 def _club_set_value(lbl, text, color='#e8edf2'):
     _club_pending_vis(lbl, False)
     lbl.setText(text)
+    lbl.setVisible(True)
+    row = lbl.parentWidget()
+    if row is not None and row.objectName() == 'clubKvRow':
+        row.setVisible(True)
     lbl.setStyleSheet(f"color:{color}; font-size:12px; font-weight:500; background:transparent;")
 
 
@@ -719,26 +725,9 @@ def _attr_val_color(v: int) -> str:
     return COLORS['non_hgp_red']
 
 
-# Nation ID → flag emoji
-_NATION_FLAG = {
-    11:  '🇪🇬', 29:  '🇲🇦', 33:  '🇳🇬',
-    97:  '🇨🇦', 120: '🇺🇸',
-    187: '🇦🇷', 189: '🇧🇷', 195: '🇺🇾',
-    61:  '🇯🇵', 80:  '🇰🇷', 177: '🇦🇺',
-    126: '🇦🇱', 129: '🇦🇹', 135: '🇭🇷',
-    146: '🇬🇷', 147: '🇭🇺', 161: '🇵🇱',
-    165: '🇷🇺', 176: '🇷🇸', 219: '🇽🇰',
-    131: '🇧🇪', 137: '🇨🇿', 138: '🇩🇰',
-    139: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 143: '🇫🇷', 145: '🇩🇪',
-    150: '🇮🇹', 158: '🇳🇱', 159: '🏴󠁧󠁢󠁮󠁩󠁲󠁿',
-    160: '🇳🇴', 162: '🇵🇹', 163: '🇮🇪',
-    167: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 170: '🇪🇸', 171: '🇸🇪',
-    172: '🇨🇭', 173: '🇹🇷', 175: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-}
-
 def _nation_cell(nid, default=''):
     """Flag emoji, else a short name, else the verified long name from fm_editor.nations, else default."""
-    return _NATION_FLAG.get(nid) or NATIONS.get(nid) or _nation_name_long(nid) or default
+    return _nation_flag(nid) or NATIONS.get(nid) or _nation_name_long(nid) or default
 
 
 _STAFF_COL_TOOLTIPS = {
@@ -1932,10 +1921,7 @@ class MainWindow(QMainWindow):
             country = nation_name(club.get('nation')) if club else None
             lg = (club or {}).get('league')
             pos = f"{_ordinal(lg['pos'])} of {lg['of']}" if lg else None
-            if _SHOW_PENDING:
-                club_sub = f"Division pending · {country or 'Country pending'} · {pos or 'Position pending'}"
-            else:
-                club_sub = ' · '.join(x for x in (country, pos) if x)
+            club_sub = ' · '.join(x for x in (country, pos) if x)
             self._set_header(club_name or 'Club', club_sub,
                              self._make_header_rep_widget(rep_stars((club or {}).get('rep')), (club or {}).get('rep')))
         elif key == 'squad':
@@ -2259,23 +2245,19 @@ class MainWindow(QMainWindow):
         col1_l.addStretch(1)
         body_row.addWidget(col1, 1)
 
-        # -- Col 2: Club Info / Facilities / Finances (fully static — every
-        # value is PENDING, the parser has no club-metadata fields yet) -----
+        # -- Col 2: Club Info / Finances. Region, Year founded and Facilities are not in the
+        # save, so they have no rows; a row whose value is absent for a club is hidden. -----
         col2, col2_l = _col()
         col2_l.addWidget(_club_sec_hdr('Club Info'))
-        self._club_status_val = _club_pending_chip()
         self._club_info_vals = {}
-        for label in ('Region', 'Founded', 'Status', 'Reputation', 'Stadium', 'League position'):
-            self._club_info_vals[label] = (self._club_status_val if label == 'Status'
-                                           else _club_pending_chip())
+        for label in ('Status', 'Reputation', 'Stadium', 'League position'):
+            self._club_info_vals[label] = _club_kv_value('')
             col2_l.addWidget(_club_kv_row(label, self._club_info_vals[label]))
-        col2_l.addWidget(_club_sec_hdr('Facilities', sub=True))
-        for label in ('Training', 'Youth', 'Junior coaching', 'Youth recruitment'):
-            col2_l.addWidget(_club_kv_row(label, _club_pending_chip()))
+        self._club_status_val = self._club_info_vals['Status']
         col2_l.addWidget(_club_sec_hdr('Finances', sub=True))
         self._club_fin_vals = {}
         for label in ('Transfer budget', 'Wage budget', 'Scouting budget', 'Balance'):
-            self._club_fin_vals[label] = _club_pending_chip()
+            self._club_fin_vals[label] = _club_kv_value('')
             col2_l.addWidget(_club_kv_row(label, self._club_fin_vals[label]))
         col2_l.addStretch(1)
         body_row.addWidget(col2, 1)
@@ -2299,11 +2281,11 @@ class MainWindow(QMainWindow):
 
         self._club_staff_hdr = _club_sec_hdr('Staff (0)', sub=True)
         col3_l.addWidget(self._club_staff_hdr)
-        self._club_avg_coaching_val = _club_pending_chip()
+        self._club_avg_coaching_val = _club_kv_value('')
         col3_l.addWidget(_club_kv_row('Avg coaching attr', self._club_avg_coaching_val))
-        self._club_best_staff_ca_val = _club_pending_chip()
+        self._club_best_staff_ca_val = _club_kv_value('')
         col3_l.addWidget(_club_kv_row('Best staff CA', self._club_best_staff_ca_val))
-        self._club_manager_val = _club_pending_chip()
+        self._club_manager_val = _club_kv_value('')
         col3_l.addWidget(_club_kv_row('Manager', self._club_manager_val))
 
         col3_l.addWidget(_club_sec_hdr('Contracts', sub=True))
@@ -2695,24 +2677,24 @@ class MainWindow(QMainWindow):
         if st:
             _club_set_value(self._club_status_val, st)
         else:
-            _club_set_pending(self._club_status_val)
+            _club_hide_row(self._club_status_val)
         iv = self._club_info_vals
         rep = club.get('rep')  # raw 1-10000 (verified); the 0-5 star mapping is NOT known yet
         if rep:
             _club_set_value(iv['Reputation'], f'{rep:,} / 10,000')
         else:
-            _club_set_pending(iv['Reputation'])
+            _club_hide_row(iv['Reputation'])
         sd = club.get('stadium')
         if sd:
             _club_set_value(iv['Stadium'], f"{sd['capacity']:,} · built {sd['built']}")
         else:
-            _club_set_pending(iv['Stadium'])
+            _club_hide_row(iv['Stadium'])
         lg = club.get('league')
         if lg:
             _club_set_value(iv['League position'],
                             f"{_ordinal(lg['pos'])} of {lg['of']} · {lg['PTS']} pts from {lg['P']}")
         else:
-            _club_set_pending(iv['League position'])
+            _club_hide_row(iv['League position'])
         fin = club.get('fin') or {}
         for label, key, pw in (('Transfer budget', 'transfer_budget', False),
                                ('Wage budget', 'wage_budget', True),
@@ -2723,12 +2705,12 @@ class MainWindow(QMainWindow):
                 _club_set_value(lbl, _club_money(fin[key], pw),
                                 color='#c0392b' if fin[key] < 0 else '#e8edf2')
             else:
-                _club_set_pending(lbl)
+                _club_hide_row(lbl)
         si = (self._save_data or {}).get('save_info') or {}
         if si.get('manager_name') and si.get('manager_club_id') == club['id']:
             _club_set_value(self._club_manager_val, si['manager_name'])
         else:
-            _club_set_pending(self._club_manager_val)
+            _club_hide_row(self._club_manager_val)
 
         # -- Col 3 left: injuries + staff -------------------------------------
         self._club_inj_hdr.setText(f'Injuries ({n_injured})')
@@ -2750,13 +2732,13 @@ class MainWindow(QMainWindow):
             _club_set_value(self._club_avg_coaching_val,
                              f'{sum(coaching_vals) / len(coaching_vals):.0f} / 20')
         else:
-            _club_set_pending(self._club_avg_coaching_val)
+            _club_hide_row(self._club_avg_coaching_val)
 
         staff_cas = [p['staff_ca'] for p in staff if p.get('staff_ca') is not None]
         if staff_cas:
             _club_set_value(self._club_best_staff_ca_val, str(max(staff_cas)), color='#e6b840')
         else:
-            _club_set_pending(self._club_best_staff_ca_val)
+            _club_hide_row(self._club_best_staff_ca_val)
 
         # -- Col 3 right: contracts + homegrown --------------------------------
         n6, n12, longest = _contract_expiry_counts(squad, date.today())
