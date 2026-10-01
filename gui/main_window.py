@@ -2290,7 +2290,7 @@ class MainWindow(QMainWindow):
             tot = getattr(self, '_report_total', n)
             cnt = '' if not n else f'{n:,} players' if tot <= n else f'top {n:,} of {tot:,} players'
             parts = [p for p in (label, cnt) if p]
-            self._set_header('Player Reports', ' · '.join(parts), icon=_REPORT_ICONS.get(self._current_report_key))
+            self._set_header('Player Reports', ' · '.join(parts), icon=_REPORT_ICONS.get(self._current_report_key, 'player_reports'))
         elif key == 'players':
             self._set_header('All Players', self._scouting_count_text(self._players_model, 'players'), icon='players')
         elif key == 'shortlist':
@@ -2310,9 +2310,7 @@ class MainWindow(QMainWindow):
         elif key == 'welcome':
             self._set_header('FM Backroom 24', 'Load a save to begin')
         elif key == 'settings':
-            self._set_header('Settings', 'Preferences & paths')
-            self._header_badge_lbl.setText('')  # cog instead of the initial (26px, #E8EDF3)
-            self._header_badge_lbl.setPixmap(_svg_icon(_SVG_COG, '#E8EDF3', 26).pixmap(26, 26))
+            self._set_header('Settings', 'Preferences & paths', icon='settings')
 
     def _make_sidebar(self):
         sidebar = _SidebarFrame()
