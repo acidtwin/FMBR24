@@ -56,7 +56,7 @@ def _tile(kind):
             for x in range(128):
                 if kind == 'fine':
                     v = rnd()
-                    a = round(rnd() * (14 if v < .5 else 9) * (STEEL_ALPHA if kind == 'fine' else 1))
+                    a = round(rnd() * (14 if v < .5 else 9) * STEEL_ALPHA)
                     img.setPixelColor(x, y, QColor(0, 0, 0, a) if v < .5 else QColor(255, 255, 255, a))
                 elif rnd() < .008:
                     img.setPixelColor(x, y, QColor(200, 215, 255, 30 + round(rnd() * 30)))

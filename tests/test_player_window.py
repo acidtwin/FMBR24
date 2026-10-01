@@ -5,7 +5,7 @@ import os
 import sys
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('FMBR24_CONFIG_DIR', '/tmp/fmbr24_test_pw')
+os.environ['FMBR24_CONFIG_DIR'] = __import__('tempfile').mkdtemp()  # never the user's real settings
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from PyQt6.QtWidgets import QApplication, QFrame, QLabel, QPushButton, QScrollArea  # noqa: E402
@@ -35,7 +35,7 @@ def check(gk):
         page = w._stack.currentWidget()
         if key == 'positions':
             assert isinstance(page, QScrollArea) and page.verticalScrollBar().maximum() == 0, 'Positions scrolls'
-    # Close is the last button of the action strip; Make HGP / HGC before Add to Shortlist
+    # action strip: Add to Shortlist then Close, Close always last (the HGP / HGC pills live in the header)
     strip = w.findChild(QPushButton, 'pwGhost').parentWidget()
     texts = [b.text() for b in strip.findChildren(QPushButton)]
     assert texts[-1] == 'Close' and texts[-2] == 'Add to Shortlist', texts
@@ -62,4 +62,9 @@ def check(gk):
 
 check(False)
 check(True)
+# a person without raw_attrs / ca / pa / positions must not raise in the Full Potential slot
+bare = PlayerWindow({'id': 1, 'name': 'Bare', 'nation': 0}, {'squads': {}, 'clubs': []}, 0, None)
+bare._set_pot(True)
+assert bare._projection().target == 0
+bare.close()
 print('OK: player window tabs, Close last, no foot words in Profile, Positions fits, History kind column')

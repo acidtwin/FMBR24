@@ -1,4 +1,8 @@
 """Shared painted star widget (club header, player window CA/PA boxes)."""
+import math
+
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import QWidget
 
 
@@ -10,9 +14,6 @@ class _StarWidget(QWidget):
         self.setFixedSize(15, 15)
 
     def paintEvent(self, _e):
-        import math
-        from PyQt6.QtGui import QPainter, QPainterPath, QColor
-        from PyQt6.QtCore import QPointF, QRectF
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()

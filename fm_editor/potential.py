@@ -41,7 +41,8 @@ def group_of(positions):
 
 
 def availability(ca, pa, age):
-    """-> (enabled, tooltip/note). Toggle is disabled when there is nothing to project."""
+    """-> (enabled, tooltip/note). `enabled` is False when there is nothing to project (PA <= CA, age 30+). ADVISORY: the
+    player window keeps the Full Potential toggle always selectable (session-17 decision) and only shows the note."""
     if pa is None or ca is None or pa <= ca:
         return False, 'Already at potential.'
     if age >= 30:
