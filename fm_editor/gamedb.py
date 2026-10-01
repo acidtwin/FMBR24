@@ -339,7 +339,10 @@ def find_abilities(b, names_end):
         if owner_id not in abilities:
             # weight kg = b[at+82], height cm = b[at+84] (u16 LE each, high byte 0; 18/18 vs in-game Jan 2028)
             abilities[owner_id] = {'ca': ca, 'pa': pa, 'positions': positions, 'raw_attrs': attrs,
-                                   'weight_kg': b[at + 82], 'height_cm': b[at + 84]}
+                                   'weight_kg': b[at + 82], 'height_cm': b[at + 84],
+                                   # transfer value in GBP, u32 at at+54 (16/16 vs in-game ranges, session 19);
+                                   # 300_000_000 = 'Not for Sale', 0 / >300M = none
+                                   'value_est': _u32(b, at + 54)}
         p = at + 54
     return abilities
 
