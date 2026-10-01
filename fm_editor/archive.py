@@ -70,12 +70,16 @@ def parse_archive(path):
 
 
 def get_member_raw(path, m):
-    return _rfile(path, m['o'] + 26, m['s'])
+    d = _rfile(path, m['o'] + 26, m['s'])
+    if len(d) != m['s']:
+        raise ValueError(f"Truncated archive: member {m['name']} has {len(d)} of {m['s']} bytes")
+    return d
 
 
 def get_member(path, m):
     data = _decomp(get_member_raw(path, m), m['p'])
-    assert len(data) == m['p']
+    if len(data) != m['p']:
+        raise ValueError(f"Corrupt archive: member {m['name']} decompressed to {len(data)} of {m['p']} bytes")
     return bytearray(data)
 
 

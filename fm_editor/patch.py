@@ -121,6 +121,8 @@ def patch_to_hgc(b, persons_desc, club_entity_id):
         if first_48_roff is not None:
             b[first_48_roff:first_48_roff + 4] = club_entity_id.to_bytes(4, 'little')
         else:
+            if rec_count >= 255:  # count byte is full: inserting would corrupt the record block
+                continue
             insert_at = end + 35 + rec_count * 16
             new_rec = bytearray(_HGC_RECORD_TEMPLATE)
             new_rec[0:4] = club_entity_id.to_bytes(4, 'little')

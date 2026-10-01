@@ -22,8 +22,12 @@ from pathlib import Path
 from fm_editor import settings as _app_settings
 
 _BUNDLED_DIR = Path(__file__).parent / 'weights'
-_USER_DIR = Path(_app_settings.config_dir()) / 'weights'
-_SETTINGS_FILE = Path(_app_settings.settings_path())
+
+
+def _user_dir() -> Path:
+    return Path(_app_settings.config_dir()) / 'weights'
+
+
 _ACTIVE_KEY = 'role_weights_preset'
 _DEFAULT_PRESET = 'FMScout Community'
 
@@ -31,7 +35,7 @@ _DEFAULT_PRESET = 'FMScout Community'
 def list_presets() -> list[dict]:
     """Return list of preset info dicts, bundled first then user, sorted by name."""
     presets = []
-    for bundled, d in ((True, _BUNDLED_DIR), (False, _USER_DIR)):
+    for bundled, d in ((True, _BUNDLED_DIR), (False, _user_dir())):
         if not d.exists():
             continue
         for f in sorted(d.glob('*.json')):
@@ -63,23 +67,15 @@ def load_preset(path: str) -> dict:
 
 def get_active_preset_name() -> str:
     try:
-        with open(_SETTINGS_FILE, encoding='utf-8') as f:
+        with open(_app_settings.settings_path(), encoding='utf-8') as f:
             return json.load(f).get(_ACTIVE_KEY, _DEFAULT_PRESET)
     except Exception:
         return _DEFAULT_PRESET
 
 
 def set_active_preset_name(name: str):
-    _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    data = {}
-    try:
-        with open(_SETTINGS_FILE, encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception:
-        pass
-    data[_ACTIVE_KEY] = name
-    with open(_SETTINGS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
+    """Atomic merge into settings.json (via settings.save; unknown keys kept)."""
+    _app_settings.save({_ACTIVE_KEY: name})
 
 
 def load_active_preset() -> dict | None:
@@ -109,12 +105,12 @@ def get_role_weights(preset: dict | None, role_name: str) -> dict[int, int] | No
 
 def import_preset(source_path: str) -> str:
     """Copy a JSON preset file to user weights dir. Returns preset name."""
-    _USER_DIR.mkdir(parents=True, exist_ok=True)
+    _user_dir().mkdir(parents=True, exist_ok=True)
     src = Path(source_path)
     with open(src, encoding='utf-8') as f:
         data = json.load(f)
     name = data.get('name', src.stem)
-    dest = _USER_DIR / src.name
+    dest = _user_dir() / src.name
     shutil.copy2(src, dest)
     return name
 
@@ -122,9 +118,9 @@ def import_preset(source_path: str) -> str:
 def save_custom_preset(name: str, description: str,
                         roles_weights: dict[str, dict[int, int]]) -> str:
     """Write a custom preset to user weights dir. Returns path."""
-    _USER_DIR.mkdir(parents=True, exist_ok=True)
+    _user_dir().mkdir(parents=True, exist_ok=True)
     safe = ''.join(c if c.isalnum() or c in ' -_' else '_' for c in name)
-    path = _USER_DIR / f"{safe.replace(' ', '_').lower()}.json"
+    path = _user_dir() / f"{safe.replace(' ', '_').lower()}.json"
     roles_str = {
         role: {str(k): v for k, v in sorted(w.items())}
         for role, w in roles_weights.items()
