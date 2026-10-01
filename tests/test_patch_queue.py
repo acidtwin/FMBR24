@@ -93,6 +93,24 @@ assert is_hgc(b2, m2[4], CLUB) and not is_homegrown(b2, m2[4]) and not is_hgc(b2
 b3, people3 = build(LAYOUTS)
 assert P.apply_queue(b3, [(people3[0], 'hgc')], lambda p: None) == (0, 0) and bytes(b3) == bytes(build(LAYOUTS)[0])
 
+# HGP for a player with NO 0x46 record (Alvaro Montoro on the real save: nothing to rewrite, the old patch was a silent
+# no-op and the status said 'needed no edit'): a new England 0x46 record is inserted, together with HGC when queued
+L2 = [[], [rec(0, 0x00, 0x40)], [HGC_DONE], [HGP_DONE]]  # 0 nothing, 1 only a 0x40 flag, 2 HGC only, 3 HGP only
+b4, people4 = build(L2)
+size4 = len(b4)
+q4 = [(people4[i], 'hgp') for i in (0, 1, 2)] + [(people4[0], 'hgc'), (people4[3], 'hgc')]
+assert P.apply_queue(b4, q4, ent) == (3, 2)  # HGP: P0 P1 P2 (P1's 0x40 flip is not counted twice); HGC: P0 P3
+assert len(b4) == size4 + 16 * (2 + 1 + 1 + 1)  # P0 two records, P1, P2, P3 one each
+ends, pos = [], 100
+for n in (2, 2, 2, 2):  # record counts after the patch
+    ends.append(pos + 10)
+    pos += 10 + 34 + 1 + 16 * n + PAD
+m4 = [{'end': e} for e in ends]
+assert [is_homegrown(b4, p) for p in m4] == [True] * 4, 'every queued player (and the already-HGP one) reads back as HGP'
+assert [is_hgc(b4, p, CLUB) for p in m4] == [True, False, True, True]
+assert b4[m4[1]['end'] + 35 + 11] == 0x47, 'the 0x40 flag was still flipped'
+assert P.apply_queue(b4, [(m4[i], k) for (i, k) in ((0, 'hgp'), (1, 'hgp'), (2, 'hgp'), (0, 'hgc'), (3, 'hgc'))], ent) == (0, 0), 'second apply: nothing left to do'
+
 # --- 2. main-window queue model ---------------------------------------------------------------------------------
 seen = []
 QMessageBox.information = lambda *a, **k: seen.append(('info', a[1:]))

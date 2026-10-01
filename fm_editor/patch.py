@@ -4,9 +4,12 @@ HGP = Homegrown Player (nation-level): b10=0x08, b11=0x46, bytes 0-3 = England (
 HGC = Homegrown at Club: b10=0x01, b11=0x48, bytes 0-3 = club entity ID.
 Club entity ID is found from b11=0x6a (employment) records — typically club_id+1.
 
-HGP patch strategy: in-place only (no size change).
+HGP patch strategy:
   1. If a b11=0x40 non-HGP override flag exists: flip b11 to 0x47.
-  2. If a b11=0x46 record exists with non-England nation: rewrite first 4 bytes to England.
+  2. If a b11=0x46 record exists with non-England nation: rewrite first 4 bytes to England (in place).
+  3. A player with NO b11=0x46 record at all (never qualified in any nation, e.g. a foreign signing; 55k of
+     128k players in a real save) has nothing to rewrite: insert a new 16-byte England record (size change,
+     same insert rule as HGC; 4,253 players carry exactly this record in the game's own data).
 
 HGC patch strategy: overwrite first b11=0x48 record's entity bytes; if none exists,
 insert a new 16-byte record (size change). Process people in descending end-offset
@@ -21,6 +24,15 @@ _HGC_RECORD_TEMPLATE = bytearray([
     0, 0,             # bytes 8-9: zeroes
     0x01, 0x48,       # b10=0x01, b11=0x48
     0x01, 0xff, 0x00, 0xff,  # bytes 12-15
+])
+
+
+_HGP_RECORD_TEMPLATE = bytearray([
+    ENGLAND_NATION_ID, 0, 0, 0,  # bytes 0-3: nation entity ID (England), little-endian
+    0, 0, 0, 0,       # bytes 4-7: zeroes
+    0, 0,             # bytes 8-9: zeroes
+    0x08, 0x46,       # b10=0x08, b11=0x46
+    0x01, 0xff, 0x00, 0xff,  # bytes 12-15 (same as the game's own England records)
 ])
 
 
@@ -58,6 +70,20 @@ def patch_to_homegrown(b, person):
             b[roff + 3] = 0x00
             patched = True
     return patched
+
+
+def insert_hgp_record(b, person):
+    """Append a new England 0x46 record to a person who has none (size +16). Callers sort persons by
+    person['end'] DESCENDING, like patch_to_hgc. Returns True if inserted."""
+    end = person['end']
+    if end + 35 > len(b): return False
+    rec_count = b[end + 34]
+    if rec_count >= 255:  # count byte is full: inserting would corrupt the record block
+        return False
+    insert_at = end + 35 + rec_count * 16
+    b[insert_at:insert_at] = _HGP_RECORD_TEMPLATE
+    b[end + 34] += 1
+    return True
 
 
 def find_club_entity_id(b, squad):
@@ -150,19 +176,26 @@ def hgp_in_place(b, people):
 def apply_queue(b, queue, entity_of):
     """Write queued homegrown changes into bytearray b in the SAFE order (offsets are the ones parsed at load).
     queue: iterable of (person, 'hgp'|'hgc'); entity_of(person) -> club entity id or None.
-    1. every HGP in place (offsets stay valid), 2. HGC for persons sorted by record offset DESCENDING
-    (a 16-byte insert only shifts later bytes). Only the part a person is missing is added.
+    1. every HGP that has a 0x46 record to rewrite, in place (offsets stay valid),
+    2. inserts (HGC record, or an HGP record for a person with no 0x46 at all) for persons sorted by record
+       offset DESCENDING (a 16-byte insert only shifts later bytes). Only the part a person is missing is added.
     Returns (changed_hgp, changed_hgc). Raises on any failure: the caller keeps a pristine copy of b."""
     hgp, hgc = {}, {}
     for p, kind in queue:
         (hgp if kind == 'hgp' else hgc)[id(p)] = p
-    n_hgp = len(hgp_in_place(b, [p for p in hgp.values() if not is_homegrown(b, p)]))
-    todo = []
+    changed = {id(p) for p in hgp_in_place(b, [p for p in hgp.values() if not is_homegrown(b, p)])}
+    todo = {}  # id(person) -> [person, club entity or None, needs an HGP record inserted]
+    for p in hgp.values():
+        if not is_homegrown(b, p):  # still not HGP after the in-place pass: no 0x46 record exists
+            todo[id(p)] = [p, None, True]
     for p in hgc.values():
         ent = entity_of(p)
         if ent is not None and not is_hgc(b, p, ent):
-            todo.append((p, ent))
+            todo.setdefault(id(p), [p, None, False])[1] = ent
     n_hgc = 0
-    for p, ent in sorted(todo, key=lambda t: t[0]['end'], reverse=True):
-        n_hgc += patch_to_hgc(b, [p], ent)
-    return n_hgp, n_hgc
+    for p, ent, need_hgp in sorted(todo.values(), key=lambda t: t[0]['end'], reverse=True):
+        if need_hgp and insert_hgp_record(b, p):
+            changed.add(id(p))
+        if ent is not None:
+            n_hgc += patch_to_hgc(b, [p], ent)
+    return len(changed), n_hgc
