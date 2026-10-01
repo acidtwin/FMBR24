@@ -1524,7 +1524,7 @@ HERO_GLOW = dict(
     depth=0.65,             # intensity added at the top of each pulse (floor + depth = 1.0)
     fade_in_ms=900,         # ease in from 0 when the load starts
     fade_ms=350,            # ease out when the load ends (the bar reached 100 %)
-    delay_ms=2500,          # a load that ends sooner (cache hit, ~2 s) never glows at all
+    delay_ms=800,           # a load that ends sooner than this never glows; a ~2 s cached load gets a short, gentle pulse
     fps_ms=16,              # ~60 fps timer: smooth
 )
 
@@ -1613,7 +1613,7 @@ class _HeaderHeroWidget(QWidget):
 
     def glow_start(self):
         """First load began (Welcome hero only; the caller says nothing about veils). The glow itself starts after
-        `delay_ms`, so a quick (cached) load never glows."""
+        `delay_ms`, so a sub-second load never glows and a ~2 s cached load gets a short, gentle pulse."""
         if self._page != 'welcome':
             return
         self._g_state = 'wait'
