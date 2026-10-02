@@ -1,13 +1,13 @@
 """Golden fingerprint of the parser stages on the real save (guards perf rewrites).
 
-Run: python3 tests/test_parse_golden.py   (skips if the save is absent; ~40 s)
+Run: python3 tests/test_parse_golden.py   (skips if the frozen snapshot save is absent; ~40 s)
 First run creates tests/golden_parse.json from the current code; later runs compare.
 Delete the json to re-baseline after an INTENDED output change. The save is only read.
 
 The hashes cover offset-INDEPENDENT fields only (ids, names, nation, birth, ca/pa, attributes, hgp, ...) so a
 re-save by the app (an HGC/HGP insert shifts every later byte offset) does not break them. Offsets
 (offset / end / identity_offset / he) are not pinned; offset_problems() checks they are self-consistent instead.
-FMBR24_GOLDEN_SAVE=<path> runs the same check on another copy of the save.
+Runs on the frozen 2028-01-02 snapshot (tests/snapshot.py). FMBR24_GOLDEN_SAVE=<path> runs the same check on another copy of the save.
 """
 import copy
 import hashlib
@@ -20,10 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 GOLDEN = os.path.join(ROOT, 'tests', 'golden_parse.json')
 
-SAVE = os.environ.get('FMBR24_GOLDEN_SAVE') or os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = os.environ.get('FMBR24_GOLDEN_SAVE') or snapshot_save()
 OFFSET_KEYS = {'offset', 'end', 'identity_offset', 'he'}  # byte positions: drift after any insert, never hashed
 
 
@@ -125,8 +123,8 @@ def collect(save=SAVE, timings=None):
 
 
 def test_golden():
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_parse_golden'); return
+    if not os.environ.get('FMBR24_GOLDEN_SAVE'):
+        skip_if_missing()
     tm = {}
     b, raw = collect(timings=tm)
     print({k: round(v, 1) for k, v in tm.items()})

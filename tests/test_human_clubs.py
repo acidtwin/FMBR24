@@ -10,10 +10,8 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fm_editor.saveinfo import human_club_ids, human_pids  # noqa: E402
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 
 def _humans(pids):
@@ -80,8 +78,7 @@ def test_real_save():
 if __name__ == '__main__':
     test_synthetic()
     print('OK: synthetic')
-    if os.path.exists(SAVE):
-        test_real_save()
-        print('OK: real save + PlayerWindow')
-    else:
-        print('SKIPPED (save not found): test_human_clubs real-save part')
+    skip_if_missing()
+    assert_snapshot(SAVE)
+    test_real_save()
+    print('OK: real save + PlayerWindow')

@@ -5,12 +5,13 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from tests.test_parse_golden import SAVE
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot, SNAPSHOT_DATE_JAN12 as DAY  # noqa: E402  (frozen 12 Jan 2028 copy, never the live save)
+SAVE = snapshot_save(DAY)
 
 
 def test_injuries():
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_injuries'); return
+    skip_if_missing(DAY)
+    assert_snapshot(SAVE, DAY)
     from fm_editor.archive import parse_archive, get_member
     from fm_editor import gamedb as G
     from fm_editor.saveinfo import parse_save_info

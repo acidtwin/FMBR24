@@ -9,10 +9,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 # person id -> (height cm, weight kg) from the in-game profiles
 GT = {45362: (188, 86), 36039: (186, 75), 16963: (194, 92), 26552: (175, 73), 109583: (173, 66),
@@ -40,7 +38,6 @@ def test_height_weight():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_height_weight')
-    else:
-        test_height_weight()
+    skip_if_missing()
+    assert_snapshot(SAVE)
+    test_height_weight()

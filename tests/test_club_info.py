@@ -7,10 +7,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 
 def test_club_info():
@@ -68,8 +66,7 @@ def test_club_info():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_club_info')
-    else:
-        test_club_info()
-        print('OK')
+    skip_if_missing()
+    assert_snapshot(SAVE)
+    test_club_info()
+    print('OK')

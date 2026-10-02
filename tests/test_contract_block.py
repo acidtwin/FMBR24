@@ -11,10 +11,8 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 # person id -> (weekly wage as shown in game, contract end 'YYYY-MM')
 GT = {45362: (110000, '2031-06'), 36039: (350000, '2031-06'), 16963: (34500, '2029-06'),
@@ -53,7 +51,6 @@ def test_contract_block():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_contract_block')
-    else:
-        test_contract_block()
+    skip_if_missing()
+    assert_snapshot(SAVE)
+    test_contract_block()
