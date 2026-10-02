@@ -7,7 +7,7 @@ PyQt6 desktop tool for browsing Football Manager 2024 save files on Linux, with 
 - Save Info and Club overview (reputation, stadium, league position, finances, contracts, injuries)
 - Squads with full attributes; club staff; scouting tables over every player and staff member in the database
 - Reports (Best Prospects, Wonderkids, Best in Position, Best by Role) with quick filters, and separate player and staff shortlists
-- Detailed player window: ability and potential (stars or numbers), attribute radar, Full Potential projection, traits, season stats, career history
+- Detailed player window: ability and potential (stars or numbers), attribute radar, Full Potential projection, traits, season stats, career history, role ratings per position, value-by-age trend
 - Homegrown patching: queue HGP (nation) or HGC (club) for your own club's players, then Save Changes: a verified temp file, two rolling backups (`.bk1`/`.bk2`), atomic replace, automatic reload
 
 ## Run

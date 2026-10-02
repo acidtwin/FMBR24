@@ -14,10 +14,11 @@ Always set `FMBR24_CONFIG_DIR` (temp dir) for tests and verification: the real `
 
 ## Workflow rules
 
-- **Mockup first:** every VISUAL change to the player window (and other designed surfaces) is made and approved in `mockups/player-window.html` (or that surface's mockup) BEFORE app code changes; then build the app mechanically from it. Exception: pure bug fixes with no visual design decision. The user tests the LIVE mockup at http://localhost:8792 (`cd mockups && python3 -m http.server 8792`) by refreshing; do not send screenshots to the user (take them only for your own checks).
+- **Mockup first:** every VISUAL change to the player window (and other designed surfaces) is made and approved in `mockups/player-window.html` (or that surface's mockup) BEFORE app code changes; then build the app mechanically from it. Exception: pure bug fixes with no visual design decision. The user tests the LIVE mockup at http://localhost:8792 (`cd <MAIN checkout>/mockups && python3 -m http.server 8792`; a server started from a deleted worktree returns 404) by refreshing; do not send screenshots to the user (take them only for your own checks).
 - **Homegrown (HGP/HGC) changes never open dialogs:** they are queued, then Save Changes writes them (one confirm dialog at Save only).
 - **Button order:** Close is ALWAYS the last (far-right) button of any button row or action strip (player window: Add to Shortlist / Close). Applies to every dialog and mockup you touch.
 - **Verify UI headlessly:** construct `MainWindow()` under `QT_QPA_PLATFORM=offscreen`, `.grab().save('x.png')` and LOOK at the PNG; reading QSS misses bugs. Sub-agents without Bash (cavecrew-builder) cannot run tests: verify their output yourself.
+- **Busy lock:** `_set_busy` disables every nav/sidebar button (incl. Player Reports `_report_btns`) during Save/Reload; a new nav button must be added there and in `_update_ui_state`. Page header icons: `_set_header(icon=)`, files in `resources/icons/pages/` (see HANDOVER section 3).
 - **Sub-agent worktrees:** create the worktree off `main`, merge back with `--no-ff`, then delete the worktree AND its branch. Do not delete someone else's worktree without asking. No bare `git stash` in worktrees (the stash list is shared by all of them).
 
 ## Mockup -> PyQt6 rule
