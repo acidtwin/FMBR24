@@ -13,8 +13,9 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolic
 
 from fm_editor import rolepos
 from fm_editor import weights as _weights
+from fm_editor.words import position_word
 from gui.player_window import (C_ALT, POS_CODE, POS_DISPLAY, POS_FULL, TIER_HEX, _ElideLabel, _lab, _PitchBig, _spaced,
-                               tier, word)
+                               tier)
 from gui.pw_widgets import _a, _font
 from gui.theme import COLORS
 
@@ -316,7 +317,7 @@ class RoleTab:
                    else 'Not rated: outfield roles are not rated for goalkeepers')
             return f'{title}\n{why}'
         r = w._ratings.get(pos, 1)
-        t = f'{title}\nBest role: {info[0]} {pct_text(info[1])}\nPosition rating: {word(r)} ({r})'
+        t = f'{title}\nBest role: {info[0]} {pct_text(info[1])}\nPosition rating: {position_word(r)} ({r})'
         return t + ('\nDimmed: position rating below 10, not familiar with this position' if dim else '')
 
     # -- widgets ---------------------------------------------------------------------------------

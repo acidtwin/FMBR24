@@ -192,8 +192,8 @@ VALUE BY AGE CHART (section 4.2b; Contract & Transfer tab; modelled on FM Genie 
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
      ring only the listed position's dot. Which?
-  2. Rating words: "Ineffective" for 1 only and "Awkward" for 2-4 is the agent's recollection, UNVERIFIED (earlier mock had Awkward 1-4).
-  3. Foot words: Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16, Very Strong 20 verified in-game; Very Weak (<=5) and Strong 17-19 assumed.
+  2. Rating words (position familiarity): the APP'S OWN wording, table in fm_editor/words.py (POSITION_WORDS); this mockup's `word` and the legend text below mirror it (tests/test_words.py checks the legend).
+  3. Foot words: the APP'S OWN wording, table in fm_editor/words.py (FOOT_WORDS): Very Weak 0-5, Weak 6-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-19, Very Strong 20 (7-16 matched in-game screens; the rest is ours).
   4. Positions "Future": DESIGN ONLY (the real button is DISABLED with a tooltip; '+future' still renders the design). A real implementation needs a position-rating recompute from the projected attributes
      (fm_editor/potential.project_attrs -> the same position-weights that produce the 15 current ratings).
   5. Tab strip style follows the current implementation (selection_bg + accent left edge), not the accent-fill of the earlier mock.
@@ -525,8 +525,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <ul>
 <li>Trait bit 48 (guess: Attempts To Develop Weaker Foot) - unconfirmed; holders to look up when scouted: Philip Andersson (J&ouml;nk&ouml;pings S&ouml;dra), Michalis Michail (Anorthosis), Vitaly Semenov, Cau&ecirc; Gordilho, Keith Keegan (needs scouting).</li>
 <li>Trait bit 53 - a flag carried only by staff/non-players (e.g. Wanda Nara, Tomislav Puljic): need a staff profile screenshot. Bits 49, 61, 62 are set in the save but the game shows no trait for them (hidden; nothing to do).</li>
-<li>Foot words: 'Strong' at 17-19 vs 'Very Strong' unverified (Branthwaite right 17, Demb&eacute;l&eacute; right 18, Greenwood right 19); 'Very Weak' range unverified.</li>
-<li>Position familiarity words (Natural/Accomplished/Competent/Unconvincing/Awkward/Ineffective) number ranges unverified: need a hover screenshot of a player's positions.</li>
+<li>Foot and position familiarity words: the app's own wording, no longer open (fm_editor/words.py).</li>
 <li>Asking price and transfer/loan status: not found in the save (market value is stored; the game shows a range around it).</li>
 <li>Wage rounding for the display is inferred (the 50K step above &pound;300K rests on one player); reputation star boundaries fitted to 9 clubs.</li>
 <li>History: seasons simulated in the save (2025-28) not shown; plain-year season labels for calendar-year leagues are an assumption; History needs the FM install database.</li>
@@ -738,9 +737,9 @@ const isGK=()=>D().pos==='GK';
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
 const HEX=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
 const aT=a=>tier(a[3]?21-a[1]:a[1]);
-/* rating words. UNVERIFIED: 1 = Ineffective, 2-4 = Awkward (see OPEN QUESTIONS 2) */
+/* rating words: the app's own wording, mirrors fm_editor/words.py POSITION_WORDS (OPEN QUESTIONS 2) */
 const word=v=>v>=20?'Natural':v>=15?'Accomplished':v>=10?'Competent':v>=5?'Unconvincing':v>=2?'Awkward':'Ineffective';
-const footWord=v=>v<=5?'Very Weak':v<=8?'Weak':v<=11?'Reasonable':v<=14?'Fairly Strong':v<=19?'Strong':'Very Strong'; // verified in-game: Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16, Very Strong 20
+const footWord=v=>v<=5?'Very Weak':v<=8?'Weak':v<=11?'Reasonable':v<=14?'Fairly Strong':v<=19?'Strong':'Very Strong'; // the app's own wording, mirrors fm_editor/words.py FOOT_WORDS
 const badge=(p,w)=>`<span class="badge ${BADGE[p]}${w?' w':''}">${CODE[p]}</span>`;
 const faceSvg='<svg class="face" viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A58A"/><stop offset="1" stop-color="#A9846B"/></linearGradient></defs><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="#2B3A55"/><rect x="108" y="150" width="44" height="60" rx="14" fill="#B58F76"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="url(#fg)"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="#2A2018"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/><path d="M112 150Q130 162 148 150" stroke="#6E4A3A" stroke-width="4" fill="none" stroke-linecap="round"/></svg>';   // SYNTHETIC sample (no real person); the app draws the facepack PNG here
 const person='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';

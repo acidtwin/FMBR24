@@ -40,6 +40,7 @@ from fm_editor import traitrec as _tr
 from fm_editor import valuecurve as _vc
 from fm_editor.agecalc import age_exact, get_ref, person_age
 from fm_editor.traits import trait_ids, trait_names
+from fm_editor.words import foot_word, position_legend, position_word   # the app's own wording: fm_editor/words.py
 from gui.theme import COLORS
 
 # -- tokens (mockup comment block, literal) ------------------------------------------------------
@@ -391,19 +392,6 @@ class _Bar(QWidget):
         p.fillRect(self.rect(), QColor(COLORS['border']))
         p.fillRect(QRect(0, 0, round(self.width() * self._frac), self.height()), self._color)
 
-
-
-def word(v):
-    """Rating word. Thresholds per mockup; 1 = Ineffective / 2-4 = Awkward is UNVERIFIED (open question 2)."""
-    return ('Natural' if v >= 20 else 'Accomplished' if v >= 15 else 'Competent' if v >= 10
-            else 'Unconvincing' if v >= 5 else 'Awkward' if v >= 2 else 'Ineffective')
-
-
-def foot_word(v):
-    """Verified vs in-game screens (24 players): Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16,
-    Very Strong 20. UNVERIFIED: Very Weak (<=5 assumed), Strong 17-19 (assumed)."""
-    return ('Very Weak' if v <= 5 else 'Weak' if v <= 8 else 'Reasonable' if v <= 11
-            else 'Fairly Strong' if v <= 14 else 'Strong' if v <= 19 else 'Very Strong')
 
 
 _FUTURE_TIP = ('Not available yet: position ratings are stored in the save, not calculated from attributes, '
@@ -1218,7 +1206,7 @@ class PlayerWindow(QDialog):
             h.addWidget(self._badge(pos, True))
             h.addWidget(_lab(POS_FULL[pos], 'pwPosNameB' if pos == self._pos else 'pwPosName'), 1)
             h.addWidget(self._tile_label(val, tier(val), 34))
-            w = _lab(word(val), 'pwWordNat' if nat else 'pwWord')
+            w = _lab(position_word(val), 'pwWordNat' if nat else 'pwWord')
             w.setFixedWidth(112)
             h.addWidget(w)
             v.addWidget(row)
@@ -1268,9 +1256,10 @@ class PlayerWindow(QDialog):
             lg.addWidget(_lab(lab, 'pwNote'))
         lg.addStretch()
         kv.addLayout(lg)
+        ws = position_legend()    # best first: Natural | Accomplished | Competent / Unconvincing | Awkward | Ineffective
         txt = _lab('White ring = Natural (20) · bold = listed position<br>'
-                   '<span style="color:#FFFFFF">Natural</span> 20 · Accomplished 15–19 · Competent 10–14<br>'
-                   'Unconvincing 5–9 · Awkward 2–4 · Ineffective 1', 'pwNote')
+                   f'<span style="color:#FFFFFF">{ws[0]}</span> · {ws[1]} · {ws[2]}<br>'
+                   f'{ws[3]} · {ws[4]} · {ws[5]}', 'pwNote')
         txt.setTextFormat(Qt.TextFormat.RichText)
         kv.addWidget(txt)
         return key
@@ -1466,7 +1455,7 @@ class PlayerWindow(QDialog):
             aw = self._row_widget(ws)
         else:
             aw = _lab('None 10+', 'pwKvL')
-        rows = [('Best position', bw), ('Also', aw), ('Rating', word(R[best]))]
+        rows = [('Best position', bw), ('Also', aw), ('Rating', position_word(R[best]))]
         h, w = self._data.get('height_cm'), self._data.get('weight_kg')
         if h is not None and w is not None:                  # Physique line: hidden when absent (no PENDING chip)
             rows.append(('Physique', f'{h} cm · {w} kg'))
