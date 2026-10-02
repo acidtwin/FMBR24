@@ -12,7 +12,7 @@ so those cannot show.
 """
 import re
 
-from gui.roles import _ROLE_INDEX
+from gui.roles import _ROLE_INDEX, FM_ROLES
 from fm_editor.weights import get_role_weights
 
 POS_CODES = ('GK', 'SW', 'DL', 'DC', 'DR', 'WBL', 'WBR', 'DM', 'ML', 'MC', 'MR', 'AML', 'AMC', 'AMR', 'ST')
@@ -55,6 +55,33 @@ def _build():
 
 
 POS_ROLES: dict[str, list[str]] = _build()
+
+# FALLBACK for a role that POS_ROLES does not list (none today: all 81 FM_ROLES are listed; kept so a future role added to
+# FM_ROLES alone still gets a position filter): FM_ROLES group code -> pitch positions where that group plays. ONE place.
+GROUP_POSITIONS = {
+    'GK': ('GK',), 'CB': ('DC', 'SW'), 'FB/WB': ('DL', 'DR', 'WBL', 'WBR'), 'DM': ('DM',), 'CM': ('MC',),
+    'AM': ('AMC',), 'Winger': ('ML', 'MR', 'AML', 'AMR'), 'Striker': ('ST',),
+}
+# Role families FM also lets you field on other slots than POS_ROLES (from memory, unverified): Wide Centre-Back is a D(C)
+# role in a back three, listed above only on DL/DR.
+_EXTRA_POSITIONS = {'Wide Centre-Back': ('DC',)}
+
+_ROLE_POSITIONS: dict = {}   # role -> positions, filled on first use
+
+
+def role_positions(role: str) -> tuple[str, ...]:
+    """Pitch positions (POS_CODES, = gui.main_window.POSITIONS names) where `role` can be played: the inverse of
+    POS_ROLES (+ _EXTRA_POSITIONS), else the role's FM_ROLES group via GROUP_POSITIONS; () for an unknown role."""
+    if not _ROLE_POSITIONS:
+        for pos, names in POS_ROLES.items():
+            for n in names:
+                _ROLE_POSITIONS.setdefault(n, []).append(pos)
+        for n in list(_ROLE_POSITIONS):
+            _ROLE_POSITIONS[n] = tuple(dict.fromkeys(_ROLE_POSITIONS[n] + list(_EXTRA_POSITIONS.get(split_role(n)[0], ()))))
+        for n, group, _ in FM_ROLES:
+            _ROLE_POSITIONS.setdefault(n, GROUP_POSITIONS.get(group, ()))
+    return _ROLE_POSITIONS.get(role, ())
+
 
 DUTY_WORD = {'D': 'Defend', 'S': 'Support', 'A': 'Attack', 'Cover': 'Cover', '': 'Defend'}   # '' = unsuffixed No-Nonsense roles
 _SPLIT = re.compile(r'^(.*) \((D|S|A|Cover)\)$')
