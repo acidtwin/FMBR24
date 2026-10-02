@@ -20,6 +20,7 @@
 
   CONTEXT-ONLY (already exist in the app, drawn here so the page is judged in place):
     .sb sidebar (192px), .hero (186px = 38px nav row + 148px content), .dev state switch, .sheet state reference.
+  FACE PICTURES section (settings keys faces_enabled, faces_dir; msg shows 'Found N facepacks' from fm_editor/faces.py, or the bad state when no FM24 folder resolves).
   NEW IN THE APP:  a "Settings" sidebar entry pinned below the stretch (bottom), gear button in the hero nav row
     lights up when the page is open, and the page itself = .page (scroll) + .footer (fixed).
 
@@ -345,6 +346,32 @@ a:hover { text-decoration:underline; }
             <div class="help">Row height in every table.</div>
           </div>
           <div class="ctl"><div class="seg" role="group" aria-label="Table density"><button type="button" aria-pressed="true" disabled>Comfortable</button><button type="button" aria-pressed="false" disabled>Compact</button></div></div>
+        </div>
+      </section>
+
+      <!-- FACE PICTURES -->
+      <div class="sec-hdr">Face pictures</div>
+      <section class="panel">
+        <div class="row">
+          <div class="lab">
+            <div class="lab-top">Show face pictures</div>
+            <div class="help">Uses the facepacks installed for the game (player window header). Read only, nothing in the game folder is changed.</div>
+          </div>
+          <div class="ctl"><label class="chk"><input type="checkbox" checked>Enabled</label></div>
+        </div>
+        <div class="row">
+          <div class="lab">
+            <div class="lab-top">FM24 folder</div>
+            <div class="help">The Sports Interactive / Football Manager 2024 folder (the one holding games and graphics). Empty = detect automatically.</div>
+          </div>
+          <div class="ctl col">
+            <div class="ctl-line">
+              <input class="inp" type="text" spellcheck="false" aria-label="FM24 folder" placeholder="Detect automatically" value="">
+              <button class="btn" type="button">Browse…</button>
+            </div>
+            <div class="msg good"><i class="dot"></i><span>Found 2 facepacks &middot; DF11 Megapack (July 2023), FMNEWGANv2 + Update 1</span></div>
+            <div class="msg bad" style="display:none"><i class="dot"></i><span>No FM24 folder found. Choose it above, or turn face pictures off.</span></div>
+          </div>
         </div>
       </section>
 

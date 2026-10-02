@@ -28,6 +28,7 @@ from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
 from gui.people_model import PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT
 from gui.player_window import PlayerWindow
+from gui.faces import get_service as _faces_service
 from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref, get_ref as _get_age_ref
 
 DEFAULT_SAVE_DIR = os.path.expanduser(
@@ -1103,10 +1104,13 @@ class StaffDetailDialog(QDialog):
         photo.setStyleSheet(
             f"QFrame#qfStrip {{ background:{COLORS['elevated']}; border-bottom:1px solid {COLORS['border']}; }}")
         photo_inner = QVBoxLayout(photo)
+        photo_inner.setContentsMargins(0, 0, 0, 0)  # the face picture fills the 190x119 box
         photo_inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         photo_icon = QLabel()
         photo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        photo_icon.setPixmap(_svg_icon(_SVG_STAFF, COLORS['text_dim'], 48).pixmap(48, 48))
+        face = _faces_service().pixmap(p.get('uid'), 190, 119, self.devicePixelRatioF(), fit=True)  # whole picture, 119 = box - 1px border
+        photo_icon.setPixmap(face if face is not None
+                             else _svg_icon(_SVG_STAFF, COLORS['text_dim'], 48).pixmap(48, 48))
         photo_inner.addWidget(photo_icon)
         left_vbox.addWidget(photo)
 
@@ -5119,6 +5123,7 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
+        _faces_service().start(self._save_path)  # background facepack index (fm_editor/faces.py)
         self._save_data['disk_sig'] = result.get('disk_sig')  # taken by the ParseWorker of THIS parse
         self._sg_idx = None  # search index is rebuilt lazily
         # fresh lists: reset filters/search subset without re-running them
@@ -5566,6 +5571,7 @@ class MainWindow(QMainWindow):
                 players = self._get_report_players('best_role', role_name=role)
                 self._populate_reports_table(players)
         self._apply_ui_prefs(vals)
+        _faces_service().start(self._save_path)  # faces_enabled / faces_dir may have changed
 
     def _apply_ui_prefs(self, vals=None):
         global _SHOW_PENDING

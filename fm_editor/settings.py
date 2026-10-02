@@ -26,6 +26,9 @@ DEFAULTS = {
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
     'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
     'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
+    'faces_enabled': True,             # show facepack pictures (player window header, staff dialog)
+    'faces_dir': '',                   # FM24 user folder (holds games + graphics); '' = auto-detect (fm_editor/faces.py)
+    'faces_pack_order': [],            # facepack folder names, highest priority first (no UI; rest alphabetical)
     'trait_threshold': 11,             # Trait recommender: min average attribute (sheet default, 1-20)
 }
 
@@ -64,6 +67,9 @@ def _clean(raw):
         out['landing_page'] = DEFAULTS['landing_page']
     if out['ability_display'] not in ABILITY_DISPLAYS:
         out['ability_display'] = DEFAULTS['ability_display']
+    out['faces_pack_order'] = list(out['faces_pack_order'])
+    if not all(isinstance(n, str) for n in out['faces_pack_order']):
+        out['faces_pack_order'] = list(DEFAULTS['faces_pack_order'])
     if out['player_theme'] not in PLAYER_THEMES:
         out['player_theme'] = DEFAULTS['player_theme']
     return out

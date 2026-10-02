@@ -20,7 +20,7 @@ HOW TO USE
     unk (club unknown, e.g. a player with no club: the HGC pill is NOT shown; HGP stays clickable)
     qx1 / qx3 (1 / 3 changes queued ELSEWHERE in the save session, added to the 'Changes queued' count)
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
-    nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
+    face (header avatar shows a facepack picture instead of the silhouette; synthetic sample)   nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
     tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip; on Role Rating it pins the selected dot's tip)
   Role Rating: rpAML (select that position, any pitch code: rpDC rpST rpGK ...)   weq / wpos / wdir (Settings weight preset: Equal Weight / Possession-Based / Direct Play;
     default FMScout Community; also the 'weights' segment in the review bar)   nofam (review aid: turn OFF the default dimming of positions the player is not familiar with, position rating < 10)
@@ -58,7 +58,9 @@ METRICS (px)
   Window client 1122x760 (min 1062x640; PlayerWindow.resize(1122,760)).  OS title bar is the real one (no custom topbar).
   Vertical: 12 pad | header 80 | 12 | main 592 (tab strip + content) | 12 | action strip 52.   Horizontal: 12 | tab strip 172 | 12 | content 914 | 12 (window 1122 wide).
   Panel QFrame#pwPanel: bg surface, 1px border, radius 3.  Panel header 36, pad 0 12, 11/700 UPPERCASE text_secondary (QFont letter-spacing).
-  Header panel 80 (identical on every tab): pad 0 16, gap 14: avatar 48 | identity (flex) | CA box 136 | PA box 136 | DEV RATE box 136 | queue widget 160.
+  Header panel 80 (identical on every tab): pad 0 16, gap 14: avatar 54x64 (portrait box = the facepack cutout aspect 260:310; was 48x48) | identity (flex) | CA box 136 | PA box 136 | DEV RATE box 136 | queue widget 160.
+    AVATAR: 54x64 box, bg elevated, radius 3, ALWAYS this size. Face picture (Settings > Face pictures, review flag 'face') = the facepack PNG scaled smooth to fill the box (KeepAspectRatioByExpanding,
+      anchored top-centre, so a 260x310 cutout fills it exactly and a square 256x256 NEWGAN face crops a little off the bottom), clipped to the 3px radius.  No picture / setting off / index still building = the 30px silhouette centred.
     Identity: name 20/700 + position badge + HGP/HGC pills (right end, variant A), row2 12 secondary.  Pills h18 r9 10/700 (see HGP / HGC PILLS below).
     CA / PA / DEV RATE boxes = ONE grid (stars AND numbers mode), 136x56: pad 6 8 0 10 | label 10/700 caps 14 | gap 4 | value row 24 (5 stars 15px gap 2, or 20/700 number + 6px bar).
       No captions.  Labels CURRENT ABILITY / POTENTIAL ABILITY / DEVELOPMENT RATE.  Tooltips 'CA 149' / 'PA 160' / 'Dev Rate 16 out of 20'.  Dev Rate stars = value/4 (CA, PA = value/40).
@@ -66,7 +68,7 @@ METRICS (px)
     Queue widget (.slot, was the per-tab slot 172) 160x56, hairline on the left, 15 left pad: label CHANGES QUEUED 10/700 caps | value row 24: count 20/700
       (tier-5 yellow when > 0, secondary when 0) | sub 11 secondary: 'Save to take effect' (> 0) / 'Nothing queued' (0).  Tooltip = breakdown (this window / elsewhere).
       The count is for the WHOLE save session (every player's queued HGP/HGC), not just this window.
-    Identity gets 378 px at 1122 wide (was 488): the long-name case ellipsises, the pills never wrap.
+    Identity gets 372 px at 1122 wide (378 with the old 48 px avatar; was 488): the long-name case ellipsises, the pills never wrap.
   Tab strip QFrame panel 172: rows 40, inset 6, 16px line icon + 10 gap; selected = selection_bg + 3px accent left border + white 700 + icon #735CE4; hover = elevated + white icon; hairline before General Rating and Training.
   Rows: attribute/kv 24-26 tall.  Bars 6px square-ended (track #343740).  Buttons h32 r3.  Segmented control h24 (Current | Full Potential).
   Action strip QFrame#actionStrip h52 bg surface, border-top 1px only.  ORDER: [stretch] Add to Shortlist | Close (Close always last).  No Make HGP / Make HGC buttons.
@@ -310,8 +312,9 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 
 /* ---- persistent header ---- */
 .hdr{height:80px;padding:0 16px;display:flex;align-items:center;gap:14px;flex:none}
-.avatar{width:48px;height:48px;background:var(--elev);border-radius:3px;display:flex;align-items:center;justify-content:center;flex:none}
-.avatar svg{width:30px;height:30px}
+.avatar{width:54px;height:64px;background:var(--elev);border-radius:3px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.avatar img,.avatar svg.face{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 0}
+.avatar svg:not(.face){width:30px;height:30px}
 .hid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .hid .r1{display:flex;align-items:center;gap:10px;height:24px}
 .hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -668,7 +671,7 @@ const ROLE_RATINGS={
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
+const S={face:false,nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -731,6 +734,7 @@ const aT=a=>tier(a[3]?21-a[1]:a[1]);
 const word=v=>v>=20?'Natural':v>=15?'Accomplished':v>=10?'Competent':v>=5?'Unconvincing':v>=2?'Awkward':'Ineffective';
 const footWord=v=>v<=5?'Very Weak':v<=8?'Weak':v<=11?'Reasonable':v<=14?'Fairly Strong':v<=19?'Strong':'Very Strong'; // verified in-game: Weak 7-8, Reasonable 9-11, Fairly Strong 12-14, Strong 15-16, Very Strong 20
 const badge=(p,w)=>`<span class="badge ${BADGE[p]}${w?' w':''}">${CODE[p]}</span>`;
+const faceSvg='<svg class="face" viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A58A"/><stop offset="1" stop-color="#A9846B"/></linearGradient></defs><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="#2B3A55"/><rect x="108" y="150" width="44" height="60" rx="14" fill="#B58F76"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="url(#fg)"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="#2A2018"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/><path d="M112 150Q130 162 148 150" stroke="#6E4A3A" stroke-width="4" fill="none" stroke-linecap="round"/></svg>';   // SYNTHETIC sample (no real person); the app draws the facepack PNG here
 const person='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
 const pend='<span class="pend">PENDING</span>';
 const pv=t=>S.data?t:pend;                          // unparsed field: sample value or PENDING
@@ -765,7 +769,7 @@ function header(){
   if(v==='c')id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div><div class="r2">${fl}</div></div>
     <div class="hmeta"><div>${d.age} years ${dot} ${d.born}</div>${hw?`<div>${hw}</div>`:''}<div>${pills('')}</div></div>`;
   else id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}${pills(v==='a'?'end':'')}</div><div class="r2">${fl}${dot}<span class="age" data-tip="Born ${d.born}">${d.age} years</span></div></div>`;
-  return `<div class="pn hdr"><div class="avatar">${person}</div>${id}
+  return `<div class="pn hdr"><div class="avatar">${S.face?faceSvg:person}</div>${id}
     ${cab('Current ability','CA',d.ca,'#735CE4')}${cab('Potential ability','PA',d.pa,'#9A8AF5')}${cabDev()}
     ${queueSlot()}</div>`;
 }
@@ -1140,8 +1144,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['nov','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['nov','No market value'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['face','nov','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['face','Face picture'],['nov','No market value'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
