@@ -95,18 +95,17 @@ w._clear_report_filter()
 assert w._report_minpos.value() == 14
 print('synthetic OK, header subtitle:', sub)
 
-# --- real save, read-only, via the parse cache --------------------------------------------------------------------------
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/2026-27 START - Acid Twin Spurs.fm')
-if not os.path.exists(SAVE):
-    print('SKIPPED real-save check (save absent)')
-    sys.exit(0)
-from fm_editor.cache import load_cache  # noqa: E402
-cache = load_cache(SAVE)
-if not cache:
-    print('SKIPPED real-save check (no valid parse cache)')
-    sys.exit(0)
+# --- frozen snapshot save, read-only, parsed fresh --------------------------------------------------------------------------
+from tests.snapshot import snapshot_save, skip_if_missing  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+skip_if_missing()
+SAVE = snapshot_save()
+import fm_editor.cache as _cache  # noqa: E402
+from gui.workers import ParseWorker  # noqa: E402
+_cache._CACHE_DIR = __import__('tempfile').mkdtemp()  # never touch ~/.cache
+cache = {}
+_pw = ParseWorker(SAVE, use_cache=False)
+_pw.done.connect(lambda r: cache.update(r))
+_pw.run()
 w._save_data = cache
 n = len(cache['people'])
 for role in ('Winger (A)', 'Advanced Forward (A)', 'Full Back (A)', 'Central Defender (D)',

@@ -7,10 +7,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 
 def test_save_info():
@@ -23,11 +21,10 @@ def test_save_info():
     clubs = find_clubs(gdb, find_names(gdb)[2])
     r = parse_save_info(SAVE, members, name, gdb=gdb, clubs=clubs)
 
-    assert r['game_name'] == '2026-27 START - Acid Twin Spurs', r
-    assert r['times_saved'] >= 125, r  # grows every time the save is re-saved (was 125 on the first check)
-    assert r['in_game_date'] >= '2028-01-02', r  # the save has been played on since
+    assert r['game_name'] == '2026-27 START - Acid Twin Spurs (scouting budget change)', r
+    assert r['times_saved'] == 126 and r['in_game_date'] == '2028-01-02', r
     assert r['date_created'] == '2026-09-11', r
-    assert r['game_time_seconds'] >= (32 * 60 + 16) * 60, r  # at least the first check (1 day, 8 h, 16 min)
+    assert r['game_time_seconds'] == 123552, r
     assert r['game_version'] == '24.4.2' and r['game_build'] == 2081827, r
     assert r['database_version'] == '24.3.0' and r['database_changes'] == 8809924, r
     assert r['start_date'] == '2026-07-13', r  # in-game "Game Start Date" (Italy - 13/7/2026)
@@ -42,8 +39,7 @@ def test_save_info():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_saveinfo')
-        sys.exit(0)
+    skip_if_missing()
+    assert_snapshot(SAVE)
     test_save_info()
     print('OK: parse_save_info')

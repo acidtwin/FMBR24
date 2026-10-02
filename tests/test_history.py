@@ -6,10 +6,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SAVE = os.path.expanduser(
-    '~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/'
-    'Documents/Sports Interactive/Football Manager 2024/games/'
-    '2026-27 START - Acid Twin Spurs.fm')
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
+SAVE = snapshot_save()
 
 # person id: (identity uid, name)
 PLAYERS = {32446: (28049320, 'Harry Kane'), 33096: (28106491, 'Declan Rice'), 32666: (28067800, 'Jack Grealish'),
@@ -20,8 +18,10 @@ STAFF = {127: (1120, 'Pep Guardiola'), 362: (4059, 'Mauricio Pochettino'), 10510
 
 def main():
     from fm_editor import history as H
-    if not os.path.exists(SAVE) or not H.install_db_dir(SAVE):
-        print('SKIPPED (save or install DB not found): test_history')
+    skip_if_missing()
+    assert_snapshot(SAVE)
+    if not H.install_db_dir(SAVE):
+        print('SKIPPED (FM install database not found): test_history')
         return
     from fm_editor.archive import get_member, parse_archive
     from fm_editor.gamedb import find_names, find_people, match_identities

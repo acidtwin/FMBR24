@@ -1,22 +1,21 @@
 """Ground-truth check for reputation / stadium / league table / scouting budget (fm_editor/clubextra.py)
 against the real 2026-27 Spurs save (in-game date 2 Jan 2028, user screenshots).
-Fixed facts (reputation, stadium, which clubs have data) are always asserted; league tables and the scouting budget
-move as the save is played, so their exact values run only in snapshot mode (tests/snapshot.py), else invariants.
+Runs on the frozen 2028-01-02 snapshot (tests/snapshot.py), so the exact league tables and scouting budget are asserted.
 
-Run directly: python3 tests/test_club_extra.py   (skips politely if the save is absent)
+Run directly: python3 tests/test_club_extra.py   (skips politely if the frozen snapshot is absent)
 """
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.snapshot import save_path, snapshot_mode  # noqa: E402
-from tests.test_club_info import SAVE  # noqa: E402
+from tests.snapshot import snapshot_save, skip_if_missing, assert_snapshot  # noqa: E402  (frozen 2028-01-02 copy, never the live save)
 
-SAVE = save_path(SAVE)
+SAVE = snapshot_save()
 
 
 def test_club_extra():
+    assert_snapshot(SAVE)
     from fm_editor.archive import parse_archive, get_member
     from fm_editor.gamedb import find_names, find_clubs
     from fm_editor import clubextra as X
@@ -50,16 +49,15 @@ def test_club_extra():
     def rec(n):
         g = c[n]['league']
         return g['pos'], g['of'], g['P'], g['W'], g['D'], g['L'], g['GF'], g['GA'], g['PTS']
-    # league tables vs in-game screens (Championship, League Two, Premier League): exact at the snapshot date only
-    if snapshot_mode(SAVE):
-        assert rec('Charlton Athletic') == (23, 24, 26, 5, 8, 13, 22, 34, 23)
-        assert rec('Fulham') == (1, 24, 25, 17, 3, 5, 47, 23, 54)
-        assert rec('Southampton') == (2, 24, 26, 13, 9, 4, 44, 28, 48)
-        assert rec('Hull City')[0] == 3 and rec('Middlesbrough')[0] == 4 and rec('West Bromwich Albion')[0] == 5
-        assert rec('Swansea City') == (9, 24, 25, 10, 7, 8, 31, 31, 37)
-        assert rec('Barnet')[:3] == (12, 24, 27)
-        assert rec('Tottenham Hotspur') == (1, 20, 20, 14, 5, 1, 56, 24, 47)
-    # invariants hold for every club in every save. Only round-robin tables count as a league (cup group stages such as the
+    # league tables vs in-game screens (Championship, League Two, Premier League) at the snapshot date
+    assert rec('Charlton Athletic') == (23, 24, 26, 5, 8, 13, 22, 34, 23)
+    assert rec('Fulham') == (1, 24, 25, 17, 3, 5, 47, 23, 54)
+    assert rec('Southampton') == (2, 24, 26, 13, 9, 4, 44, 28, 48)
+    assert rec('Hull City')[0] == 3 and rec('Middlesbrough')[0] == 4 and rec('West Bromwich Albion')[0] == 5
+    assert rec('Swansea City') == (9, 24, 25, 10, 7, 8, 31, 31, 37)
+    assert rec('Barnet')[:3] == (12, 24, 27)
+    assert rec('Tottenham Hotspur') == (1, 20, 20, 14, 5, 1, 56, 24, 47)
+    # invariants hold for every club. Only round-robin tables count as a league (cup group stages such as the
     # Scottish League Cup, comp_1301431, flattened 24 clubs / P=4, used to be attached to Scottish lower-league clubs, whose
     # own divisions have no table in the save): so PTS == 3W+D always (no shootout bonus points) and 1 <= pos <= of
     for x in cl:
@@ -76,11 +74,10 @@ def test_club_extra():
     # English league tiers keep their data (24/20-team tables)
     assert sum(x.get('league', {}).get('of') in (20, 24) for x in cl) > 100
 
-    # scouting budget: human club only (Spurs in-game 150,000 in the recorded save; the user edits it, so exact only there)
+    # scouting budget: human club only. The snapshot is the save the user made right after the 'scouting budget change'
+    # (it used to read 150,000 before that edit), so the stored value is pinned to what the frozen copy holds
     sb = X.find_human_scouting_budget(gdb)
-    assert sb and sb[0] > 0, sb
-    if snapshot_mode(SAVE, game_name=True):
-        assert sb[0] == 150_000, sb
+    assert sb and sb[0] == 2_340_000, sb
 
 
 def _fix(*pairs):
@@ -121,10 +118,8 @@ def test_is_league_table():
 
 
 if __name__ == '__main__':
-    if not os.path.exists(SAVE):
-        print('SKIPPED (save not found): test_club_extra (real-save checks)')
-    else:
-        test_club_extra()
     test_league_position_ranking()
     test_is_league_table()
+    skip_if_missing()
+    test_club_extra()
     print('OK')
