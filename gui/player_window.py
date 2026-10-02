@@ -12,7 +12,7 @@ TABS rows = (key, label, page builder method name | None). None = "Coming soon" 
 Add a real tab = write `_page_<key>` and name it in TABS. Profile = layout C (cards Position / This season / Fitness;
 attribute grid + Attribute groups radar + Footedness soles; Personality + Player traits); Training = Recommended traits +
 a coming-soon block; Contract & Transfer = Contract | Transfer row + the Value by age chart (gui/pw_valuechart.py); Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are
-stored in the save, not derived from attributes).
+stored in the save, not derived from attributes); Role Rating = role list + best-role pitch (gui/pw_roles.py).
 
 Data the save does not give us yet is read from `data` (see `player_extra_data`) and shown as PENDING
 (respecting Settings > Show PENDING markers). Projected ("at potential") values are display only.
@@ -114,13 +114,12 @@ TABS = [
     ('contract', 'Contract & Transfer', '_page_contract'),
     ('positions', 'Positions', '_page_positions'),
     ('general', 'General Rating', None),
-    ('role', 'Role Rating', None),
+    ('role', 'Role Rating', '_page_role'),
     ('training', 'Training', '_page_training'),
     ('history', 'History', '_page_history'),
 ]
 SOON = {
     'general': 'Overall rating and a summary of the role ratings.',
-    'role': 'Suitability for each tactical role.',
 }
 # 16x16 line icons for the tab strip (mirror of ICONS in mockups/player-window.html); {c} = stroke colour
 _TAB_SVG = {
@@ -440,14 +439,22 @@ class _PitchBig(QWidget):
                 p.drawArc(rect, round(alpha * 16), span)        # above the box edge
             else:
                 p.drawArc(rect, round(-alpha * 16), -span)      # below the box edge
+        self.paint_dots(p)
+
+    def _pt(self, pos):
+        """Centre of a position's slot (SLOTS fractions of the marked field)."""
+        sx_, sy_ = SLOTS[pos]
+        return (self.M + sx_ * (self.width() - 2 * self.M), self.M + sy_ * (self.height() - 2 * self.M))
+
+    def paint_dots(self, p):
+        """The dots on the field: the 15 position ratings (Positions tab). Hook: the Role Rating tab's pitch overrides it."""
         f = QFont(p.font())
         f.setPixelSize(12)
         f.setBold(True)
         fl = QFont(f)
         fl.setPixelSize(10)
         for pos in sorted(POS_DISPLAY, key=lambda q: (self._r.get(q, 1), -POS_DISPLAY.index(q))):
-            sx_, sy_ = SLOTS[pos]
-            x, y = M + sx_ * w, M + sy_ * h
+            x, y = self._pt(pos)
             v = self._r.get(pos, 1)
             t = tier(v)
             col = QColor(TIER_HEX[t])
@@ -698,6 +705,12 @@ class PlayerWindow(QDialog):
 
     def _page_positions(self):
         return self._page(self._positions_list(), self._positions_pitch(), stretch={1: 1}, fill=True)
+
+    def _page_role(self):
+        """Role Rating: role list of the selected position + pitch of best-role dots (gui/pw_roles.py)."""
+        from gui.pw_roles import RoleTab
+        self._role_tab = RoleTab(self)
+        return self._page(self._role_tab.list_panel, self._role_tab.pitch_panel, stretch={1: 1}, fill=True)
 
     # -- panels ----------------------------------------------------------------------------------
     def _panel(self, title, right=None, after_title=None):
@@ -1253,6 +1266,8 @@ class PlayerWindow(QDialog):
         old.hide()
         old.deleteLater()
         self._refresh_radar()
+        if getattr(self, '_role_tab', None) is not None:
+            self._role_tab.refresh()
         if getattr(self, '_rec_v', None) is not None:
             oldr = self._rec_body
             self._rec_body = self._rec_rows()
