@@ -2,7 +2,7 @@
 
 Each role is (display_name, group, key_attr_indices).
 key_attr_indices are indices into the 54-byte raw_attrs array (0-100 scale).
-Rating = mean of key attrs scaled to 1-20 (round(raw/5)).
+Rating = mean of key attrs scaled to 1-20 (round(raw/5)); the maths lives in fm_editor/rolepos.py (role_score = the percent).
 
 Attribute index reference:
  0 crossing   1 dribbling  2 finishing  3 heading    4 longShots  5 marking
@@ -141,19 +141,9 @@ def role_rating(person: dict, role_name: str,
 
     weights: {attr_idx: weight} from a loaded preset. None = equal-weight fallback.
     """
-    key_indices = _ROLE_INDEX.get(role_name)
-    if not key_indices:
-        return None
-    raw = person.get('raw_attrs', [])
-    if len(raw) < 54:
-        return None
-    if weights:
-        total_w = sum(weights.get(i, 0) for i in key_indices)
-        if total_w > 0:
-            score = sum(raw[i] * weights.get(i, 0) for i in key_indices) / total_w
-            return max(1, min(20, round(score / 5)))
-    score = sum(raw[i] for i in key_indices) / len(key_indices)
-    return max(1, min(20, round(score / 5)))
+    from fm_editor.rolepos import role_score, score_to_rating   # lazy: rolepos imports this module's tables
+    score = role_score(person.get('raw_attrs', []), role_name, weights)
+    return None if score is None else score_to_rating(score)
 
 
 def all_role_names() -> list[str]:
