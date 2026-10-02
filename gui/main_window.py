@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QStatusBar, QFrame, QSizePolicy, QMessageBox,
     QAbstractItemView, QMenu, QStackedWidget, QDialog, QScrollArea,
     QComboBox, QStyledItemDelegate, QSpinBox,
-    QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication,
+    QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication, QToolTip,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent, QElapsedTimer
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
@@ -18,7 +18,8 @@ from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.rolepos import role_positions
 from fm_editor.clubextra import rep_stars
-from gui.stars import _StarWidget
+from gui.stars import _StarWidget, star_row_pixmap
+from fm_editor.abilitystars import ability_stars
 from fm_editor.nations import nation_name as _nation_name_long, nation_flag as _nation_flag
 from fm_editor.cache import clear_cache
 from gui.workers import ParseWorker, SaveWorker
@@ -863,6 +864,66 @@ class _RowMarkDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
         if marked and index.column() == 0:
             painter.fillRect(option.rect.x(), option.rect.y(), 3, option.rect.height(), QColor(COLORS['queued']))
+
+
+_AB_W_STARS, _AB_W_NUM = 76, 45   # CA / PA column width in the lists: 10 inset (= header text) + 5 stars (58) + 8 | the old number width
+
+
+class StarsDelegate(_RowMarkDelegate):
+    """CA / PA cell of the player lists as 5 stars (mockups/list-stars.html), composed on the row-mark delegate
+    (tint, selection, queued bar come from it). The raw value is the cell's text (the number the table
+    already shows; sorting uses the items' own raw sort key / PeopleModel key, never the stars). `stars_on` is the
+    Settings > Ability display flag, set by MainWindow._apply_ui_prefs; Numbers mode (or a non-numeric cell such
+    as '?' / '-') = the normal text cell, untouched. Stars mode adds the raw number as a tooltip ('CA 149')."""
+    stars_on = True
+    SIZE, GAP, INSET = 10, 2, 10
+
+    def __init__(self, label, parent=None):
+        super().__init__(parent)
+        self._label = label
+
+    def _raw(self, index):
+        if not StarsDelegate.stars_on:
+            return None
+        t = index.data(Qt.ItemDataRole.DisplayRole)
+        return int(t) if isinstance(t, str) and t.isdigit() else None
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if self._raw(index) is not None:
+            option.text = ''   # the stars are the content
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        v = self._raw(index)
+        if v is None:
+            return
+        pm = star_row_pixmap(ability_stars(v), self.SIZE, self.GAP, painter.device().devicePixelRatioF())
+        r = option.rect
+        painter.drawPixmap(r.x() + self.INSET, r.y() + (r.height() - self.SIZE) // 2, pm)
+
+    def tip(self, index):
+        v = self._raw(index)
+        return None if v is None else f'{self._label} {v}'
+
+    def helpEvent(self, event, view, option, index):
+        if event.type() == QEvent.Type.ToolTip and self.tip(index):
+            QToolTip.showText(event.globalPos(), self.tip(index), view)
+            return True
+        return super().helpEvent(event, view, option, index)
+
+    def sizeHint(self, option, index):
+        sh = super().sizeHint(option, index)
+        return QSize(_AB_W_STARS, sh.height()) if self._raw(index) is not None else sh
+
+
+def _ability_w():
+    return _AB_W_STARS if StarsDelegate.stars_on else _AB_W_NUM
+
+
+def _set_star_delegates(table, ca_col, pa_col):
+    table.setItemDelegateForColumn(ca_col, StarsDelegate('CA', table))
+    table.setItemDelegateForColumn(pa_col, StarsDelegate('PA', table))
 
 
 class _PosBadgeDelegate(_RowMarkDelegate):
@@ -3301,6 +3362,7 @@ class MainWindow(QMainWindow):
         self._table.setItemDelegate(_RowMarkDelegate(self._table))
         self._table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._table))
         self._table.setItemDelegateForColumn(9, _HGBadgeDelegate('hgc', self._table))
+        _set_star_delegates(self._table, 3, 4)
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 
@@ -3888,9 +3950,10 @@ class MainWindow(QMainWindow):
         self._shortlist_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 150, 1: 160, 2: 55, 3: 55, 4: 45, 5: 45, 6: 40, 7: 50}.items():
+        for i, cw in {0: 150, 1: 160, 2: 55, 3: 55, 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
         self._shortlist_table.setItemDelegate(_RowMarkDelegate(self._shortlist_table))
+        _set_star_delegates(self._shortlist_table, 4, 5)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(True)
@@ -4285,6 +4348,7 @@ class MainWindow(QMainWindow):
         self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
         self._reports_table.setItemDelegate(_RowMarkDelegate(self._reports_table))
         self._reports_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._reports_table))
+        _set_star_delegates(self._reports_table, 3, 4)
 
         rhdr = self._reports_table.horizontalHeader()
         rhdr.setHighlightSections(False)
@@ -4297,7 +4361,7 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}
         for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
         for i in range(11, len(cols)):
@@ -4643,7 +4707,7 @@ class MainWindow(QMainWindow):
         # Players table: virtualised QTableView + PeopleModel (all players, no cap)
         self._players_model, self._players_table = self._make_scouting_view(
             self._make_players_model(), _COL_TT,
-            {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}, 35,
+            {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}, 35,
             sort=(2, Qt.SortOrder.AscendingOrder))
         self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
@@ -4651,6 +4715,7 @@ class MainWindow(QMainWindow):
         self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
         self._players_table.setItemDelegate(_RowMarkDelegate(self._players_table))
         self._players_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._players_table))
+        _set_star_delegates(self._players_table, 3, 4)
         self._players_table.horizontalHeader().setStretchLastSection(True)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -4926,7 +4991,7 @@ class MainWindow(QMainWindow):
         self._table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: 45, 4: 45, 5: 45, 6: 40, 7: 50, 8: 62,
+        fixed_widths = {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62,
                         9: 62, 10: 65}  # 1=INJ, 8/9=HGP/HGC badges ('+ HGP' fits), 10=CtrE
         for i, cw in fixed_widths.items():
             self._table.setColumnWidth(i, cw)
@@ -5655,11 +5720,25 @@ class MainWindow(QMainWindow):
     def _apply_ui_prefs(self, vals=None):
         global _SHOW_PENDING
         vals = vals or _settings_mod.load()
+        stars = vals.get('ability_display', 'stars') == 'stars'
+        if stars != StarsDelegate.stars_on:   # Ability display changed: new CA/PA column width + repaint, no reload
+            StarsDelegate.stars_on = stars
+            self._refresh_ability_cols()
         show = bool(vals.get('show_pending', True))
         if show != _SHOW_PENDING:
             _SHOW_PENDING = show
             if self._current_club:
                 self._update_club_view()
+
+    def _refresh_ability_cols(self):
+        """CA / PA columns of the player lists after the Ability display setting changed (tables may not exist yet)."""
+        for name, cols in (('_table', (3, 4)), ('_reports_table', (3, 4)), ('_players_table', (3, 4)),
+                           ('_shortlist_table', (4, 5))):
+            t = getattr(self, name, None)
+            if t is not None:
+                for c in cols:
+                    t.setColumnWidth(c, _ability_w())
+                t.viewport().update()
 
     def _land_after_load(self):
         """Page shown once a save finishes parsing (Settings > Landing page)."""
