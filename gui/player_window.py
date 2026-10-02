@@ -21,11 +21,11 @@ import calendar
 import math
 
 
-from PyQt6.QtCore import QEvent, Qt, QPointF, QRect, QRectF, QSize
+from PyQt6.QtCore import QEvent, QTimer, Qt, QPointF, QRect, QRectF, QSize
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QSizePolicy, QStackedWidget, QToolTip, QVBoxLayout, QWidget,
 )
 
 from fm_editor import potential as _pot
@@ -344,6 +344,27 @@ class _ElideLabel(QLabel):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._elide()
+
+
+class _CopyNameLabel(_ElideLabel):
+    """The player's name in the header: click copies the full name to the clipboard (pointer cursor, tooltip,
+    a short 'Copied' tooltip as feedback). Mockup: .hid .nm cursor:pointer, title 'Click to copy name'."""
+    HINT = 'Click to copy name'
+
+    def __init__(self, text, name, natural=False):
+        super().__init__(text, name, natural)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(self.HINT)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            QApplication.clipboard().setText(self._full)
+            self.setToolTip('Copied')
+            QToolTip.showText(e.globalPosition().toPoint(), 'Copied', self, self.rect(), 1200)
+            QTimer.singleShot(1400, lambda: self.setToolTip(self.HINT))
+            e.accept()
+        else:
+            super().mousePressEvent(e)
 
 
 class _DottedLabel(QLabel):
@@ -955,7 +976,7 @@ class PlayerWindow(QDialog):
         r1 = QHBoxLayout()
         r1.setSpacing(10)
         r1.setContentsMargins(0, 0, 0, 0)
-        nm = _ElideLabel(p['name'], 'pwName', natural=True)
+        nm = _CopyNameLabel(p['name'], 'pwName', natural=True)
         nm.setFixedHeight(24)
         r1.addWidget(nm, 0)
         if self._pos:

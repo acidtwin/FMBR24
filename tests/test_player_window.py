@@ -68,3 +68,20 @@ bare._set_pot(True)
 assert bare._projection().target == 0
 bare.close()
 print('OK: player window tabs, Close last, no foot words in Profile, Positions fits, History kind column')
+
+# click on the player's name copies it to the clipboard (header)
+from PyQt6.QtCore import QPoint, Qt as _Qt  # noqa: E402
+from PyQt6.QtTest import QTest  # noqa: E402
+from PyQt6.QtWidgets import QApplication as _QA  # noqa: E402
+cw = PlayerWindow(person(False), {'squads': {}, 'clubs': []}, 0, None)
+cw.show()
+app.processEvents()
+nm = cw.findChild(QLabel, 'pwName')
+assert nm is not None and nm.toolTip() == 'Click to copy name' and nm.cursor().shape() == _Qt.CursorShape.PointingHandCursor
+_QA.clipboard().setText('before')
+QTest.mouseClick(nm, _Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+assert _QA.clipboard().text() == 'Test Player', _QA.clipboard().text()
+QTest.mouseClick(nm, _Qt.MouseButton.RightButton, pos=QPoint(5, 5))        # other buttons do not touch it
+assert _QA.clipboard().text() == 'Test Player'
+cw.close()
+print('OK: click on the player name copies it')

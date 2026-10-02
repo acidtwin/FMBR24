@@ -323,7 +323,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .avatar svg:not(.face){width:30px;height:30px}
 .hid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .hid .r1{display:flex;align-items:center;gap:10px;height:24px}
-.hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}   /* click copies the name to the clipboard (title 'Click to copy name', then 'Copied') */
 .hid .r2{display:flex;align-items:center;gap:6px;color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden}
 .hid .r2 .fl{font:14px/16px "Noto Color Emoji",sans-serif}
 .hid .r2 .sep{color:var(--tx3)}
@@ -775,9 +775,9 @@ function header(){
   const fl=`<span class="fl">${NATFLAG[d.nat]||''}</span><span>${d.nat}</span>${dot}<span class="club">${S.nobadge||S.unk?'':clubBadge}<span>${d.club}</span></span>`;
   const hw=S.data?`${d.height} · ${d.weight}`:S.nopend?'':'Height / weight '+pend;
   let id;
-  if(v==='c')id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div><div class="r2">${fl}</div></div>
+  if(v==='c')id=`<div class="hid"><div class="r1"><span class="nm" title="Click to copy name" onclick="navigator.clipboard&&navigator.clipboard.writeText('${d.name}')">${d.name}</span>${badge(d.pos)}</div><div class="r2">${fl}</div></div>
     <div class="hmeta"><div>${d.age} years ${dot} ${d.born}</div>${hw?`<div>${hw}</div>`:''}<div>${pills('')}</div></div>`;
-  else id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}${pills(v==='a'?'end':'')}</div><div class="r2">${fl}${dot}<span class="age" data-tip="Born ${d.born}">${d.age} years</span></div></div>`;
+  else id=`<div class="hid"><div class="r1"><span class="nm" title="Click to copy name" onclick="navigator.clipboard&&navigator.clipboard.writeText('${d.name}')">${d.name}</span>${badge(d.pos)}${pills(v==='a'?'end':'')}</div><div class="r2">${fl}${dot}<span class="age" data-tip="Born ${d.born}">${d.age} years</span></div></div>`;
   return `<div class="pn hdr"><div class="avatar">${S.face?faceSvg:person}</div>${id}
     ${cab('Current ability','CA',d.ca,'#735CE4')}${cab('Potential ability','PA',d.pa,'#9A8AF5')}${cabDev()}
     ${queueSlot()}</div>`;
