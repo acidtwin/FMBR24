@@ -39,9 +39,11 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Positions: a rating for every position, shown as a list and on a pitch
 - Contract & Transfer: contract dates and wage, market value
 - Career history, recommended traits, and a Current / Full Potential projection (display only)
-- CA, PA and Development Rate as stars or raw numbers (Settings)
+- CA, PA and Development Rate as stars or raw numbers (Settings), in the player window and in every player list (the raw value is the tooltip in stars mode, sorting is always by the number)
 - Face pictures from your own installed facepack (for example DF11): the player window header and the staff window show the same face the game does, looked up by the person's UniqueID from the pack's `config.xml`. Auto-detects your FM24 folder, reads it read-only, builds its index in the background (about half a second for 200,000 pictures), and can be switched off in Settings. Nothing is bundled: bring your own pack. Generated players (newgens) only show a face when your facepack tool has written a config for them, the same as in the game
 - Club badges from your own installed logo pack (for example FMG Standard Logos): shown before the club name in the player window, on Save Info and in the Club, Squads and Club Staff headers. Same read-only lookup as the face pictures, switch off in Settings; the club badge is found through the club's UniqueID, using the game's install database when available. Nothing is bundled: bring your own pack
+- Pictures in the lists: Squads, Player Reports, Players, Player Shortlist and the staff lists show the person's face before the name, the club as its badge (hover for the club name, sorting stays by name) and the nation as the nation's picture from your logo pack (hover for the name); anything the packs do not have falls back to the plain text, so no information is lost. The Club page shows the league's competition logo. All of it is read-only, built from your own installed packs, off-thread and lazily decoded for the visible rows only, and switchable in Settings (Show face pictures / club badges / nation flags)
+- Kit lookup from your installed kit packs (`graphics/kits/<pack>`, home / away / third): available to the code, no screen uses it yet
 
 **Editing**
 - Homegrown flags (HGP / HGC) for the players of your own club: queue them from the player window or the Squads toolbar, then press Save Changes
