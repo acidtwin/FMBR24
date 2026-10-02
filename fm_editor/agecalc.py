@@ -50,3 +50,21 @@ def age_on(p, ref):
 def person_age(p):
     """Age on the loaded save's in-game date."""
     return age_on(p, _ref)
+
+
+def age_exact(p, ref=None):
+    """Age as a float: whole years (age_on) + the part of the current year since the last birthday (int() == age_on)."""
+    ref = ref or _ref
+    whole = age_on(p, ref)
+    by, d = p.get('birth_year'), p.get('birth_day')
+    if by is None:
+        return 0.0
+    if d:
+        bd = date.fromordinal(date(by, 1, 1).toordinal() + d - 1)
+    else:
+        bd = date(by, 7, 1)
+    try:
+        last = bd.replace(year=by + whole)
+    except ValueError:                                   # 29 Feb birthday in a non-leap year
+        last = date(by + whole, 3, 1)
+    return whole + min((ref - last).days / 365.2425, 0.999)
