@@ -28,6 +28,7 @@ DEFAULTS = {
     'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
     'faces_enabled': True,             # show facepack pictures (player window header, staff dialog)
     'logos_enabled': True,             # show club badges from the installed logo packs (same FM24 folder / pack order as faces)
+    'flags_enabled': True,             # show nation pictures (lists) and competition logos (Club page) from the logo packs
     'faces_dir': '',                   # FM24 user folder (holds games + graphics); '' = auto-detect (fm_editor/faces.py)
     'faces_pack_order': [],            # facepack folder names, highest priority first (no UI; rest alphabetical)
     'trait_threshold': 11,             # Trait recommender: min average attribute (sheet default, 1-20)

@@ -20,8 +20,8 @@
 
   CONTEXT-ONLY (already exist in the app, drawn here so the page is judged in place):
     .sb sidebar (192px), .hero (186px = 38px nav row + 148px content), .dev state switch, .sheet state reference.
-  PICTURES section (was 'Face pictures'; settings keys faces_enabled, logos_enabled, faces_dir; msg 1 shows 'Found N facepacks', msg 2 'Found N logo packs' (fm_editor/faces.py status(kind=)), or the bad state when no FM24 folder resolves).
-    Row 'Show club badges' (logos_enabled, default on) sits under 'Show face pictures'; both share the FM24 folder row. Reset to defaults turns both back on.
+  PICTURES section (was 'Face pictures'; settings keys faces_enabled, logos_enabled, flags_enabled, faces_dir; msg 1 shows 'Found N facepacks', msg 2 'Found N logo packs' (fm_editor/faces.py status(kind=)), or the bad state when no FM24 folder resolves).
+    Row 'Show club badges' (logos_enabled, default on) sits under 'Show face pictures'; row 'Show nation flags' (flags_enabled, default on: nation pictures in the player lists and competition logos on the Club page) sits under it; all share the FM24 folder row. Reset to defaults turns all three back on.
   NEW IN THE APP:  a "Settings" sidebar entry pinned below the stretch (bottom), gear button in the hero nav row
     lights up when the page is open, and the page itself = .page (scroll) + .footer (fixed).
 
@@ -363,7 +363,14 @@ a:hover { text-decoration:underline; }
         <div class="row">
           <div class="lab">
             <div class="lab-top">Show club badges</div>
-            <div class="help">Uses the club logo packs installed for the game (player window header, Save Info, Club, Squads and Club Staff pages). Read only, nothing in the game folder is changed.</div>
+            <div class="help">Uses the club logo packs installed for the game (player window header, Save Info, Club, Squads and Club Staff pages, and the Club column of the player and staff lists). Read only, nothing in the game folder is changed.</div>
+          </div>
+          <div class="ctl"><label class="chk"><input type="checkbox" checked>Enabled</label></div>
+        </div>
+        <div class="row">
+          <div class="lab">
+            <div class="lab-top">Show nation flags</div>
+            <div class="help">Uses the nation and competition logos of the installed logo packs (Nation column of the player and staff lists, competition on the Club page). Read only, nothing in the game folder is changed.</div>
           </div>
           <div class="ctl"><label class="chk"><input type="checkbox" checked>Enabled</label></div>
         </div>
@@ -379,7 +386,7 @@ a:hover { text-decoration:underline; }
             </div>
             <div class="msg good"><i class="dot"></i><span>Found 2 facepacks &middot; DF11 Megapack (July 2023), FMNEWGANv2 + Update 1</span></div>
             <div class="msg good"><i class="dot"></i><span>Found 1 logo pack &middot; FMG Standard Logos</span></div>
-            <div class="msg bad" style="display:none"><i class="dot"></i><span>No FM24 folder found. Choose it above, or turn face pictures and club badges off.</span></div>
+            <div class="msg bad" style="display:none"><i class="dot"></i><span>No FM24 folder found. Choose it above, or turn face pictures, club badges and nation flags off.</span></div>
           </div>
         </div>
       </section>

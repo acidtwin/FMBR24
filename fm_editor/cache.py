@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 32  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 33  # bump when schema changes to auto-invalidate old caches
 
 
 def file_signature(save_path):

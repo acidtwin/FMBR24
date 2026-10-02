@@ -128,8 +128,10 @@ def is_league_table(tab, pairs, min_density=0.9):
     return n >= 2 and sum(frozenset((a, b)) in pairs for i, a in enumerate(ts) for b in ts[i + 1:]) >= min_density * n * (n - 1) / 2
 
 
-def add_league_positions(clubs, tables, fix=None):
-    """tables = [ {team: row} per comp ]. club['league'] = {pos, of, P, W, D, L, GF, GA, PTS, comp}
+def add_league_positions(clubs, tables, fix=None, comp_uids=None):
+    """tables = [ {team: row} per comp ]. club['league'] = {pos, of, P, W, D, L, GF, GA, PTS, comp, comp_uid}
+    (comp = index into tables; comp_uid = the competition's UniqueID, the number in `rgman/comp_<id>.dat`, parallel list
+    `comp_uids`, the key the competition logo packs use; absent without it)
     from the round-robin table (see is_league_table; needs the fix_man.dat bytes, else every table counts) where the
     club has played most games. A club whose division has no table in the save (e.g. Scottish Championship and below,
     which the game does not simulate in detail) gets no 'league' rather than a cup group's."""
@@ -148,6 +150,8 @@ def add_league_positions(clubs, tables, fix=None):
     for t, (p, ci, pos, n, r) in best.items():
         by_team[t]['league'] = {'pos': pos, 'of': n, 'P': r[0], 'W': r[1], 'D': r[2], 'L': r[3],
                                 'GF': r[4], 'GA': r[5], 'PTS': r[6], 'comp': ci}
+        if comp_uids:
+            by_team[t]['league']['comp_uid'] = comp_uids[best[t][1]]
 
 
 # -- Human club's scouting budget -----------------------------------------------------------------

@@ -453,6 +453,7 @@ class SettingsPage(QWidget):
     def _build_faces(self, col_l):
         self._faces_on = self._check(True)
         self._logos_on = self._check(True)
+        self._flags_on = self._check(True)
         self._faces_dir = self._input()
         self._faces_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._faces_dir.setPlaceholderText('Detect automatically')
@@ -473,8 +474,13 @@ class SettingsPage(QWidget):
                       'nothing in the game folder is changed.', self._ctl_line(self._faces_on)),
             self._row('Show club badges',
                       'Uses the club logo packs installed for the game (player window header, Save Info, Club, '
-                      'Squads and Club Staff pages). Read only, nothing in the game folder is changed.',
+                      'Squads and Club Staff pages, and the Club column of the player and staff lists). Read only, '
+                      'nothing in the game folder is changed.',
                       self._ctl_line(self._logos_on)),
+            self._row('Show nation flags',
+                      'Uses the nation and competition logos of the installed logo packs (Nation column of the player '
+                      'and staff lists, competition on the Club page). Read only, nothing in the game folder is changed.',
+                      self._ctl_line(self._flags_on)),
             self._row('FM24 folder',
                       'The Sports Interactive / Football Manager 2024 folder (the one holding games and '
                       'graphics). Empty = detect automatically.', ctl),
@@ -591,6 +597,7 @@ class SettingsPage(QWidget):
         self._theme.currentIndexChanged.connect(self._on_changed)
         self._faces_on.toggled.connect(self._on_changed)
         self._logos_on.toggled.connect(self._on_changed)
+        self._flags_on.toggled.connect(self._on_changed)
         self._faces_dir.textChanged.connect(self._on_changed)
         self._faces_browse.clicked.connect(self._browse_faces)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
@@ -614,6 +621,7 @@ class SettingsPage(QWidget):
             'player_theme': self._theme.currentData(),
             'faces_enabled': self._faces_on.isChecked(),
             'logos_enabled': self._logos_on.isChecked(),
+            'flags_enabled': self._flags_on.isChecked(),
             'faces_dir': self._faces_dir.text().strip(),
         }
 
@@ -622,7 +630,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -633,9 +641,10 @@ class SettingsPage(QWidget):
         self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
         self._faces_on.setChecked(v['faces_enabled'])
         self._logos_on.setChecked(v['logos_enabled'])
+        self._flags_on.setChecked(v['flags_enabled'])
         self._faces_dir.setText(v['faces_dir'])
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()
@@ -701,7 +710,7 @@ class SettingsPage(QWidget):
             ltext, lcolor = text, color
         elif fm is None:
             state, color = 'none', C['text_dim']
-            text = 'No FM24 folder found. Choose it above, or turn face pictures and club badges off.'
+            text = 'No FM24 folder found. Choose it above, or turn face pictures, club badges and nation flags off.'
             ltext, lcolor = text, color
         else:
             state = 'ok' if packs else 'empty'
