@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 from fm_editor import potential as _pot
 from fm_editor import settings as _settings
 from fm_editor.abilitystars import ability_stars, dev_stars
+from gui.faces import get_service as _faces_service
 from gui.stars import _StarWidget
 from gui.pw_themes import ActiveTabButton, ThemedFrame, apply_active_theme
 from gui.pw_valuechart import VC_EST, VC_NOTE, ChartLegend, ValueChart
@@ -105,6 +106,7 @@ SLOTS = {
     'GK': (.50, .94),
 }
 
+AVATAR_SIZE = (54, 64)   # mockup .avatar: the facepack cutout aspect (260:310), same box with or without a picture
 _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#525B68" '
                'stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>')
 
@@ -794,6 +796,15 @@ class PlayerWindow(QDialog):
         lbl.setStyleSheet(f'QLabel#pwBadge {{ background:{bg}; padding:0 5px; }}')
         return lbl
 
+    def _refresh_avatar(self):
+        """Facepack picture (Settings > Face pictures) or, without one, the silhouette (mockup .avatar 54x64, radius 3)."""
+        w, h = AVATAR_SIZE
+        px = _faces_service().pixmap(self._person.get('uid'), w, h, self.devicePixelRatioF(), radius=3)
+        try:
+            self._avatar.setPixmap(px if px is not None else self._svg_pixmap(_PERSON_SVG, 30))
+        except RuntimeError:
+            pass   # header rebuilt / window closing: the old label is gone
+
     @staticmethod
     def _svg_pixmap(svg, size):
         from PyQt6.QtSvg import QSvgRenderer
@@ -915,9 +926,11 @@ class PlayerWindow(QDialog):
         hl.setSpacing(14)
         av = QLabel()
         av.setObjectName('pwAvatar')
-        av.setFixedSize(48, 48)
+        av.setFixedSize(*AVATAR_SIZE)
         av.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        av.setPixmap(self._svg_pixmap(_PERSON_SVG, 30))
+        self._avatar = av
+        self._refresh_avatar()
+        _faces_service().ready.connect(self._refresh_avatar)   # index still loading when the window opened
         hl.addWidget(av)
         col = QVBoxLayout()
         col.setSpacing(4)

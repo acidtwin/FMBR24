@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from fm_editor import cache as _cache
+from fm_editor import faces as _faces
 from fm_editor import settings as _settings
 from fm_editor import weights as _weights
 from gui.about_dialog import AboutDialog
@@ -216,6 +217,7 @@ class SettingsPage(QWidget):
         self.setStyleSheet(_QSS)
         self._saved = {}
         self._folder_state = 'unset'
+        self._faces_state = 'unset'
         self._soon = []
         self._fitted = False
 
@@ -245,6 +247,7 @@ class SettingsPage(QWidget):
         self._build_save_games(col_l)
         self._build_scouting(col_l)
         self._build_interface(col_l)
+        self._build_faces(col_l)
         self._build_data(col_l)
         self._build_about(col_l)
         col_l.addStretch(1)
@@ -343,6 +346,25 @@ class SettingsPage(QWidget):
         c.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         return c
 
+    @staticmethod
+    def _msg_line():
+        """Status line (.msg): coloured dot + wrapped text. Returns (widget, dot, label)."""
+        msg_w, msg_l = _bare(QHBoxLayout)
+        msg_l.setSpacing(6)
+        dot_wrap = QWidget()
+        dot_wrap.setObjectName('setBare')
+        dot_wrap.setFixedSize(7, 15)
+        dot = _dot(_OK)
+        dot.setParent(dot_wrap)
+        dot.setGeometry(0, 4, 7, 7)  # .msg .dot margin-top 4
+        lbl = QLabel()
+        lbl.setObjectName('setMsg')
+        lbl.setWordWrap(True)
+        lbl.setProperty('bad', False)
+        msg_l.addWidget(dot_wrap, 0, Qt.AlignmentFlag.AlignTop)
+        msg_l.addWidget(lbl, 1)
+        return msg_w, dot, lbl
+
     # -- sections ----------------------------------------------------------------------------
 
     def _build_save_games(self, col_l):
@@ -352,20 +374,7 @@ class SettingsPage(QWidget):
         self._folder.setAccessibleName('Default save game folder')
         self._browse = _btn('Browse…')
         line = self._ctl_line(self._folder, self._browse, stretch_first=True)
-        msg_w, msg_l = _bare(QHBoxLayout)
-        msg_l.setSpacing(6)
-        dot_wrap = QWidget()
-        dot_wrap.setObjectName('setBare')
-        dot_wrap.setFixedSize(7, 15)
-        self._folder_dot = _dot(_OK)
-        self._folder_dot.setParent(dot_wrap)
-        self._folder_dot.setGeometry(0, 4, 7, 7)  # .msg .dot margin-top 4
-        self._folder_msg = QLabel()
-        self._folder_msg.setObjectName('setMsg')
-        self._folder_msg.setWordWrap(True)
-        self._folder_msg.setProperty('bad', False)
-        msg_l.addWidget(dot_wrap, 0, Qt.AlignmentFlag.AlignTop)
-        msg_l.addWidget(self._folder_msg, 1)
+        msg_w, self._folder_dot, self._folder_msg = self._msg_line()
         ctl, ctl_l = _bare(QVBoxLayout)
         ctl_l.setSpacing(6)
         ctl_l.addWidget(line)
@@ -439,6 +448,29 @@ class SettingsPage(QWidget):
                       'Stars are an approximation; hover for the number.',
                       self._ctl_line(self._ability)),
             self._row('Table density', 'Row height in every table.', seg, soon=True),
+        ])
+
+    def _build_faces(self, col_l):
+        self._faces_on = self._check(True)
+        self._faces_dir = self._input()
+        self._faces_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._faces_dir.setPlaceholderText('Detect automatically')
+        self._faces_dir.setAccessibleName('FM24 folder')
+        self._faces_browse = _btn('Browse…')
+        line = self._ctl_line(self._faces_dir, self._faces_browse, stretch_first=True)
+        msg_w, self._faces_dot, self._faces_msg = self._msg_line()
+        ctl, ctl_l = _bare(QVBoxLayout)
+        ctl_l.setSpacing(6)
+        ctl_l.addWidget(line)
+        ctl_l.addWidget(msg_w)
+        ctl_l.addStretch(1)
+        self._section(col_l, 'Face pictures', [
+            self._row('Show face pictures',
+                      'Uses the facepacks installed for the game (player window header). Read only, '
+                      'nothing in the game folder is changed.', self._ctl_line(self._faces_on)),
+            self._row('FM24 folder',
+                      'The Sports Interactive / Football Manager 2024 folder (the one holding games and '
+                      'graphics). Empty = detect automatically.', ctl),
         ])
 
     def _build_data(self, col_l):
@@ -550,6 +582,9 @@ class SettingsPage(QWidget):
         self._trait_thr.currentIndexChanged.connect(self._on_changed)
         self._ability.currentIndexChanged.connect(self._on_changed)
         self._theme.currentIndexChanged.connect(self._on_changed)
+        self._faces_on.toggled.connect(self._on_changed)
+        self._faces_dir.textChanged.connect(self._on_changed)
+        self._faces_browse.clicked.connect(self._browse_faces)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_edit.clicked.connect(self._edit_weights)
         self._preset_import.clicked.connect(self._import_preset)
@@ -569,6 +604,8 @@ class SettingsPage(QWidget):
             'trait_threshold': self._trait_thr.currentData(),
             'ability_display': self._ability.currentData(),
             'player_theme': self._theme.currentData(),
+            'faces_enabled': self._faces_on.isChecked(),
+            'faces_dir': self._faces_dir.text().strip(),
         }
 
     def is_dirty(self):
@@ -576,7 +613,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._faces_dir):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -585,8 +622,10 @@ class SettingsPage(QWidget):
         self._trait_thr.setCurrentIndex(max(0, self._trait_thr.findData(v['trait_threshold'])))
         self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
         self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
+        self._faces_on.setChecked(v['faces_enabled'])
+        self._faces_dir.setText(v['faces_dir'])
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._faces_dir):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()
@@ -637,10 +676,35 @@ class SettingsPage(QWidget):
         for w in (self._folder_msg, self._folder):
             w.style().unpolish(w)
             w.style().polish(w)
+        self._update_faces_status()
         self._refresh_footer()
 
+    def _update_faces_status(self):
+        """'Found N facepacks' line (discovery only, no index build). A typed folder that does not exist is an error."""
+        typed = self._faces_dir.text().strip()
+        fm, packs = _faces.status(typed, getattr(self.window(), '_save_path', None))
+        if typed and not os.path.isdir(os.path.expanduser(typed)):
+            state, color, text = 'missing', C['non_hgp_red'], 'Folder not found. Check the path or choose another folder.'
+        elif fm is None:
+            state, color = 'none', C['text_dim']
+            text = 'No FM24 folder found. Choose it above, or turn face pictures off.'
+        elif packs:
+            state, color = 'ok', _OK
+            text = f"Found {len(packs)} facepack{'s' if len(packs) != 1 else ''} · {', '.join(packs)}"
+        else:
+            state, color = 'empty', C['text_dim']
+            text = 'FM24 folder found, but no facepacks in its graphics folder.'
+        self._faces_state = state
+        self._faces_dot.setStyleSheet(f"background:{color}; border-radius:3px;")
+        self._faces_msg.setText(text)
+        self._faces_msg.setProperty('bad', state == 'missing')
+        self._faces_dir.setProperty('err', state == 'missing')
+        for w in (self._faces_msg, self._faces_dir):
+            w.style().unpolish(w)
+            w.style().polish(w)
+
     def _refresh_footer(self):
-        err = self._folder_state in ('missing', 'notdir')
+        err = self._folder_state in ('missing', 'notdir') or self._faces_state == 'missing'
         dirty = self.is_dirty()
         if err:
             state, text, dot = 'error', 'Fix the folder path to save', C['non_hgp_red']
@@ -661,6 +725,13 @@ class SettingsPage(QWidget):
         path = QFileDialog.getExistingDirectory(self.window(), 'Choose default save game folder', start)
         if path:
             self._folder.setText(path)
+
+    def _browse_faces(self):
+        cur = os.path.expanduser(self._faces_dir.text().strip())
+        fm = cur if os.path.isdir(cur) else (_faces.find_fm_dir('', getattr(self.window(), '_save_path', None)) or '')
+        path = QFileDialog.getExistingDirectory(self.window(), 'Choose the FM24 folder', fm or os.path.expanduser('~'))
+        if path:
+            self._faces_dir.setText(path)
 
     # role weights (logic reused from the old SettingsDialog) --------------------------------
 
