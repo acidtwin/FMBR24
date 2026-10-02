@@ -1,8 +1,10 @@
-"""Face pictures for Qt widgets: background index load (fm_editor/faces.py) + a small scaled-QPixmap LRU cache.
+"""Face pictures and club badges for Qt widgets: background index load (fm_editor/faces.py) + a small scaled-QPixmap LRU cache.
 
     svc = get_service()
     px = svc.pixmap(person.get('uid'), 54, 64, dpr, radius=3)   # QPixmap or None (none / index still loading / off)
-    svc.ready.connect(refresh)                                  # emitted once when the index becomes available
+    bx = svc.club_pixmap(club.get('uid'), 18, dpr)              # club badge in an 18x18 box (aspect kept, transparent) or None
+    svc.set_clubs(clubs, extra_uids, save_path)                 # on every save load, before start(): the uid -> logo id key table
+    svc.ready.connect(refresh)                                  # emitted once when the index (and the club key table) is available
 
 The index is loaded in a background thread (first run ~0.6 s to build, ~0.2 s from its disk cache), so the GUI thread only
 ever does dictionary lookups plus decoding one small PNG per visible face.
@@ -25,9 +27,15 @@ class FaceService(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._lru = OrderedDict()   # (path, w, h, dpr, radius, fit) -> QPixmap
+        self._clubs = None          # (clubs, extra uids, save path) of the loaded save: key table input
         self._busy = False
         self._started = False
         self._loaded.connect(self._on_loaded)
+
+    def set_clubs(self, clubs, extra=(), save_path=None):
+        """Remember the loaded save's clubs (list of dicts with 'uid') and its second-layout club uids; the next start() builds the
+        club uid -> logo id table from them in the background thread (fm_editor/clublogo.py)."""
+        self._clubs = (clubs, extra, save_path)
 
     def start(self, save_path=None):
         """(Re)read the settings and load the index in the background. Safe to call again (Settings saved, new save).
@@ -39,12 +47,15 @@ class FaceService(QObject):
             self.ready.emit()
             return
         self._busy = True
-        threading.Thread(target=self._load, args=(idx,), daemon=True, name='face-index').start()
+        threading.Thread(target=self._load, args=(idx, self._clubs), daemon=True, name='face-index').start()
 
-    def _load(self, idx):
+    def _load(self, idx, clubs=None):
         try:
             if not idx.ready:
                 idx.load()
+            if clubs is not None:
+                from fm_editor import clublogo
+                _faces.set_club_uids(clublogo.build(*clubs))
         except Exception:
             import traceback
             traceback.print_exc()   # a broken pack folder must never take the app down: faces just stay off
@@ -65,7 +76,7 @@ class FaceService(QObject):
     def path(self, uid, kind='person'):
         if not self._started:
             self.start()          # first request without an explicit start(): auto-detect, picture appears on `ready`
-        return _faces.face_path(uid, kind)
+        return _faces.club_logo_path(uid) if kind == 'club' else _faces.face_path(uid, kind)
 
     def pixmap(self, uid, w, h, dpr=1.0, radius=0, kind='person', fit=False):
         """Face scaled for a w x h (logical px) box, or None. fit=False: fill the box (KeepAspectRatioByExpanding,
@@ -86,6 +97,11 @@ class FaceService(QObject):
         while len(self._lru) > LRU_SIZE:
             self._lru.popitem(last=False)
         return px
+
+    def club_pixmap(self, club_uid, size, dpr=1.0):
+        """Club badge (club['uid'], the parsed save uid) fitted inside a size x size box: aspect kept, centred, transparent
+        background, smooth. None = no pack / no logo for this club / still loading / Settings > Club badges off."""
+        return self.pixmap(club_uid, size, size, dpr, kind='club', fit=True)
 
 
 def _render(path, w, h, dpr, radius, fit):

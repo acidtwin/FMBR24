@@ -48,7 +48,8 @@ def pump(n=3):
 
 def load(w, path):
     from fm_editor import settings as S  # fresh parse every run: the parse cache holds ~170 fewer staff than a fresh parse
-    S.save({**S.load(), 'use_cache': False, 'faces_enabled': False})  # no third-party facepack pictures in published shots
+    S.save({**S.load(), 'use_cache': False, 'faces_enabled': False,
+            'logos_enabled': False})  # no third-party facepack pictures or club logos in published shots
     w._load_path(path)
     t0 = time.time()
     while w._save_data is None or w._busy:

@@ -123,8 +123,12 @@ body[data-state="parsed"] .pend-only { display: none; }
 .id-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 0.02em; line-height: 34px; height: 34px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .id-name .chip { font-size: 13px; padding: 4px 12px; border-radius: 12px; vertical-align: 5px; }
 .id-club .chip { font-size: 12px; }
+/* CLUB BADGE (Settings > Club badges): logo pack PNG before the club name, shown only when a save is parsed and the manager has a club and the packs have its logo.
+   22x22 box in the 24px row (app: _si_club row 24 tall / 15px text, badge QLabel 22x22 = FaceService.club_pixmap(uid, 22, dpr), aspect kept, transparent, gap 8). No logo / unemployed = no badge widget, the name starts at the left edge. Sample shield is synthetic. */
+.id-club .bdg { width: 22px; height: 22px; flex: none; }
+body[data-state="parsed"] .id-club .bdg { display: block; }
 .lbl2 { margin-top: 8px; }
-.id-club { display: flex; align-items: center; gap: 8px; height: 22px; line-height: 22px; margin-top: 2px; color: var(--text); font-size: 13px; font-weight: 500; }
+.id-club { display: flex; align-items: center; gap: 8px; height: 24px; line-height: 24px; margin-top: 2px; color: var(--text); font-size: 15px; font-weight: 500; }   /* 24px / 15px = the shipped rail row */
 .note { color: var(--text-dim); font-size: 11px; line-height: 1.45; padding: 2px 0 4px; }
 
 /* Nations line */
@@ -196,7 +200,7 @@ body[data-state="parsed"] .pend-only { display: none; }
             <div class="id-lbl">Manager</div>
             <div class="id-name"><i class="chip">Pending</i><span class="pv">Elliot Nathan</span></div>
             <div class="id-lbl lbl2">Current club</div>
-            <div class="id-club"><i class="chip">Pending</i><span class="pv">Tottenham Hotspur</span></div>
+            <div class="id-club"><i class="chip">Pending</i><svg class="bdg pv" viewBox="0 0 16 16"><path d="M8 .8 14.2 2.6V8.2C14.2 11.4 11.6 13.9 8 15.2 4.4 13.9 1.8 11.4 1.8 8.2V2.6Z" fill="#F2F4F7"/><path d="M8 2.2 12.8 3.6V8.1C12.8 10.7 10.8 12.7 8 13.8 5.2 12.7 3.2 10.7 3.2 8.1V3.6Z" fill="#132B5E"/><path d="M5.6 6.2H10.4M5.6 8.6H10.4" stroke="#F2F4F7" stroke-width="1.3"/></svg><span class="pv">Tottenham Hotspur</span></div>
           </div>
         </div>
         <p class="note pend-only">Manager and club are not read from the save yet.</p>

@@ -452,6 +452,7 @@ class SettingsPage(QWidget):
 
     def _build_faces(self, col_l):
         self._faces_on = self._check(True)
+        self._logos_on = self._check(True)
         self._faces_dir = self._input()
         self._faces_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._faces_dir.setPlaceholderText('Detect automatically')
@@ -459,15 +460,21 @@ class SettingsPage(QWidget):
         self._faces_browse = _btn('Browse…')
         line = self._ctl_line(self._faces_dir, self._faces_browse, stretch_first=True)
         msg_w, self._faces_dot, self._faces_msg = self._msg_line()
+        logo_w, self._logos_dot, self._logos_msg = self._msg_line()
         ctl, ctl_l = _bare(QVBoxLayout)
         ctl_l.setSpacing(6)
         ctl_l.addWidget(line)
         ctl_l.addWidget(msg_w)
+        ctl_l.addWidget(logo_w)
         ctl_l.addStretch(1)
-        self._section(col_l, 'Face pictures', [
+        self._section(col_l, 'Pictures', [
             self._row('Show face pictures',
                       'Uses the facepacks installed for the game (player window header). Read only, '
                       'nothing in the game folder is changed.', self._ctl_line(self._faces_on)),
+            self._row('Show club badges',
+                      'Uses the club logo packs installed for the game (player window header, Save Info, Club, '
+                      'Squads and Club Staff pages). Read only, nothing in the game folder is changed.',
+                      self._ctl_line(self._logos_on)),
             self._row('FM24 folder',
                       'The Sports Interactive / Football Manager 2024 folder (the one holding games and '
                       'graphics). Empty = detect automatically.', ctl),
@@ -583,6 +590,7 @@ class SettingsPage(QWidget):
         self._ability.currentIndexChanged.connect(self._on_changed)
         self._theme.currentIndexChanged.connect(self._on_changed)
         self._faces_on.toggled.connect(self._on_changed)
+        self._logos_on.toggled.connect(self._on_changed)
         self._faces_dir.textChanged.connect(self._on_changed)
         self._faces_browse.clicked.connect(self._browse_faces)
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
@@ -605,6 +613,7 @@ class SettingsPage(QWidget):
             'ability_display': self._ability.currentData(),
             'player_theme': self._theme.currentData(),
             'faces_enabled': self._faces_on.isChecked(),
+            'logos_enabled': self._logos_on.isChecked(),
             'faces_dir': self._faces_dir.text().strip(),
         }
 
@@ -613,7 +622,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._faces_dir):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -623,9 +632,10 @@ class SettingsPage(QWidget):
         self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
         self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
         self._faces_on.setChecked(v['faces_enabled'])
+        self._logos_on.setChecked(v['logos_enabled'])
         self._faces_dir.setText(v['faces_dir'])
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._faces_on, self._logos_on, self._faces_dir):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()
@@ -680,26 +690,36 @@ class SettingsPage(QWidget):
         self._refresh_footer()
 
     def _update_faces_status(self):
-        """'Found N facepacks' line (discovery only, no index build). A typed folder that does not exist is an error."""
+        """'Found N facepacks' / 'Found N logo packs' lines (discovery only, no index build). A typed folder that does not
+        exist is an error."""
         typed = self._faces_dir.text().strip()
-        fm, packs = _faces.status(typed, getattr(self.window(), '_save_path', None))
+        save = getattr(self.window(), '_save_path', None)
+        fm, packs = _faces.status(typed, save)
+        _fm, logos = _faces.status(typed, save, 'club')
         if typed and not os.path.isdir(os.path.expanduser(typed)):
             state, color, text = 'missing', C['non_hgp_red'], 'Folder not found. Check the path or choose another folder.'
+            ltext, lcolor = text, color
         elif fm is None:
             state, color = 'none', C['text_dim']
-            text = 'No FM24 folder found. Choose it above, or turn face pictures off.'
-        elif packs:
-            state, color = 'ok', _OK
-            text = f"Found {len(packs)} facepack{'s' if len(packs) != 1 else ''} · {', '.join(packs)}"
+            text = 'No FM24 folder found. Choose it above, or turn face pictures and club badges off.'
+            ltext, lcolor = text, color
         else:
-            state, color = 'empty', C['text_dim']
-            text = 'FM24 folder found, but no facepacks in its graphics folder.'
+            state = 'ok' if packs else 'empty'
+            color = _OK if packs else C['text_dim']
+            text = (f"Found {len(packs)} facepack{'s' if len(packs) != 1 else ''} · {', '.join(packs)}" if packs
+                    else 'FM24 folder found, but no facepacks in its graphics folder.')
+            lcolor = _OK if logos else C['text_dim']
+            ltext = (f"Found {len(logos)} logo pack{'s' if len(logos) != 1 else ''} · {', '.join(logos)}" if logos
+                     else 'No club logo packs in its graphics folder.')
         self._faces_state = state
         self._faces_dot.setStyleSheet(f"background:{color}; border-radius:3px;")
+        self._logos_dot.setStyleSheet(f"background:{lcolor}; border-radius:3px;")
         self._faces_msg.setText(text)
-        self._faces_msg.setProperty('bad', state == 'missing')
+        self._logos_msg.setText(ltext)
+        for m in (self._faces_msg, self._logos_msg):
+            m.setProperty('bad', state == 'missing')
         self._faces_dir.setProperty('err', state == 'missing')
-        for w in (self._faces_msg, self._faces_dir):
+        for w in (self._faces_msg, self._logos_msg, self._faces_dir):
             w.style().unpolish(w)
             w.style().polish(w)
 

@@ -41,6 +41,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Career history, recommended traits, and a Current / Full Potential projection (display only)
 - CA, PA and Development Rate as stars or raw numbers (Settings)
 - Face pictures from your own installed facepack (for example DF11): the player window header and the staff window show the same face the game does, looked up by the person's UniqueID from the pack's `config.xml`. Auto-detects your FM24 folder, reads it read-only, builds its index in the background (about half a second for 200,000 pictures), and can be switched off in Settings. Nothing is bundled: bring your own pack. Generated players (newgens) only show a face when your facepack tool has written a config for them, the same as in the game
+- Club badges from your own installed logo pack (for example FMG Standard Logos): shown before the club name in the player window, on Save Info and in the Club, Squads and Club Staff headers. Same read-only lookup as the face pictures, switch off in Settings; the club badge is found through the club's UniqueID, using the game's install database when available. Nothing is bundled: bring your own pack
 
 **Editing**
 - Homegrown flags (HGP / HGC) for the players of your own club: queue them from the player window or the Squads toolbar, then press Save Changes
