@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent, QElapsedTimer
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
 
+from gui.icon import logo_pixmap
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.clubextra import rep_stars
@@ -2143,9 +2144,11 @@ class MainWindow(QMainWindow):
             " font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;"
         )
         self._header_badge_lbl.setStyleSheet(self._header_badge_ss)
-        self._app_logo_px = QPixmap(os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon.png')).scaled(
-            56, 56, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self._app_logo_px = logo_pixmap(56, self.devicePixelRatioF())   # Welcome header logo: vector master
+        if self._app_logo_px.isNull():
+            self._app_logo_px = QPixmap(os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon.png')).scaled(
+                56, 56, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
         # Title + subtitle block
         text_block = QWidget()
@@ -2340,12 +2343,14 @@ class MainWindow(QMainWindow):
         mark.setObjectName('sbMark')
         mark.setFixedSize(_BRAND_MARK_PX, _BRAND_MARK_PX)
         mark.setStyleSheet("QLabel#sbMark { background:transparent; }")
-        _mark_px = QPixmap(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon-source.png'))
-        if not _mark_px.isNull():
-            mark.setPixmap(_mark_px.scaled(
-                _BRAND_MARK_PX * 2, _BRAND_MARK_PX * 2, Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation))
+        _mark_px = logo_pixmap(_BRAND_MARK_PX, self.devicePixelRatioF())   # vector master, crisp at any DPR
+        if _mark_px.isNull():   # SVG missing: raster fallback
+            _mark_px = QPixmap(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon-source.png'))
+            _mark_px = _mark_px.scaled(_BRAND_MARK_PX * 2, _BRAND_MARK_PX * 2, Qt.AspectRatioMode.KeepAspectRatio,
+                                       Qt.TransformationMode.SmoothTransformation)
             mark.setScaledContents(True)
+        if not _mark_px.isNull():
+            mark.setPixmap(_mark_px)
         wordmark = QLabel(_APP_WORDMARK.upper())
         wordmark.setObjectName('sbWordmark')
         wordmark.setFixedHeight(_BRAND_MARK_PX)
