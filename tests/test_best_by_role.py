@@ -47,7 +47,7 @@ def report(role, minpos=None):
 
 
 # --- default threshold hides the CB, threshold 1 shows it (and the GK) -------------------------------------------------------
-assert M._MIN_POS_DEFAULT == 12 and w._report_minpos.value() == 12
+assert M._MIN_POS_DEFAULT == 14 and w._report_minpos.value() == 14
 for role in ('Winger (A)', 'Advanced Forward (A)'):
     names, ratings = report(role)
     order = [p['id'] for p in people if p['name'] in names]
@@ -60,9 +60,10 @@ for role in ('Winger (A)', 'Advanced Forward (A)'):
     # displayed rating unchanged by the filter, survivors still ordered by it
     assert all(ratings[i] == ratings1[i] for i in ratings)
     assert [ratings[i] for i in order] == sorted(ratings.values(), reverse=True) and len(order) == len(ratings)
-assert 'Natural Forward' in report('Winger (A)')[0]          # AMR 14 >= 12
+assert 'Natural Forward' in report('Winger (A)')[0]          # AMR 14 >= 14 (default)
 assert 'Natural Forward' not in report('Winger (A)', 15)[0]  # raising the bar drops it
-assert 'Natural Winger' in report('Advanced Forward (A)')[0]  # ST 12 passes at exactly 12
+assert 'Natural Winger' not in report('Advanced Forward (A)')[0]  # ST 12 < 14 default
+assert 'Natural Winger' in report('Advanced Forward (A)', 12)[0]  # ST 12 passes at exactly 12
 assert 'Natural Winger' not in report('Advanced Forward (A)', 13)[0]
 assert 'Weak Winger' in report('Winger (A)')[0] and 'Weak Winger' not in report('Advanced Forward (A)')[0]
 
@@ -91,7 +92,7 @@ sub = w._header_subtitle_lbl.text()
 assert 'Best by Role' in sub and 'Winger (A)' in sub and '≥ 12' in sub, sub
 w._report_minpos.setValue(1)
 w._clear_report_filter()
-assert w._report_minpos.value() == 12
+assert w._report_minpos.value() == 14
 print('synthetic OK, header subtitle:', sub)
 
 # --- real save, read-only, via the parse cache --------------------------------------------------------------------------

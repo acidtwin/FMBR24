@@ -842,7 +842,7 @@ _POS_SORT_ORDER = {
     'AMC': 13, 'ST': 14,
 }
 
-_MIN_POS_DEFAULT = 12   # Best by Role: min position familiarity (1-20) at any position the role is played from
+_MIN_POS_DEFAULT = 14   # Best by Role: min position familiarity (1-20) at any position the role is played from
 
 _REPORT_ICONS = {'prospects': 'best_prospects', 'wonderkids': 'wonderkids', 'best_pos': 'best_in_position', 'best_role': 'best_by_role'}
 _REPORT_LABELS = {
