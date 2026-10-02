@@ -29,11 +29,13 @@ class ParseWorker(QThread):
         fix = get_member(self.save_path, fm) if fm else None
         if fix:
             X.add_club_stadiums(b, clubs, fix)
-        tables = []
+        tables, uids = [], []
         for n, m in by_name.items():
-            if re.fullmatch(r'rgman/comp_\d+\.dat', n):
+            mt = re.fullmatch(r'rgman/comp_(\d+)\.dat', n)
+            if mt:
                 tables.append(X.parse_comp_table(get_member(self.save_path, m)))
-        X.add_league_positions(clubs, tables, fix)
+                uids.append(int(mt.group(1)))   # the file number is the competition's UniqueID (logo pack key)
+        X.add_league_positions(clubs, tables, fix, uids)
 
     def _human_clubs(self, b, members, save_info, people, clubs):
         """Human-managed club ids (fm_editor.saveinfo.human_club_ids); cheap, so never cached."""

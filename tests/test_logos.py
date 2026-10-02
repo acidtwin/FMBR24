@@ -93,7 +93,7 @@ assert [p.name for p in faces.discover_packs(fm, kind='club')] == ['A Logos', 'B
 assert [p.name for p in faces.discover_packs(fm)] == ['Faces']                      # default kind = person: unchanged behaviour
 assert [p.name for p in faces.discover_packs(fm, kind=None)] == ['A Logos', 'B Logos', 'Faces']
 kinds = {p.name: set(p.kinds) for p in faces.discover_packs(fm, kind=None)}
-assert kinds == {'A Logos': {'club'}, 'B Logos': {'club'}, 'Faces': {'person'}}, kinds   # nations/icons do not make a person/club pack
+assert kinds == {'A Logos': {'club', 'nation'}, 'B Logos': {'club'}, 'Faces': {'person'}}, kinds   # nations count as a kind now, `icon`s do not
 assert [os.path.relpath(c, A) for c in faces._configs(A)] == [
     os.path.join('Clubs', 'Normal', 'Normal', 'config.xml'), os.path.join('Clubs', 'Normal', 'Small', 'config.xml'),
     os.path.join('Nations', 'Normal', 'Normal', 'config.xml')]
@@ -120,7 +120,7 @@ assert rel(728, idx_b) == os.path.join('B Logos', 'pictures', 'club', '728', 'lo
 assert idx.path(100) is not None and idx.path(728) is None                                     # persons unaffected, ids not mixed
 fidx = [f for f in os.listdir(cache_dir) if f.endswith('.fidx')]
 assert len(fidx) == 3 and not [f for f in os.listdir(cache_dir) if f.endswith('.json')], os.listdir(cache_dir)
-assert json.load(open(os.path.join(cache_dir, fidx[0])))['v'] == faces._INDEX_VERSION == 2
+assert json.load(open(os.path.join(cache_dir, fidx[0])))['v'] == faces._INDEX_VERSION == 3
 real_build = faces._build_pack
 faces._build_pack = lambda *a, **k: (_ for _ in ()).throw(AssertionError('rebuilt despite a valid cache'))
 c2 = faces.FaceIndex(fm, cache_dir=cache_dir)
@@ -157,9 +157,9 @@ assert faces.club_logo_path(728).endswith('729.png') and faces.club_logo_path(72
 assert faces.club_logo_path(0) is None and faces.club_logo_path(None) is None
 assert faces.club_logo_path(900) is None                                             # not in the table; the raw uid is never used as an id
 assert faces.face_path(100) is None                                                  # faces off, badges on
-assert settings.save({'logos_enabled': False, 'faces_enabled': False})
-assert faces.configure(cache_dir=cache_dir) is None                                  # both off: no index at all
-assert settings.save({'logos_enabled': True, 'faces_enabled': True})
+assert settings.save({'logos_enabled': False, 'faces_enabled': False, 'flags_enabled': False})
+assert faces.configure(cache_dir=cache_dir) is None                                  # all off: no index at all
+assert settings.save({'logos_enabled': True, 'faces_enabled': True, 'flags_enabled': True})
 
 # ---------------------------------------------------------------- Qt layer
 from gui import faces as gf  # noqa: E402

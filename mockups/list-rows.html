@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>List rows: faces, Dev stars, club badges, nation flags</title>
+<!--
+LIST ROWS MOCKUP (extends mockups/list-stars.html): what a row of the player / staff lists carries.
+Lists: Squads, Player Reports, Players, Player Shortlist (+ Staff, Staff Shortlist, Club Staff for face / badge / flag).
+Hash switches (combine with '&'):  #nofaces  #nobadges  #noflags  #nums  e.g. mockups/list-rows.html#nofaces&nobadges
+Pictures here are synthetic stand-ins (shapes), the app draws the installed packs' pictures.
+
+CELL SPEC (translated mechanically in gui/main_window.py: _FaceNameDelegate, _ClubBadgeDelegate, _FlagDelegate, StarsDelegate)
+  row height 30 (= Players view default section size; QTableWidget lists are 30 too)
+
+  NAME cell, faces ON (Settings > Face pictures):
+    face tile 20 x 24, radius 2, x = cell left + 10 (the cell's own text inset), centred vertically
+    tile background #292B32 (= the player window avatar box --elev); picture = the 260x310 cutout, scaled to FILL the tile
+      (KeepAspectRatioByExpanding, anchored top-centre = object-fit:cover; object-position:50% 0), the same crop as the avatar
+    no picture (not in any pack / index still loading): the avatar silhouette, 14px glyph (viewBox 24, stroke #525B68 1.6), centred in the tile
+    text starts at cell left + 10 + 20 + 8 = 38 (the app's own item text sits 3 px right of the 10 px inset, so the app's unfaced text starts at 13 and the column grows by 25, not 28: the text space stays the same, no layout jump)
+    Name column 175 (was 150)
+    faces OFF or no facepack on this machine: no tile, text at 10, Name 150 as before
+    the queued 3px yellow bar stays at x 0..3 of the cell (the tile starts at 10, no overlap); selected row #2A1B4A under the tile
+  DEV cell = CA / PA stars (fm_editor/abilitystars.py dev_stars: value / 4, half stars, ties up, clamp .5..5), same 5 stars 10px / gap 2,
+    column 76 in stars mode (45 in Numbers), raw value as tooltip 'Dev 14' in stars mode, sorts by the raw value, '?' stays text.
+    Best by Role's 'Rating' column (same slot as Dev) is NOT stars.
+  CLUB cell (Players, Reports, Staff, Shortlist; badges ON = Settings > Club badges AND a logo pack on this machine):
+    badge 22 x 22 (the 180 px logo scaled smooth, aspect kept, transparent), x = cell left + 10, centred vertically; column width 40 (was 160)
+    tooltip = the club name (always, also when the club has no badge); sorting by this column = the club NAME (the item keeps the name)
+    club without a badge (pack has no file, free agent shows nothing): the club NAME as text, 10px #8B96A8, elided to the 32px between x 4 and 36
+    (the column is resizable: drag it wider to read the names), tooltip as above
+    HEADER of the 40 px column: no label (a 'CLUB' header needs ~75 px in the app's header style, it would elide to 'CL...'); tooltip 'Club'. Sort arrow and click-to-sort stay.
+    badges OFF / no logo pack: the old text cell, width 160 and the 'Club' header
+  NATION cell (flags ON = Settings > Show nation flags AND a nation picture for the id): picture 22 x 22 (fit, transparent) at x = cell left + 10 (under the header text; the Shortlist's last column is stretched), centred vertically;
+    tooltip = nation name; no picture for that nation = the old emoji / text cell (14pt emoji) unchanged; flags OFF = the old cell
+  queued row: rgba(234,217,92,.10) tint under the whole row (cells paint it themselves), pictures on top; selected row: #2A1B4A.
+  Item hover: the app QSS has no item hover rule, so none here either; the tooltip is the hover feedback.
+-->
+<style>
+:root{--bg:#14151A;--alt:#161721;--sel:#2A1B4A;--hdr:#292B32;--bd:#343740;--tx:#fff;--tx2:#8B96A8;--dim:#525B68;--elev:#292B32}
+body{margin:0;padding:16px;background:#101116;color:var(--tx);font:13px/1.2 "Noto Sans",sans-serif}
+h3{font-size:12px;font-weight:600;color:var(--tx2);margin:18px 0 6px}
+.bar{margin-bottom:8px;font-size:12px;color:var(--tx2)} .bar a{color:#9A7CFF;margin-right:10px}
+table{border-collapse:collapse;table-layout:fixed;background:var(--bg);width:max-content}
+th{background:var(--hdr);color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:400;text-align:left;padding:6px 10px;border-right:1px solid var(--bd);border-bottom:1px solid var(--bd);overflow:hidden;white-space:nowrap}
+td{height:30px;padding:0 10px;border-bottom:1px solid rgba(52,55,64,.6);overflow:hidden;white-space:nowrap;box-sizing:border-box;position:relative}
+tr:nth-child(even) td{background:var(--alt)}
+tr.sel td{background:var(--sel)}
+tr.q td{background-image:linear-gradient(rgba(234,217,92,.10),rgba(234,217,92,.10))}
+tr.q td:first-child:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#EAD95C}
+td.st{padding:0 0 0 10px}
+.stars{display:flex;gap:2px;align-items:center;height:100%}
+.stars svg{width:10px;height:10px;flex:none}
+.pos{display:inline-block;background:#2A2D35;color:var(--tx2);font:700 10px/16px sans-serif;padding:0 5px;border-radius:2px}
+/* name cell */
+.nm{display:flex;align-items:center;height:100%}
+.face{width:20px;height:24px;border-radius:2px;background:var(--elev);flex:none;margin-right:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.face svg.pic{width:100%;height:100%;display:block}
+.face svg.sil{width:14px;height:14px}
+.nmt{overflow:hidden;text-overflow:ellipsis}
+/* club / nation */
+td.cl{padding:0}
+td.cl .b{position:absolute;left:10px;top:4px;width:22px;height:22px}
+td.cl .ct{position:absolute;left:4px;right:4px;top:0;bottom:0;display:flex;align-items:center;font-size:10px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.fl{padding:0 0 0 10px;text-align:left}
+td.fl .f{display:inline-block;width:22px;height:22px;vertical-align:middle}
+td.fl .em{font-size:14pt;line-height:30px}
+.tip{position:fixed;display:none;background:var(--elev);border:1px solid #454A58;border-radius:3px;padding:4px 8px;font-size:11px;color:#fff;z-index:20;pointer-events:none}
+</style></head><body>
+<div class="bar">Mode: <a href="#" onclick="setTimeout(()=>location.reload())">All on (default)</a><a href="#nofaces&nobadges&noflags&nums" onclick="setTimeout(()=>location.reload())">All off, Numbers</a><a href="#nofaces" onclick="setTimeout(()=>location.reload())">No faces</a><a href="#nobadges" onclick="setTimeout(()=>location.reload())">No badges</a><a href="#noflags" onclick="setTimeout(()=>location.reload())">No flags</a> &nbsp; selected row = 3rd, queued row = 4th. Hover the Club / Nation cells for the tooltip.</div>
+<h3>Players / Player Reports (Name, INJ, Pos, CA, PA, Dev, Age, Nation, HGP, Club, CtrE)</h3>
+<table id="t1"></table>
+<h3>Squads (no Club column) / Player Shortlist (Name, Club, Type, Pos, CA, PA, Age, Nation) / Staff (Name, Club, Nation, Age ...) use the same cells</h3>
+<table id="t2"></table>
+<div class="tip" id="tip"></div>
+<script>
+const H=location.hash;const NOF=H.includes('nofaces'),NOB=H.includes('nobadges'),NOFL=H.includes('noflags'),NUMS=H.includes('nums');
+const star=(v,div)=>{const n=Math.max(.5,Math.min(5,Math.floor(v/div*2+.5)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));
+ const P='M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z';
+ s+=`<svg viewBox="0 0 15 15"><defs><clipPath id="c${i}_${v}_${div}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="${P}" fill="#3A4050"/><path d="${P}" fill="#F5C518" clip-path="url(#c${i}_${v}_${div})"/></svg>`}return s};
+const stars=(v,d)=>v==='?'?'?':NUMS?v:`<div class="stars">${star(v,d)}</div>`;
+const sil='<svg class="sil" viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+const pic=(c)=>`<svg class="pic" viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice"><circle cx="130" cy="120" r="62" fill="${c}"/><path d="M20 310c0-90 50-130 110-130s110 40 110 130z" fill="${c}" opacity=".7"/></svg>`;
+const face=(c)=>NOF?'':`<div class="face">${c?pic(c):sil}</div>`;
+const badge=(c,name)=>c?`<svg class="b" viewBox="0 0 22 22"><path d="M3 2h16v10c0 5-5 8-8 9-3-1-8-4-8-9z" fill="${c}"/><circle cx="11" cy="9" r="3" fill="#fff" opacity=".85"/></svg>`:`<div class="ct">${name}</div>`;
+const flag=(c,emoji)=>c?`<span class="f"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="10" fill="${c}"/><path d="M11 1v20M1 11h20" stroke="#fff" stroke-width="2" opacity=".8"/></svg></span>`:`<span class="em">${emoji}</span>`;
+const WN=NOF?150:175, WC=NOB?160:40, WS=NUMS?45:76;
+// name, inj, pos, ca, pa, dev, age, nation(c,emoji,name), hgp, club(c,name), ctr, faceColour
+const rows=[['Kylian Mbappe','','ST',187,188,17,25,['#1d6fb8','F','France'],'HGP',['#d4a017','Real Madrid'],'2029','#c68642'],
+ ['Jude Bellingham','','AMC',172,190,18,21,['#c8102e','E','England'],'',['#d4a017','Real Madrid'],'2029','#e0ac69'],
+ ['Reece James','INJ','DR',160,171,12,24,['#c8102e','E','England'],'',['#1d4fa8','Chelsea'],'2030','#8d5524'],
+ ['Lamine Yamal','','AMR',141,200,20,17,['#c60b1e','S','Spain'],'',['#a50044','Barcelona'],'2030',null],
+ ['Nick Woltemade','','ST',110,125,10,22,['#222','G','Germany'],'',[null,'VfB Stuttgart'],'2028','#f1c27d'],
+ ['Academy Kid','','MC',45,152,14,16,[null,'\u{1F1F3}\u{1F1F4}','Norway'],'HGP',[null,'Molde'],'2027',null],
+ ['Journeyman','','DC',86,86,8,34,['#0b6b3a','I','Ireland'],'',['#6a1b9a','Shamrock Rovers'],'2026','#c68642'],
+ ['Unknown','','GK','?','?','?',30,[null,'?',''],'',[null,'Free agent'],'','']];
+const tipEl=document.getElementById('tip');
+document.addEventListener('mousemove',e=>{const t=e.target.closest('[data-tip]');if(!t){tipEl.style.display='none';return}tipEl.textContent=t.dataset.tip;tipEl.style.display='block';tipEl.style.left=(e.clientX+12)+'px';tipEl.style.top=(e.clientY+16)+'px'});
+const nat=(r)=>{const n=r[7];return `<td class="fl" data-tip="${n[2]}">${NOFL?`<span class="em">${n[1].length>1?n[1]:'\u{1F3F3}'}</span>`:flag(n[0],n[1].length>1?n[1]:'\u{1F3F3}')}</td>`};
+const clubCell=(r)=>{const c=r[9];return `<td class="cl" data-tip="${c[1]}">${NOB?`<div style="position:absolute;left:10px;top:0;bottom:0;display:flex;align-items:center">${c[1]}</div>`:badge(c[0],c[1])}</td>`};
+let h='<tr>'+[['Name',WN],['INJ',35],['Pos',55],['CA',WS],['PA',WS],['Dev',WS],['Age',40],['Nation',50],['HGP',62],['Club',WC],['CtrE',65]].map(c=>`<th style="width:${c[1]}px"${c[0]=='Club'&&!NOB?' title="Club"':''}>${c[0]=='Club'&&!NOB?'':c[0]}</th>`).join('')+'</tr>';
+rows.forEach((r,k)=>{h+=`<tr class="${k==2?'sel':''} ${k==3?'q':''}"><td><div class="nm">${face(r[11])}<span class="nmt">${r[0]}</span></div></td><td>${r[1]}</td><td><span class="pos">${r[2]}</span></td>`+
+ [[3,40,'CA '],[4,40,'PA '],[5,4,'Dev ']].map(([i,d,l])=>`<td class="${NUMS?'':'st'}" ${NUMS||r[i]==='?'?'':`data-tip="${l}${r[i]}"`}>${stars(r[i],d)}</td>`).join('')+`<td>${r[6]}</td>${nat(r)}<td>${r[8]}</td>${clubCell(r)}<td>${r[10]}</td></tr>`});
+document.getElementById('t1').innerHTML=h;
+let h2='<tr>'+[['Name',WN],['INJ',35],['Pos',55],['CA',WS],['PA',WS],['Dev',WS],['Age',40],['Nation',50]].map(c=>`<th style="width:${c[1]}px">${c[0]}</th>`).join('')+'</tr>';
+rows.slice(0,5).forEach((r,k)=>{h2+=`<tr><td><div class="nm">${face(r[11])}<span class="nmt">${r[0]}</span></div></td><td>${r[1]}</td><td><span class="pos">${r[2]}</span></td>`+
+ [3,4,5].map(i=>`<td class="${NUMS?'':'st'}">${stars(r[i],i==5?4:40)}</td>`).join('')+`<td>${r[6]}</td>${nat(r)}</tr>`});
+document.getElementById('t2').innerHTML=h2;
+</script></body></html>

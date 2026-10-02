@@ -3,6 +3,9 @@
     svc = get_service()
     px = svc.pixmap(person.get('uid'), 54, 64, dpr, radius=3)   # QPixmap or None (none / index still loading / off)
     bx = svc.club_pixmap(club.get('uid'), 18, dpr)              # club badge in an 18x18 box (aspect kept, transparent) or None
+    fx = svc.nation_pixmap(person.get('nation'), 22, dpr)       # nation picture (our nation entity id) or None
+    cx = svc.comp_pixmap(club['league']['comp_uid'], 16, dpr)   # competition logo or None
+    svc.active('club')                                          # True when badges are on, the index is loaded and a pack has some
     svc.set_clubs(clubs, extra_uids, save_path)                 # on every save load, before start(): the uid -> logo id key table
     svc.ready.connect(refresh)                                  # emitted once when the index (and the club key table) is available
 
@@ -17,7 +20,7 @@ from PyQt6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 
 from fm_editor import faces as _faces
 
-LRU_SIZE = 256
+LRU_SIZE = 2048   # tiny pixmaps (a 20x24 face is 2 KB): the Players list shows ~100 distinct pictures per screen
 
 
 class FaceService(QObject):
@@ -27,6 +30,8 @@ class FaceService(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._lru = OrderedDict()   # (path, w, h, dpr, radius, fit) -> QPixmap
+        self._act = {}              # kind -> bool, see active()
+        self._bad = set()           # picture files that failed to decode (vanished / corrupt): not retried on every paint
         self._clubs = None          # (clubs, extra uids, save path) of the loaded save: key table input
         self._busy = False
         self._started = False
@@ -41,6 +46,8 @@ class FaceService(QObject):
         """(Re)read the settings and load the index in the background. Safe to call again (Settings saved, new save).
         A plain daemon thread, not a QThread: a QThread still running when a script / the app exits aborts the process."""
         self._lru.clear()
+        self._act = {}
+        self._bad = set()
         self._started = True
         idx = _faces.configure(save_path)
         if idx is None:
@@ -68,15 +75,32 @@ class FaceService(QObject):
 
     def _on_loaded(self):
         self._busy = False
+        self._act = {}
         self.ready.emit()
+
+    def active(self, kind):
+        """True when pictures of `kind` ('person', 'club', 'nation', 'comp', 'kit') can show: the setting is on, the index is
+        loaded and some pack holds some. The lists use it to pick the picture layout over the text one (cached per index load)."""
+        a = self._act.get(kind)
+        if a is None:
+            a = self._act[kind] = bool(self._started and not self._busy and _faces.has_kind(kind))
+        return a
 
     def loading(self):
         return self._busy
 
     def path(self, uid, kind='person'):
+        """Picture file for a key of `kind` (person UniqueID, club save uid, our nation id, competition UniqueID) or None. No
+        file-exists stat (paint path): a vanished file fails once in _render."""
         if not self._started:
             self.start()          # first request without an explicit start(): auto-detect, picture appears on `ready`
-        return _faces.club_logo_path(uid) if kind == 'club' else _faces.face_path(uid, kind)
+        if kind == 'club':
+            return _faces.club_logo_path(uid, False)
+        if kind == 'nation':
+            return _faces.nation_logo_path(uid, False)
+        if kind == 'comp':
+            return _faces.comp_logo_path(uid, False)
+        return _faces.media_path('person', uid, False) if kind == 'person' else None
 
     def pixmap(self, uid, w, h, dpr=1.0, radius=0, kind='person', fit=False):
         """Face scaled for a w x h (logical px) box, or None. fit=False: fill the box (KeepAspectRatioByExpanding,
@@ -85,6 +109,8 @@ class FaceService(QObject):
         path = self.path(uid, kind)
         if not path:
             return None
+        if path in self._bad:
+            return None
         key = (path, w, h, dpr, radius, fit)
         px = self._lru.get(key)
         if px is not None:
@@ -92,6 +118,7 @@ class FaceService(QObject):
             return px
         px = _render(path, w, h, dpr, radius, fit)
         if px is None:
+            self._bad.add(path)
             return None
         self._lru[key] = px
         while len(self._lru) > LRU_SIZE:
@@ -102,6 +129,15 @@ class FaceService(QObject):
         """Club badge (club['uid'], the parsed save uid) fitted inside a size x size box: aspect kept, centred, transparent
         background, smooth. None = no pack / no logo for this club / still loading / Settings > Club badges off."""
         return self.pixmap(club_uid, size, size, dpr, kind='club', fit=True)
+
+    def nation_pixmap(self, nation_id, size, dpr=1.0):
+        """Nation picture (our nation entity id) fitted inside size x size, or None (Settings > Nation flags off / no pack /
+        no picture for the nation / still loading)."""
+        return self.pixmap(nation_id, size, size, dpr, kind='nation', fit=True)
+
+    def comp_pixmap(self, comp_uid, size, dpr=1.0):
+        """Competition logo (competition UniqueID) fitted inside size x size, or None."""
+        return self.pixmap(comp_uid, size, size, dpr, kind='comp', fit=True)
 
 
 def _render(path, w, h, dpr, radius, fit):

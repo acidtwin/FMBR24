@@ -17,6 +17,12 @@ ignored) and `<id>` is the club's game UniqueID, NOT our parsed club uid (fm_edi
 `Alternatives/Retro/Fantasy` have no config.xml: FM does not map them either. Folder-per-id layout:
 `<pack>/pictures/club/<id>/logo.png`. One index per pack covers both kinds.
 
+Nation logos (`to="graphics/pictures/nation/<id>/logo"`), competition logos (`.../comp/<id>/logo`) and kit images
+(`.../team/<id>/kits/<home|away|third|...>`, the key is `<id>/<variant>`) use the same mechanism and the same index; the
+folder-per-id forms are `<pack>/pictures/<nation|comp>/<id>/logo.png` and `<pack>/pictures/team/<id>/kits/<variant>.png`. Nation
+ids are the nations' UniqueIDs (fm_editor/nationuid.py maps our nation entity id), comp ids are the competition UniqueID
+(the `rgman/comp_<id>.dat` number), kit team ids are the club logo id (same 'next uid' rule as club logos).
+
 Index = one small JSON per pack in the cache dir (`faces-<hash>.fidx`, never touched by Settings > Clear cache),
 validated by mtime/size of the pack folder, its config.xml(s) and pictures/person. Building it for 200k pictures is
 ~0.5 s (one regex pass over a 16 MB config + one directory listing); loading the cached index ~0.2 s. Neither
@@ -37,9 +43,12 @@ from fm_editor import settings as _settings
 _FM_NAME = 'Football Manager 2024'
 _STEAM_APPID = '2252570'
 _EXTS = ('.png', '.jpg', '.jpeg')                      # lookup priority when a stem exists in several formats
-_RECORD = re.compile(rb'<record\s+from="([^"]*)"\s+to="graphics/pictures/(person|club)/([^/"]+)/(portrait|logo)"')
-_KIND_ROLE = {b'person': b'portrait', b'club': b'logo'}   # a record counts only with its own role (club `icon`s are ignored)
-_INDEX_VERSION = 2
+KINDS = ('person', 'club', 'nation', 'comp', 'kit')
+# resource folder -> kind; a record counts only with its own role (club/nation `icon`s, `logo/huge`, 3D `kits_textures` are ignored)
+_DIR_KIND = {'person': 'person', 'club': 'club', 'nation': 'nation', 'comp': 'comp', 'team': 'kit'}
+_RECORD = re.compile(rb'<record\s+from="([^"]*)"\s+to="graphics/pictures/(person|club|nation|comp|team)/([^/"]+)/'
+                     rb'(portrait|logo|kits/[^/"]+)"')
+_INDEX_VERSION = 3
 _EXT_RANK = {e: i for i, e in enumerate(_EXTS)}
 _MAX_DEPTH = 3          # config.xml levels below the pack folder (FMG: Clubs/Normal/Normal)
 _LEAF_FILES = 200       # a folder with this many files before any subfolder is a picture folder: do not list it further
@@ -114,7 +123,13 @@ def _configs(pack_dir, flat=False):
     return out
 
 
-_CLUB_LOGO_REC = re.compile(rb'pictures/club/[^/"]+/logo"')
+_KIND_PROBES = (('person', re.compile(rb'pictures/person/[^/"]+/portrait"')),
+                ('club', re.compile(rb'pictures/club/[^/"]+/logo"')),
+                ('nation', re.compile(rb'pictures/nation/[^/"]+/logo"')),
+                ('comp', re.compile(rb'pictures/comp/[^/"]+/logo"')),
+                ('kit', re.compile(rb'pictures/(?:team|club)/[^/"]+/kits/[^/"]+"')))
+# folder-per-id trees: kind -> (folder under pictures/, leaf below the id folder)
+_TREES = {'person': ('person', 'portrait'), 'club': ('club', 'logo'), 'nation': ('nation', 'logo'), 'comp': ('comp', 'logo')}
 
 
 def _config_kinds(config_path):
@@ -123,12 +138,7 @@ def _config_kinds(config_path):
             head = f.read(1 << 20)
     except OSError:
         return set()
-    out = set()
-    if b'pictures/person/' in head:
-        out.add('person')
-    if _CLUB_LOGO_REC.search(head):
-        out.add('club')
-    return out
+    return {k for k, rx in _KIND_PROBES if rx.search(head)}
 
 
 def _has_person_records(config_path):
@@ -136,11 +146,13 @@ def _has_person_records(config_path):
 
 
 def pack_kinds(pack_dir, flat=False):
-    """{'person', 'club'} subset: what this folder holds (records in a config.xml, or the folder-per-id trees)."""
+    """Subset of KINDS this folder holds (records in a config.xml, or the folder-per-id trees)."""
     out = set()
-    for kind in ('person', 'club'):
-        if os.path.isdir(os.path.join(pack_dir, 'pictures', kind)):
+    for kind, (folder, _leaf) in _TREES.items():
+        if os.path.isdir(os.path.join(pack_dir, 'pictures', folder)):
             out.add(kind)
+    if os.path.isdir(os.path.join(pack_dir, 'pictures', 'team')):
+        out.add('kit')
     for c in _configs(pack_dir, flat):
         out |= _config_kinds(c)
     return out
@@ -151,9 +163,10 @@ def is_facepack(pack_dir):
 
 
 def discover_packs(fm_dir, order=(), kind='person'):
-    """[Pack(name, path, flat, kinds)] picture packs under <fm_dir>/graphics holding `kind` ('person' = facepacks, 'club' =
-    logo packs, None = either), highest priority first. The graphics folder itself counts when it holds a config.xml with such
-    records (the classic 'config.xml + faces/ in graphics' install)."""
+    """[Pack(name, path, flat, kinds)] picture packs under <fm_dir>/graphics holding `kind` (one of KINDS; 'person' = facepacks,
+    'club' = logo packs, None = any), highest priority first. The graphics folder itself counts when it holds a config.xml with
+    such records (the classic 'config.xml + faces/ in graphics' install). Kit packs live in `graphics/kits/<pack>/`
+    (one level deeper): they are found as packs named 'kits/<pack>'."""
     g = os.path.join(fm_dir or '', 'graphics')
     packs = []
     try:
@@ -164,7 +177,15 @@ def discover_packs(fm_dir, order=(), kind='person'):
     cand = []
     if os.path.isfile(root_cfg):
         cand.append(Pack('graphics', g, True))
-    cand += [Pack(n, os.path.join(g, n), False) for n in names]
+    for n in names:
+        if n.casefold() != 'kits' or os.path.isfile(os.path.join(g, n, 'config.xml')):
+            cand.append(Pack(n, os.path.join(g, n), False))
+        if n.casefold() == 'kits':          # graphics/kits/<pack>/config.xml: one pack per sub folder
+            try:
+                subs = sorted((e.name for e in os.scandir(os.path.join(g, n)) if e.is_dir()), key=str.casefold)
+            except OSError:
+                subs = []
+            cand += [Pack(f'{n}/{sn}', os.path.join(g, n, sn), False) for sn in subs]
     for pk in cand:
         kinds = frozenset(pack_kinds(pk.path, pk.flat))
         if kinds and (kind is None or kind in kinds):
@@ -182,7 +203,7 @@ def _signature(pack_dir, flat=False):
             return [os.path.relpath(p, pack_dir), s.st_mtime_ns, s.st_size]
         except OSError:
             return [os.path.relpath(p, pack_dir), 0, 0]
-    paths = [pack_dir, os.path.join(pack_dir, 'pictures', 'person'), os.path.join(pack_dir, 'pictures', 'club')] \
+    paths = [pack_dir] + [os.path.join(pack_dir, 'pictures', f) for f in ('person', 'club', 'nation', 'comp', 'team')] \
         + _configs(pack_dir, flat)
     return [st(p) for p in paths]
 
@@ -207,10 +228,20 @@ def _listing(folder, memo):
     return got
 
 
+def _record_kind(dirname, role):
+    """(kind, key suffix) of a record's resource path part, or None when the record is not one we index."""
+    if role.startswith('kits/'):
+        return ('kit', role[5:]) if dirname in ('team', 'club') else None
+    if role == 'portrait':
+        return ('person', '') if dirname == 'person' else None
+    return (_DIR_KIND[dirname], '') if dirname in ('club', 'nation', 'comp') else None   # role 'logo'
+
+
 def _build_pack(pack_dir, flat=False):
-    """({person key -> path}, {club logo id -> path}); paths relative to pack_dir, '' = '<key>.png' next to the pack's top
-    config.xml (persons only: the short form keeps the 200k-entry DF11 index small)."""
-    out = {'person': {}, 'club': {}}
+    """{kind: {key -> path}} for one pack. Paths relative to pack_dir; '' = '<key>.png' next to the pack's top config.xml
+    (persons only: the short form keeps the 200k-entry DF11 index small). Keys: person uid / 'r-<uid>', club logo id, nation id,
+    comp id, kit '<team id>/<variant>'."""
+    out = {k: {} for k in KINDS}
     memo = {}
     for cfg in _configs(pack_dir, flat):
         base = os.path.dirname(cfg)
@@ -221,14 +252,16 @@ def _build_pack(pack_dir, flat=False):
         except OSError:
             continue
         for m in _RECORD.finditer(data):
-            kind = m.group(2)
-            if m.group(4) != _KIND_ROLE[kind]:
+            rk = _record_kind(m.group(2).decode(), m.group(4).decode())
+            if rk is None:
                 continue
-            kind = kind.decode()
+            kind = rk[0]
             frm = m.group(1).decode('utf-8', 'replace')
             if '&' in frm:
                 frm = html.unescape(frm)
             key = m.group(3).decode('utf-8', 'replace')
+            if kind == 'kit':
+                key += '/' + rk[1]
             dest = out[kind]
             folder, _, stem = frm.replace('\\', '/').rpartition('/')
             name = _listing(os.path.join(base, folder) if folder else base, memo).get(stem.casefold())
@@ -236,8 +269,8 @@ def _build_pack(pack_dir, flat=False):
                 continue
             rel = os.path.normpath(os.path.join(reldir, folder, name)) if (folder or reldir != '.') else name
             dest[key] = '' if (kind == 'person' and rel == key + '.png') else rel
-    for kind, leaf in (('person', 'portrait'), ('club', 'logo')):
-        pdir = os.path.join(pack_dir, 'pictures', kind)
+    for kind, (folder, leaf) in _TREES.items():
+        pdir = os.path.join(pack_dir, 'pictures', folder)
         try:
             ids = [e.name for e in os.scandir(pdir) if e.is_dir()]
         except OSError:
@@ -247,8 +280,17 @@ def _build_pack(pack_dir, flat=False):
                 continue
             name = _listing(os.path.join(pdir, key), memo).get(leaf)
             if name:
-                out[kind][key] = os.path.join('pictures', kind, key, name)
-    return out['person'], out['club']
+                out[kind][key] = os.path.join('pictures', folder, key, name)
+    tdir = os.path.join(pack_dir, 'pictures', 'team')       # kits: pictures/team/<id>/kits/<variant>.png
+    try:
+        tids = [e.name for e in os.scandir(tdir) if e.is_dir()]
+    except OSError:
+        tids = []
+    for tid in tids:
+        kdir = os.path.join(tdir, tid, 'kits')
+        for variant, name in _listing(kdir, memo).items():
+            out['kit'].setdefault(f'{tid}/{variant}', os.path.join('pictures', 'team', tid, 'kits', name))
+    return out
 
 
 def _cache_file(cache_dir, pack_dir):
@@ -257,31 +299,30 @@ def _cache_file(cache_dir, pack_dir):
 
 
 def load_pack_index(pack_dir, cache_dir, flat=False):
-    """(person map, club map) of one pack from the disk cache when its signature still matches, else rebuilt and cached."""
+    """{kind: {key: rel path}} of one pack from the disk cache when its signature still matches, else rebuilt and cached."""
     sig = _signature(pack_dir, flat)
     cf = _cache_file(cache_dir, pack_dir)
     try:
         with open(cf, encoding='utf-8') as f:
             data = json.load(f)
         if data.get('v') == _INDEX_VERSION and data.get('sig') == sig:
-            return data['map'], data['club']
+            return data['maps']
     except Exception:
         pass
-    people, clubs = _build_pack(pack_dir, flat)
+    maps = _build_pack(pack_dir, flat)
     try:
         os.makedirs(cache_dir, exist_ok=True)
         tmp = cf + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump({'v': _INDEX_VERSION, 'sig': sig, 'map': people, 'club': clubs}, f, separators=(',', ':'))
+            json.dump({'v': _INDEX_VERSION, 'sig': sig, 'maps': maps}, f, separators=(',', ':'))
         os.replace(tmp, cf)
     except OSError:
         pass  # a read-only cache dir only costs a rebuild next time
-    return people, clubs
+    return maps
 
 
 class FaceIndex:
-    """uid -> face picture and logo id -> club badge over all picture packs. `load()` blocks (run it in a worker); `path()` and
-    `club_path()` never do."""
+    """key -> picture file over all picture packs, per kind (KINDS). `load()` blocks (run it in a worker); the lookups never do."""
 
     def __init__(self, fm_dir, order=(), cache_dir=None):
         if cache_dir is None:
@@ -290,44 +331,55 @@ class FaceIndex:
         self.fm_dir = fm_dir
         self.order = list(order)
         self.cache_dir = cache_dir
-        self.packs = []        # [Pack] after load()
-        self._maps = []        # person maps, parallel to packs
-        self._club_maps = []   # club logo maps, parallel to packs
+        self.packs = []                       # [Pack] after load()
+        self._k = {k: [] for k in KINDS}      # kind -> [map per pack], parallel to packs
         self.ready = False
 
     def load(self):
         packs = discover_packs(self.fm_dir, self.order, None) if self.fm_dir else []
         loaded = [load_pack_index(p.path, self.cache_dir, p.flat) for p in packs]
-        self._club_maps = [c for _p, c in loaded]
-        self.packs, self._maps, self.ready = packs, [p for p, _c in loaded], True   # published last: path() reads these lock-free
+        k = {kind: [m.get(kind, {}) for m in loaded] for kind in KINDS}
+        self.packs, self._k, self.ready = packs, k, True    # published last: the lookups read these lock-free
+
+    def kind_count(self, kind):
+        return sum(len(m) for m in self._k[kind])
 
     def count(self):
-        return sum(len(m) for m in self._maps)
+        return self.kind_count('person')
 
     def club_count(self):
-        return sum(len(m) for m in self._club_maps)
+        return self.kind_count('club')
 
-    def path(self, uid):
-        """Best picture file for a UniqueID, or None (not loaded, no pack has it, file vanished)."""
-        for key in (str(uid), 'r-' + str(uid)):
-            for pk, m in zip(self.packs, self._maps):
-                rel = m.get(key)
+    def find(self, kind, key, check=True):
+        """Picture file for `key` of `kind`, or None. check=False skips the file-exists stat (paint paths: a vanished file
+        just fails to decode once)."""
+        key = str(key)
+        keys = (key, 'r-' + key) if kind == 'person' else (key,)
+        for k in keys:
+            for pk, m in zip(self.packs, self._k[kind]):
+                rel = m.get(k)
                 if rel is not None:
-                    p = os.path.join(pk.path, rel or key + '.png')
-                    if os.path.isfile(p):
+                    p = os.path.join(pk.path, rel or k + '.png')
+                    if not check or os.path.isfile(p):
                         return p
         return None
 
+    def path(self, uid):
+        """Best picture file for a person UniqueID, or None (not loaded, no pack has it, file vanished)."""
+        return self.find('person', uid)
+
     def club_path(self, logo_id):
         """Badge file for a club logo id (the pack key, see fm_editor/clublogo.py), or None."""
-        key = str(logo_id)
-        for pk, m in zip(self.packs, self._club_maps):
-            rel = m.get(key)
-            if rel:
-                p = os.path.join(pk.path, rel)
-                if os.path.isfile(p):
-                    return p
-        return None
+        return self.find('club', logo_id)
+
+    def nation_path(self, nation_uid):
+        return self.find('nation', nation_uid)
+
+    def comp_path(self, comp_uid):
+        return self.find('comp', comp_uid)
+
+    def kit_path(self, logo_id, variant='home'):
+        return self.find('kit', f'{logo_id}/{variant}')
 
 
 # ---------------------------------------------------------------- shared instance (settings driven)
@@ -336,20 +388,22 @@ _lock = threading.Lock()
 _index = None
 _faces_on = False       # Settings > Face pictures
 _logos_on = False       # Settings > Club badges
+_flags_on = False       # Settings > Nation flags and competition logos
 _club_uids = None       # sorted club uid list of the loaded save (fm_editor/clublogo.build), set by set_club_uids()
 
 
 def configure(save_path=None, cache_dir=None):
-    """(Re)create the shared index from the settings (faces_enabled, logos_enabled, faces_dir, faces_pack_order, env). Cheap:
-    nothing is read until `ensure_loaded()`. Returns the index or None when face pictures AND club badges are off / no FM24
-    folder. One index serves both kinds; the two switches only gate the lookups."""
-    global _index, _faces_on, _logos_on
+    """(Re)create the shared index from the settings (faces_enabled, logos_enabled, flags_enabled, faces_dir, faces_pack_order,
+    env). Cheap: nothing is read until `ensure_loaded()`. Returns the index or None when all switches are off / no FM24 folder.
+    One index serves every kind; the switches only gate the lookups (kits have no switch: lookup only, no UI yet)."""
+    global _index, _faces_on, _logos_on, _flags_on
     s = _settings.load()
-    want = s['faces_enabled'] or s['logos_enabled']
+    want = s['faces_enabled'] or s['logos_enabled'] or s['flags_enabled']
     fm = find_fm_dir(s['faces_dir'], save_path) if want else None
     with _lock:
         _index = FaceIndex(fm, s['faces_pack_order'], cache_dir) if fm else None
-        _faces_on, _logos_on = bool(fm and s['faces_enabled']), bool(fm and s['logos_enabled'])
+        _faces_on, _logos_on, _flags_on = (bool(fm and s['faces_enabled']), bool(fm and s['logos_enabled']),
+                                           bool(fm and s['flags_enabled']))
         return _index
 
 
@@ -367,34 +421,78 @@ def set_club_uids(uids):
     _club_uids = uids
 
 
+def has_kind(kind):
+    """True when the index is loaded, the kind's switch is on and some pack holds pictures of that kind (the UI uses it to decide
+    between a picture column and the plain text one)."""
+    idx = _index
+    if idx is None or not idx.ready or not _kind_on(kind):
+        return False
+    return idx.kind_count(kind) > 0
+
+
+def _kind_on(kind):
+    return {'person': _faces_on, 'club': _logos_on, 'nation': _flags_on, 'comp': _flags_on, 'kit': True}.get(kind, False)
+
+
+def media_path(kind, key, check=True):
+    """Picture file of `kind` for the index key `key` (see FaceIndex.find) or None. Never blocks and never raises: None until the
+    index is loaded or when the kind's switch is off."""
+    idx = _index
+    if idx is None or not idx.ready or not key or not _kind_on(kind):
+        return None
+    try:
+        return idx.find(kind, key, check)
+    except Exception:
+        return None
+
+
 def face_path(uid, kind='person'):
     """Picture path for a person UniqueID or None. Never blocks and never raises: None until the index is loaded,
     when face pictures are off, or for any kind other than 'person' (staff share the person pictures)."""
-    idx = _index
-    if kind != 'person' or idx is None or not idx.ready or not uid or not _faces_on:
+    return media_path('person', uid) if kind == 'person' else None
+
+
+def club_logo_id(club_uid):
+    """The logo id of a club's parsed save uid, or None (key table not loaded / unknown club)."""
+    uids = _club_uids
+    if not club_uid or not uids:
         return None
     try:
-        return idx.path(uid)
+        return _clublogo.logo_id(uids, club_uid)
     except Exception:
         return None
 
 
-def club_logo_path(club_uid):
+def club_logo_path(club_uid, check=True):
     """Badge file for a club's parsed save uid (`club['uid']`) or None. Never blocks and never raises: None until the index
     and the save's club list are loaded, when club badges are off, for an unknown club or a club the packs have no logo for.
     No fallback to the raw uid: it is the id of a different (the previous) club."""
-    idx, uids = _index, _club_uids
-    if idx is None or not idx.ready or not club_uid or not _logos_on or not uids:
-        return None
-    try:
-        lid = _clublogo.logo_id(uids, club_uid)
-        return idx.club_path(lid) if lid is not None else None
-    except Exception:
-        return None
+    lid = club_logo_id(club_uid)
+    return media_path('club', lid, check) if lid is not None else None
+
+
+def nation_logo_path(nation_id, check=True):
+    """Nation picture for our nation entity id (club record +13 / person end+9), via fm_editor/nationuid.py, or None."""
+    from fm_editor import nationuid
+    uid = nationuid.nation_uid(nation_id)
+    return media_path('nation', uid, check) if uid is not None else None
+
+
+def comp_logo_path(comp_uid, check=True):
+    """Competition logo for a competition UniqueID (the number of `rgman/comp_<id>.dat`), or None."""
+    return media_path('comp', comp_uid, check)
+
+
+def kit_path(club_uid, variant='home'):
+    """Kit picture ('home' | 'away' | 'third' | other variant a pack names) for a club's parsed save uid, from the kit packs in
+    `graphics/kits/<pack>/` (config.xml `to="graphics/pictures/team/<logo id>/kits/<variant>"`), or None. Same id rule as club
+    logos. No UI uses it yet."""
+    lid = club_logo_id(club_uid)
+    return media_path('kit', f'{lid}/{variant}') if lid is not None else None
 
 
 def status(configured='', save_path=None, kind='person'):
-    """(fm_dir, [pack names]) for the Settings row: facepacks (kind 'person') or logo packs ('club'). Cheap (no index
+    """(fm_dir, [pack names]) for the Settings row: facepacks (kind 'person'), logo packs ('club'), 'nation', ... Cheap (no index
     build): discovery only."""
     fm = find_fm_dir(configured, save_path)
     s = _settings.load()
