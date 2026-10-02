@@ -11,7 +11,7 @@ changes. The queue is written by the main window's Save Changes. The window stay
 TABS rows = (key, label, page builder method name | None). None = "Coming soon" placeholder described by SOON[key].
 Add a real tab = write `_page_<key>` and name it in TABS. Profile = layout C (cards Position / This season / Fitness;
 attribute grid + Attribute groups radar + Footedness soles; Personality + Player traits); Training = Recommended traits +
-a coming-soon block; Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are
+a coming-soon block; Contract & Transfer = Contract | Transfer row + the Value by age chart (gui/pw_valuechart.py); Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are
 stored in the save, not derived from attributes).
 
 Data the save does not give us yet is read from `data` (see `player_extra_data`) and shown as PENDING
@@ -33,9 +33,11 @@ from fm_editor import settings as _settings
 from fm_editor.abilitystars import ability_stars, dev_stars
 from gui.stars import _StarWidget
 from gui.pw_themes import ActiveTabButton, ThemedFrame, apply_active_theme
+from gui.pw_valuechart import VC_EST, VC_NOTE, ChartLegend, ValueChart
 from gui.pw_widgets import FeetWidget, RadarWidget, radar_axes
 from fm_editor import traitrec as _tr
-from fm_editor.agecalc import person_age
+from fm_editor import valuecurve as _vc
+from fm_editor.agecalc import age_exact, get_ref, person_age
 from fm_editor.traits import trait_ids, trait_names
 from gui.theme import COLORS
 
@@ -684,20 +686,22 @@ class PlayerWindow(QDialog):
         cv = QVBoxLayout(col)
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(12)
-        cv.addWidget(self._contract_panel())
+        top = QHBoxLayout()                                  # Contract | Transfer, equal width (mockup .c-top)
+        top.setSpacing(12)
+        top.addWidget(self._contract_panel(), 1)
         tp = self._transfer_panel()
         if tp is not None:
-            cv.addWidget(tp)
-        cv.addStretch()
-        col.setFixedWidth(360)
-        return self._page(col)
+            top.addWidget(tp, 1)
+        cv.addLayout(top)
+        cv.addWidget(self._value_chart_panel(), 1)           # chart fills the rest: no vertical scrollbar at 1122x760
+        return self._page(col, fill=True, stretch={0: 1})
 
     def _page_positions(self):
         return self._page(self._positions_list(), self._positions_pitch(), stretch={1: 1}, fill=True)
 
     # -- panels ----------------------------------------------------------------------------------
-    def _panel(self, title, right=None):
-        """-> (QFrame#pwPanel, body QVBoxLayout). 36px header, 11/700 UPPERCASE #8B96A8."""
+    def _panel(self, title, right=None, after_title=None):
+        """-> (QFrame#pwPanel, body QVBoxLayout). 36px header, 11/700 UPPERCASE #8B96A8; `after_title` = widget right of the title."""
         f = QFrame()
         f.setObjectName('pwPanel')
         v = QVBoxLayout(f)
@@ -710,6 +714,9 @@ class PlayerWindow(QDialog):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
         h.addWidget(_spaced(_lab(title.upper(), 'pwHeadT')))
+        if after_title is not None:
+            h.addSpacing(2)                               # 8 gap + 2 = mockup margin-left 10
+            h.addWidget(after_title, 0, Qt.AlignmentFlag.AlignVCenter)
         h.addStretch()
         if right is not None:
             h.addWidget(right, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -1516,6 +1523,7 @@ class PlayerWindow(QDialog):
         for i, (label, right, pend) in enumerate(rows):
             v.addWidget(self._kv(label, right, i % 2 == 1, pending=pend))
         v.addSpacing(10)
+        v.addStretch(1)                                      # rows stay top-aligned when the other panel is taller
         return panel
 
     def _transfer_panel(self):
@@ -1532,6 +1540,32 @@ class PlayerWindow(QDialog):
         for i, (label, right, pend) in enumerate(rows):
             v.addWidget(self._kv(label, right, i % 2 == 1, pending=pend))
         v.addSpacing(10)
+        v.addStretch(1)                                      # rows stay top-aligned when the other panel is taller
+        return panel
+
+    def _value_chart_panel(self):
+        """VALUE BY AGE panel: title + ESTIMATE pill, legend, ValueChart, footnote (empty state: no legend / footnote)."""
+        p = self._person
+        ref = get_ref()
+        yl = None
+        try:
+            y, m = p['contract_end'].split('-')[:2]
+            yl = (int(y) - ref.year) + (int(m) - ref.month) / 12      # month granularity, as the model was fitted
+        except (AttributeError, KeyError, ValueError, TypeError):
+            pass
+        cur = _vc.curve(age_exact(p, ref), p.get('ca'), p.get('pa'), self._is_gk, p.get('value_est'), yl)
+        pill = _spaced(_lab('ESTIMATE', 'pwSoonTag', Qt.AlignmentFlag.AlignCenter, 20))
+        pill.setToolTip(VC_EST)
+        pill.setCursor(Qt.CursorShape.WhatsThisCursor)
+        panel, v = self._panel('Value by age', None if cur.empty else ChartLegend(cur.full is not None), pill)
+        self._vchart = ValueChart(cur, self._contract_until())
+        v.addWidget(self._vchart, 1)
+        if not cur.empty:
+            note = VC_EST + VC_NOTE + ('' if cur.full is not None else ' No full-potential line: past 28 or at potential.')
+            fn = _lab(note, 'pwNote')
+            fn.setWordWrap(True)
+            fn.setContentsMargins(12, 8, 12, 10)
+            v.addWidget(fn)
         return panel
 
     def _contract_until(self):
