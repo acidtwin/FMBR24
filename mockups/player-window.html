@@ -20,6 +20,7 @@ HOW TO USE
     unk (club unknown, e.g. a player with no club: the HGC pill is NOT shown; HGP stays clickable)
     qx1 / qx3 (1 / 3 changes queued ELSEWHERE in the save session, added to the 'Changes queued' count)
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
+    nobadge (header identity line without the club badge: no logo pack / no logo for the club; the default shows a synthetic sample shield)
     face (header avatar shows a facepack picture instead of the silhouette; synthetic sample)   nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
     tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip; on Role Rating it pins the selected dot's tip)
   Role Rating: rpAML (select that position, any pitch code: rpDC rpST rpGK ...)   weq / wpos / wdir (Settings weight preset: Equal Weight / Possession-Based / Direct Play;
@@ -61,7 +62,12 @@ METRICS (px)
   Header panel 80 (identical on every tab): pad 0 16, gap 14: avatar 54x64 (portrait box = the facepack cutout aspect 260:310; was 48x48) | identity (flex) | CA box 136 | PA box 136 | DEV RATE box 136 | queue widget 160.
     AVATAR: 54x64 box, bg elevated, radius 3, ALWAYS this size. Face picture (Settings > Face pictures, review flag 'face') = the facepack PNG scaled smooth to fill the box (KeepAspectRatioByExpanding,
       anchored top-centre, so a 260x310 cutout fills it exactly and a square 256x256 NEWGAN face crops a little off the bottom), clipped to the 3px radius.  No picture / setting off / index still building = the 30px silhouette centred.
-    Identity: name 20/700 + position badge + HGP/HGC pills (right end, variant A), row2 12 secondary.  Pills h18 r9 10/700 (see HGP / HGC PILLS below).
+    Identity: name 20/700 + position badge + HGP/HGC pills (right end, variant A), row2 12 secondary.
+    CLUB BADGE (Settings > Club badges, review flag 'nobadge'): row 2 reads `flag Nation · [badge] Club · age`. Badge = a 16x16 box (the row is 16 tall; at DPR 2 the 180 px logo is scaled to 32 px), gap 5 to the club name,
+      aspect kept (fit inside the square, centred), transparent background, no frame, no radius.  App: QLabel 16x16 holding FaceService.club_pixmap(club['uid'], 16, dpr) (QPainter: KeepAspectRatio + SmoothTransformation, smooth
+      pixmap transform), placed in the same QHBoxLayout (spacing 6) right before the club _ElideLabel with a 5 px spacer: badge + name form one unit (a QWidget with QHBoxLayout spacing 5, margins 0).
+      No badge widget at all (not even a blank slot) when the player has no club (the club part and its '·' are absent), the setting is off, there is no logo pack / no logo for that club, or the index is still loading
+      (it appears on FaceService.ready).  The sample badge here is a synthetic shield, not a real club crest.  Pills h18 r9 10/700 (see HGP / HGC PILLS below).
     CA / PA / DEV RATE boxes = ONE grid (stars AND numbers mode), 136x56: pad 6 8 0 10 | label 10/700 caps 14 | gap 4 | value row 24 (5 stars 15px gap 2, or 20/700 number + 6px bar).
       No captions.  Labels CURRENT ABILITY / POTENTIAL ABILITY / DEVELOPMENT RATE.  Tooltips 'CA 149' / 'PA 160' / 'Dev Rate 16 out of 20'.  Dev Rate stars = value/4 (CA, PA = value/40).
       Dev Rate number + bar use the tier colour of the value (bar = value x 5 %).
@@ -321,6 +327,8 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .hid .r2{display:flex;align-items:center;gap:6px;color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden}
 .hid .r2 .fl{font:14px/16px "Noto Color Emoji",sans-serif}
 .hid .r2 .sep{color:var(--tx3)}
+.hid .r2 .club{display:flex;align-items:center;gap:5px;min-width:0}
+.hid .r2 .club .bdg{width:16px;height:16px;flex:none;display:block}   /* club badge: 16x16 box, aspect kept (contain), transparent, no frame */
 .hid .r2 .age{cursor:default;border-bottom:1px dotted var(--tx3)}
 .hdr .pills{display:flex;align-items:center;gap:6px;flex:none}
 .hdr .pills.end{margin-left:auto}
@@ -671,7 +679,7 @@ const ROLE_RATINGS={
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={face:false,nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
+const S={nobadge:false,face:false,nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -736,6 +744,7 @@ const footWord=v=>v<=5?'Very Weak':v<=8?'Weak':v<=11?'Reasonable':v<=14?'Fairly 
 const badge=(p,w)=>`<span class="badge ${BADGE[p]}${w?' w':''}">${CODE[p]}</span>`;
 const faceSvg='<svg class="face" viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9A58A"/><stop offset="1" stop-color="#A9846B"/></linearGradient></defs><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="#2B3A55"/><rect x="108" y="150" width="44" height="60" rx="14" fill="#B58F76"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="url(#fg)"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="#2A2018"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/><path d="M112 150Q130 162 148 150" stroke="#6E4A3A" stroke-width="4" fill="none" stroke-linecap="round"/></svg>';   // SYNTHETIC sample (no real person); the app draws the facepack PNG here
 const person='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+const clubBadge='<svg class="bdg" viewBox="0 0 16 16"><path d="M8 .8 14.2 2.6V8.2C14.2 11.4 11.6 13.9 8 15.2 4.4 13.9 1.8 11.4 1.8 8.2V2.6Z" fill="#F2F4F7"/><path d="M8 2.2 12.8 3.6V8.1C12.8 10.7 10.8 12.7 8 13.8 5.2 12.7 3.2 10.7 3.2 8.1V3.6Z" fill="#132B5E"/><path d="M5.6 6.2H10.4M5.6 8.6H10.4" stroke="#F2F4F7" stroke-width="1.3"/></svg>';   // SYNTHETIC placeholder shield; the app draws the logo pack PNG (club_pixmap) here
 const pend='<span class="pend">PENDING</span>';
 const pv=t=>S.data?t:pend;                          // unparsed field: sample value or PENDING
 const pendV=()=>S.nopend?'':pend;                   // PENDING chip, hidden when Settings > Show PENDING markers is off
@@ -763,7 +772,7 @@ function header(){
     return S.nums?`<div class="cab" title="${t}"><small>Development rate</small><div class="nv"><b style="color:${c}">${v}</b><div class="bar"><i style="width:${v*5}%;background:${c}"></i></div></div></div>`:`<div class="cab" title="${t}"><small>Development rate</small><div class="stars">${star(v,4)}</div></div>`};
   const pills=cls=>`<span class="pills ${cls}">${hgPill('hgp','HGP')}${hgPill('hgc','HGC')}</span>`;
   const dot='<span class="sep">·</span>';
-  const fl=`<span class="fl">${NATFLAG[d.nat]||''}</span><span>${d.nat}</span>${dot}<span>${d.club}</span>`;
+  const fl=`<span class="fl">${NATFLAG[d.nat]||''}</span><span>${d.nat}</span>${dot}<span class="club">${S.nobadge||S.unk?'':clubBadge}<span>${d.club}</span></span>`;
   const hw=S.data?`${d.height} · ${d.weight}`:S.nopend?'':'Height / weight '+pend;
   let id;
   if(v==='c')id=`<div class="hid"><div class="r1"><span class="nm">${d.name}</span>${badge(d.pos)}</div><div class="r2">${fl}</div></div>
@@ -1144,8 +1153,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['face','nov','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['face','Face picture'],['nov','No market value'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['nobadge','face','nov','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['face','Face picture'],['nobadge','No club badge'],['nov','No market value'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
