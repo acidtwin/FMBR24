@@ -14,6 +14,8 @@ HOW TO USE
   Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
   Contract & Transfer: 'Value by age' chart (section 4.2b). Flags: vy / vp / va / vg = chart for a REAL player of the save (young high-PA / prime / ageing / ageing goalkeeper) instead of the
     header sample; nov = no market value in the save (chart empty state). Review bar: 'value chart' segment.
+  Transfer panel status row (section 4.2): nfs = Not for sale (stored value exactly 300,000,000), loan = 'On loan from <parent club>', loanx = 'On loan' (parent club
+    not in the save's club list); neither = PENDING chip (listed / loan-listed / asking price are not in the save). Review bar toggles 'Not for sale' / 'On loan' / 'On loan, parent unknown'.
   State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: HGP/HGC pills display-only, tip 'Open from Squads to patch')   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown SET in the save = lit pill)   qhgp / qhgc (change QUEUED = yellow pill)   (neither = not set)
@@ -154,7 +156,7 @@ VALUE BY AGE CHART (section 4.2b; Contract & Transfer tab; modelled on FM Genie 
     and 'At full potential' (green #52C287, 2px dashed 5/4; CA reaches PA by 27 and then ages like a peak player; shown only for age <= 28 and CA < 97% of PA, else the legend item is absent).
     'Now' = solid dot on the first point + label 'Now  £93M' (the REAL stored market value: both lines are anchored on it). Vertical dashed marker (orange #E0973C) 'Contract ends <Mon YYYY>' at the
     expiry age (Now + years left; hidden when beyond the last age). ESTIMATE pill (header, right of the title) + footnote on every render. Hover an age column: guide line + bubble (Age / Expected / Typical range /
-    At full potential; the Now column shows 'Market value'). Empty state (flag nov): market value 0 or 'Not for Sale' (300,000,000) in the save -> centred message, no axes.
+    At full potential; the Now column shows 'Market value'). Empty state (flag nov): market value 0 or 'Not for Sale' (300,000,000) in the save (flag nfs) -> centred message, no axes.
   Layout: page = [Contract panel | Transfer panel] top row (gap 12, 118 px tall, each flex 1 = 451 px; Transfer vanishes with all-PENDING + 'Hide PENDING' as before) + chart panel below (flex 1 = 462 px tall at 1122x760): the whole tab fits
     914 x 592 with NO vertical scrollbar. Chart panel: header 36 (title 'VALUE BY AGE' 11/700 caps, ESTIMATE pill, legend right), SVG 912 x 372, footnote 11/15 px secondary, 2 lines, pad 8 12 10.
   THE MODEL IS AN ESTIMATE, NOT FM's FORMULA. Findings of the feasibility study (scripts were kept in the review scratchpad, not in the repo):
@@ -277,7 +279,8 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .ph .r{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-weight:400}
 .pnote{font-size:11px;font-weight:400;color:var(--tx2)}
 .kv{height:24px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.kv .l{color:var(--tx2)} .kv .r{color:#fff;font-weight:var(--semi);text-align:right;white-space:nowrap}
+.kv .l{color:var(--tx2)} .kv .r{color:#fff;font-weight:var(--semi);text-align:right;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kv .r .mut{color:var(--tx2);font-weight:400}
 .kv:nth-child(even){background:var(--alt)}
 .pend{display:inline-block;height:20px;line-height:20px;padding:0 8px;border-radius:10px;background:rgba(122,143,166,0.12);color:#7a8fa6;font-size:10px;font-weight:700;letter-spacing:1.14px;vertical-align:middle}  /* = main_window._CLUB_PENDING_QSS (QSS says 0.06em; the rendered chip is 73x20 = text + 1.14px/char, measured) */
 .c1{color:var(--c1)}.c2{color:var(--c2)}.c3{color:var(--c3)}.c4{color:var(--c4)}.c5{color:var(--c5)}.c6{color:var(--c6)}
@@ -526,7 +529,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <li>Trait bit 48 (guess: Attempts To Develop Weaker Foot) - unconfirmed; holders to look up when scouted: Philip Andersson (J&ouml;nk&ouml;pings S&ouml;dra), Michalis Michail (Anorthosis), Vitaly Semenov, Cau&ecirc; Gordilho, Keith Keegan (needs scouting).</li>
 <li>Trait bit 53 - a flag carried only by staff/non-players (e.g. Wanda Nara, Tomislav Puljic): need a staff profile screenshot. Bits 49, 61, 62 are set in the save but the game shows no trait for them (hidden; nothing to do).</li>
 <li>Foot and position familiarity words: the app's own wording, no longer open (fm_editor/words.py).</li>
-<li>Asking price and transfer/loan status: not found in the save (market value is stored; the game shows a range around it).</li>
+<li>Asking price, transfer-listed and loan-listed: not found in the save (they stay PENDING). Shown from the save: Not for sale (stored value 300,000,000) and On loan from the parent club (squad club differs from the contract club); loan end date is not readable.</li>
 <li>Wage rounding for the display is inferred (the 50K step above &pound;300K rests on one player); reputation star boundaries fitted to 9 clubs.</li>
 <li>History: seasons simulated in the save (2025-28) not shown; plain-year season labels for calendar-year leagues are an assumption; History needs the FM install database.</li>
 <li>Not in the save at all: club Region, Founded, Facilities; contract Bonuses &amp; clauses (panel removed).</li>
@@ -970,7 +973,12 @@ function tabContract(){
      Layout: Contract | Transfer side by side on top (118 px), the Value by age chart (4.2b) fills the rest: the tab fits 914 x 592 with no scrollbar.
      Market value is always read from the save (value_est), as the app does; only wage / asking price / status stay PENDING until 'Real data'. */
   const d=D(),row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
-  const tr=[row('Market value',S.nov?'':d.value),row('Asking price',''),row('Transfer / loan status','')].join('');
+  /* Transfer / loan status (real data, no PENDING): On loan from <parent> (loan; parent club unknown -> just 'On loan') > Not for sale (stored value
+     300,000,000) > PENDING (listing / asking price are not in the save). Market value: for Not for sale a muted '-' (the 300M is a flag, not a value; the
+     chart shows its empty state, same as nov); the status row carries the words. App: gui/player_window.py _transfer_panel / player_extra_data. */
+  const status=S.loan?'On loan from Tottenham Hotspur':S.loanx?'On loan':S.nfs?'Not for sale':'';
+  const val=S.nfs?kv('Market value','<span class="mut">-</span>'):row('Market value',S.nov?'':d.value);
+  const tr=[val,row('Asking price',''),row('Transfer / loan status',status)].join('');
   return `<div class="c-page"><div class="c-top"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',S.data?d.wage:'')}</div></div>
     ${tr?`<div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${tr}</div></div>`:''}</div>${valueChart()}</div>`;
 }
@@ -1004,7 +1012,7 @@ function vcSVG(c){
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 function valueChart(){
-  const c=S.nov?null:VC[S.vs||S.smp],est=`<span class="est" title="${VC_EST}">ESTIMATE</span>`;
+  const c=S.nov||S.nfs?null:VC[S.vs||S.smp],est=`<span class="est" title="${VC_EST}">ESTIMATE</span>`;
   if(!c)return `<div class="pn vcn">${ph('Value by age'+est)}<div class="empty"><b>No value curve</b><span>The save has no market value for this player (it is 0 or Not for Sale), so there is nothing to anchor an estimate on.</span></div></div>`;
   const lg=`<span class="lg"><span><i style="background:#EAD95C"></i>Expected</span>${c.full?'<span><i class="d"></i>At full potential</span>':''}<span><i class="b"></i>Typical range</span></span>`;
   return `<div class="pn vcn">${ph('Value by age'+est,lg)}${vcSVG(c)}<div class="fn">${S.vs?`<em>Review sample: ${c.label}. The header above is the fictional sample.</em><br>`:''}${VC_EST} Based on how player values changed between saves of the same game years apart, anchored on his current value. The band holds about half of real outcomes. Assumes he renews his contract.${c.full?'':' No full-potential line: past 28 or at potential.'}</div></div>`;
@@ -1152,8 +1160,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['nobadge','face','nov','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['face','Face picture'],['nobadge','No club badge'],['nov','No market value'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['nobadge','face','nov','nfs','loan','loanx','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['face','Face picture'],['nobadge','No club badge'],['nov','No market value'],['nfs','Not for sale'],['loan','On loan'],['loanx','On loan, parent unknown'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;

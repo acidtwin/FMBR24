@@ -37,7 +37,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Role ratings as a percentage per position, with a pitch view
 - Value-by-age trend chart (an estimate anchored on the stored market value, not a price)
 - Positions: a rating for every position, shown as a list and on a pitch
-- Contract & Transfer: contract dates and wage, market value
+- Contract & Transfer: contract dates and wage, market value, Not for sale / On loan from (parent club) status
 - Career history, recommended traits, and a Current / Full Potential projection (display only)
 - CA, PA and Development Rate as stars or raw numbers (Settings)
 - Face pictures from your own installed facepack (for example DF11): the player window header and the staff window show the same face the game does, looked up by the person's UniqueID from the pack's `config.xml`. Auto-detects your FM24 folder, reads it read-only, builds its index in the background (about half a second for 200,000 pictures), and can be switched off in Settings. Nothing is bundled: bring your own pack. Generated players (newgens) only show a face when your facepack tool has written a config for them, the same as in the game
@@ -84,7 +84,7 @@ Click a picture for the full size. They are generated from a real save with `scr
 
 FMBR24 is **alpha** and supports **FM24 saves only**. It is built and tested on Linux first.
 
-- Transfer data (asking price, transfer-listed and loan-listed status) is still being reverse-engineered, so those fields show as PENDING
+- Transfer data (asking price, transfer-listed and loan-listed status; loan end dates) is still being reverse-engineered, so those fields show as PENDING
 - A General Rating tab is planned for the player window
 - The staff window is due a redesign
 - At 1.0: a Flatpak package and a Windows `.exe`

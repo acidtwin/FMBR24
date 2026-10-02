@@ -1,4 +1,5 @@
 """Parse game_db.dat: name pools, clubs, squad memberships, people, identities."""
+import collections
 import re
 import struct
 
@@ -416,8 +417,11 @@ def _date_ymd(doy_word, year):
     return None
 
 
-def find_contract_blocks(b, people):
+def find_contract_blocks(b, people, teams=None):
     """Return {person_id: {'contract_end': 'YYYY-MM', 'contract_start': 'YYYY-MM' (optional)}}.
+
+    teams (optional dict): filled with {person_id: contract-club TEAM id} = u32 at pid_offset+4 of the person-id backlink
+    (see find_loans); a side dict, so the returned structure (and the parse golden) stay unchanged.
 
     The real contract block lies BEFORE the person record (VERIFIED 18/18 vs in-game Jan 2028):
       ff 03 04 00*7 <u16> 00 00 <u32>  ff*8  <end date> <start date>
@@ -440,14 +444,17 @@ def find_contract_blocks(b, people):
             pass
         if m is None:
             continue
+        i = b.find(struct.pack('<I', pid), m.end(), end - 40)
+        link = i > 3 and b[i - 3:i - 1] == b'\x6c\x07'
+        if teams is not None and link:
+            teams[pid] = _u32(b, i + 4)          # also when the date / wage checks below reject the block
         ed = _date_ymd(_u16(m.group(1), 0), _u16(m.group(2), 0))
         if not ed:
             continue
         r = {'contract_end': f'{ed[0]:04d}-{ed[1]:02d}'}
         # weekly wage: u32 at +12 of the person-id backlink `.. 6c 07 <flag> <pid> <u32> 00000000 <wage> 01 ..`
         # (matches the in-game wage within 2% for 18/18, exact for some; the game rounds for display)
-        i = b.find(struct.pack('<I', pid), m.end(), end - 40)
-        if i > 3 and b[i - 3:i - 1] == b'\x6c\x07' and not any(b[i + 8:i + 12]) and b[i + 18] == 0:
+        if link and not any(b[i + 8:i + 12]) and b[i + 18] == 0:
             w = _u32(b, i + 12)
             if 0 < w < 5_000_000:
                 r['wage_week'] = w
@@ -456,6 +463,50 @@ def find_contract_blocks(b, people):
             r['contract_start'] = f'{sd[0]:04d}-{sd[1]:02d}'
         result[pid] = r
     return result
+
+
+_LOAN_NOISE = {'club', 'amateure', 'reserves', 'reserve', 'juniors', 'youth', 'academy', 'young', 'team', 'castilla', 'futures'}
+_FEEDER_MIN = 3   # >= this many players with the same (borrower, parent) pair = affiliate / feeder club, not loans
+
+
+def _org_tokens(name):
+    """Significant name tokens: lowercase ASCII, drops 1-2 letter tokens (FC, CF, B, C, II ...), U19-style tags and
+    _LOAN_NOISE words, so 'Real Madrid Castilla C.F.' and 'Real Madrid C.F.' reduce to the same set."""
+    import re
+    import unicodedata
+    n = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode().lower()
+    return {t for t in re.findall(r'[a-z0-9]+', n)
+            if len(t) > 2 and t not in _LOAN_NOISE and not re.fullmatch(r'u\d+', t)}
+
+
+def find_loans(teams, squads, clubs):
+    """{person_id: parent_club_id} for players ON LOAN (VERIFIED 2026-10: Mateus Fernandes Spurs -> Getafe, Adam Wharton
+    Spurs -> Man Utd, Formose Mendy NYCFC -> Mallorca).
+
+    squads (find_squads) holds the club whose first-team array he is in = the BORROWING club. teams (find_contract_blocks)
+    is the contract club's TEAM id (club['team'] from add_club_status) = the PARENT. A player is on loan when the parent
+    resolves to a known club that differs from the squad club, unless the two are one organisation (B / C / II / U21 team
+    of the parent: same nation and one name's significant tokens contain the other's, e.g. 'C.D. Leganés C' / 'C.D. Leganés').
+    Pairs with _FEEDER_MIN or more players are dropped too: Ried <- AKA St. Pölten 15, Nooit Gedacht <- Feyenoord 11, Ranero
+    Murcia <- Villanovense 7, Linzer ASK <- 'Lewis & Harris' 14 (an affiliate team id the status table maps to the wrong club);
+    174 of 1,038 players in the 2 Jan 2028 save. Real loans of 3+ players between the same two clubs are lost with them (false
+    negatives show PENDING, which is the safe side).
+    A team id that resolves to no known club is NOT a loan: ~400 of those 481 players share the id with their squad mates
+    (a hidden affiliate team of the squad club), so it cannot tell a loan from a B-team registration.
+    Comparison is by CLUB id: youth / reserve arrays (sub_squads) are not in squads at all."""
+    by_team = {c['team']: c for c in clubs if 'team' in c}
+    by_id = {c['id']: c for c in clubs}
+    out = {}
+    for pid, cid in squads.items():
+        par, cur = by_team.get(teams.get(pid)), by_id.get(cid)
+        if par is None or cur is None or par['id'] == cid:
+            continue
+        a, b = _org_tokens(cur['name']), _org_tokens(par['name'])
+        if cur.get('nation') == par.get('nation') and a and b and (a <= b or b <= a):
+            continue
+        out[pid] = par['id']
+    pairs = collections.Counter((squads[p], par) for p, par in out.items())
+    return {p: par for p, par in out.items() if pairs[(squads[p], par)] < _FEEDER_MIN}
 
 
 def find_employment(b, people):

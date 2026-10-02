@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 32  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 33  # bump when schema changes to auto-invalidate old caches
 
 
 def file_signature(save_path):
@@ -106,6 +106,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
             entry['contract_start'] = p['contract_start']
         if 'wage_week' in p:
             entry['wage_week'] = p['wage_week']
+        if 'loan_parent' in p:
+            entry['loan_parent'] = p['loan_parent']  # parent club id of a loanee (fm_editor.gamedb.find_loans)
         slim_people.append(entry)
     data = {
         'version': _CACHE_VERSION,
