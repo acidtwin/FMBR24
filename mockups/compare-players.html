@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare players</title>
+<!--
+=====================================================================================================================
+COMPARE PLAYERS - MOCKUP OF 4 DESIGNS (new gui/compare_window.py, 'Compare with...' = FM Genie Scout's 'Compare With'). The user picks ONE (or a mix).
+Same technical conventions as player-window.html: tokens on :root (copied), Noto Sans fallback, panels pn / ph 36, tier colours TIER_HEX, flat dark theme (the real window can reuse the
+player-window theme registry for the header and action strip; not drawn here). MOCKUP ONLY: nothing in gui/ or fm_editor/ changed. Sample players are FICTIONAL.
+=====================================================================================================================
+
+HOW TO VIEW (the review bar above the window is NOT part of the window; all of it is also settable in the URL)
+  ?v=a|b|c|d            variant (default a)  A Overlaid radars | B Mirrored head-to-head | C Decision view | D Fingerprint and duels
+  ?pair=out|gk|young|veteran   sample pair: out = two midfielders (Ferrer 25y / Lindahl 28y) | gk = two goalkeepers | young = 19y high-PA winger vs 27y prime winger | veteran = 34y midfielder vs the 25y one
+  ?nums                 CA / PA / Dev Rate as numbers (Settings > Ability display = Numbers); default = stars (raw number in the title tooltip)
+  ?pot                  Full Potential values (the same Current | Full Potential segmented control the player window has; here inside each variant's main panel header)
+  ?pick                 the picker dialog open over the window (text in the box: ?q=lind, default 'lind'); it works: type, Up/Down, Enter, Esc, click
+  ?swap                 B on the left
+  ?bare=1  (or #bare=1) hides the review bar and OS title bar: window starts at 0,0 and is 1122 x 760 (headless screenshot mode).   ?min  = the 1062 x 640 minimum size
+  ?noface               silhouette instead of the (synthetic) face pictures
+  e.g.  compare-players.html?v=b&pair=gk&nums      compare-players.html?v=d&pair=young&pot&bare=1      compare-players.html?v=c&pick
+  Buttons in the window are real buttons (Tab, Enter/Space); every bar, axis, wedge and tile has a title tooltip. Review aids only: toast messages for Shortlist / Close / Save image.
+
+LAUNCH FLOWS (shared by all variants)
+  1. Player window action strip (left group): new 'Compare with...' button (Close stays the last button of the strip). It opens the picker with player A fixed.
+  2. Lists (Squads, Players, Reports, Shortlist): select exactly 2 rows -> toolbar 'Compare' button (enabled only for 2 rows) opens the window directly, no picker.
+     With 1 row selected the same button opens the picker with that row as A.
+  3. Picker (?pick): QDialog 540 wide. Search box (autocomplete = the main search index, players only), 'same position first' ordering, filter chip 'Outfield players only' / 'Goalkeepers only'
+     (a keeper is only offered keepers: their attributes and roles are not comparable), chips 'From list selection (n)' and 'Shortlist' as quick sources, Enter = Compare, buttons [Compare] [Cancel]
+     (Cancel is the dialog's Close = last). The same dialog is 'Change player B...' in the compare window.
+  Persistent window parts (all variants): header = two player panels (A left, B right mirrored) with 3 px identity colour on top: avatar 54x64, name 20/700 + position badge, flag + club badge
+  16x16 + club + age, CA and PA boxes 100x56 (stars 13 px, gap 2, or number + bar) | VS 40 wide.  Bottom action strip h52: [Swap sides] [Change player B...] ([Save comparison image...] D only)
+  ... stretch ... [Add both to Shortlist] [Close]  - CLOSE IS THE LAST BUTTON.  Window 1122 x 760: 12 pad | header 80 | 12 | main 592 | 12 | strip 52 (same as the player window); min 1062 x 640.
+  Panels scroll vertically INSIDE (6 px bar, as .content in the player window); nothing scrolls horizontally.
+
+IDENTITY COLOURS (new, needed so two players can be told apart without colliding with ratings): A sky blue #52B0FF, B orchid #D77CFF. No tier colour (red, orange, grey, white, yellow, green) is blue or
+  violet, so a player colour never reads as a rating. Both are >= 5.8:1 on #1A2226 (AA for text). Never colour alone: A = solid outline + circle marker, B = dashed outline + diamond marker; A is
+  always left / first, B right / second; every legend names the players. Winner of a row = bold value + winner colour; losing bar at alpha .45.
+  Star ratings rule: stars appear only in the header boxes (and in C 'Development', D none): ?nums switches ALL of them to number + bar (CA/PA x/200 bar, Dev Rate x5 %), raw number in the title
+  in stars mode; mapping = fm_editor/abilitystars.py (value/40, Dev Rate value/4, half_stars). Role % and attributes are numbers by nature. No new Settings key needed (reuses ability_display).
+
+SAMPLE DATA = the app's own logic run on fictional attributes (generator was a throwaway script, not in the repo): fm_editor.rolepos.role_score + the FMScout Community preset (the Settings default)
+  for all 81 roles (cur and pot), fm_editor.potential.project_attrs for Full Potential (display_value), fm_editor.valuecurve.curve for the value-by-age points (value, years left as given in the data).
+  Radar axes and every difference in the window are computed in JS from the attributes with the same rules as gui/pw_widgets.py (RADAR_OUT / RADAR_GK, inverted attributes as 21-v).
+  SAMPLE FIGURES (not computed by app logic here): C 'In your squad' (the app reads the user's club) and D peer statistics PEER (the app computes them from the loaded save).
+
+=====================================================================================================================
+THE FOUR VARIANTS  (what it is | data it needs from the app | QPainter notes | pros / cons)
+=====================================================================================================================
+
+A) OVERLAID RADARS  ('?v=a')
+  Layout: left 33 % panel 'Attribute groups': ONE six-axis radar with both players (A solid + fill alpha .20, B dashed + fill alpha .18), per-axis 'A / B' values at each vertex, legend, ring scale 10 / 20,
+  then 'Difference by group' (6 mini diverging bars).  Right: attributes table of the Profile groups (Technical + Footedness | Mental | Physical + Hidden; keepers 4 columns with Goalkeeping), each row
+  name | A tile | '3 >' difference | B tile (tier colour tiles as the Profile; difference arrow points at the winner, in the winner's colour; '=' level; lower-is-better attributes compared on 21-v), group
+  means in each column header, 'Key facts' strip below (age, contract end, value, wage, height / weight, traits count with a plain difference line).  Outfield: the 11 goalkeeping attributes are not listed (as the
+  Profile); keeper pairs show them first.  Outfield pairs list 41 + 2 footedness attributes; keeper pairs list all 54 (52 + 2).
+  Data: both players' 54 attributes (current and project_attrs), age, contract end, value, wage, height, weight, trait count (all exist in player_extra_data / parsed person).
+  QPainter: reuse RadarWidget geometry (R 106 here at 358 x 336; centre (179,170); vertex i at -90 + 60 i deg; rings k .25 .5 .75 1 pen white a .10 / outer .22; spokes a .10); draw polygon B first then A.
+    A: brush QColor(82,176,255,51), pen #52B0FF 1.75 round join; B: brush QColor(215,124,255,46), pen #D77CFF 1.75 dash [3.4,1.7] (pattern is in pen widths); marker A circle r4, B diamond (square half-side 3.6 rotated 45)
+    both with a 1.5 #14151A ring.  Labels: name 9/700 caps #8B96A8, values 12/700 'A / B' in the identity colours (two drawText runs), anchors as the player-window radar (top: baseline y_v-24, bottom y_v+14, sides +-7).
+    Table rows 22 high: name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20 (keeper pages: 22 wide tiles, 11 px names).  Difference bars: 8 px track #343740 split at the centre (gap 2), length = |d|/4 of the half.
+  Pros: closest to what FM Genie Scout / FM26 do (nobody has to learn anything); radar + table reuse existing widgets and the Profile grouping 1:1; the cheapest to build; one screen shows shape AND detail.
+  Cons: the radar overlay hides which player is better on an axis once the shapes cross (the diff bars compensate); no role or position information; 'who is better overall' is left to the reader; the attribute
+    table is long, 3 columns of 14 rows fill the panel at 760 and scroll at 640.
+
+B) MIRRORED HEAD-TO-HEAD  ('?v=b', 'tale of the tape')
+  Layout: left panel 'Head to head': scoreboard 'attributes won 17 | 21 (3 level)' + split bar + per-group tallies (counts exclude Footedness, and a keeper's outfield Technical group is listed but 'not counted'),
+  then collapsible groups (native details/summary: keyboard + click) each with a big mirrored group-mean bar and 14 / 8 / 5 thin mirrored attribute rows [A value | bar grows left | name centred | bar grows right | B value];
+  winning row tinted with the winner's colour at alpha .08, winner bar full, loser bar alpha .45.  Middle panel 'Role ratings': position chips (positions rated 10+ by either player, with both ratings) and every role
+  playable there, percent of both players side by side as two mirrored 6 px bars, same tint rule (sorted by combined rating).  Right panel 'Positions': the player-window pitch (scaled to 212 x 430) with a dot per
+  position where a player is rated 10+ (A circle left of the slot, B rounded square right; number = position rating, white ring = Natural 20; keepers only show GK).
+  Data: as A + the 15 position ratings of both + role_score of every role at the chosen position for both (rolepos.position_roles, active weight preset; Full Potential via project_attrs x5).
+  QPainter: ONE custom row widget per group; row 22: v 24 | bar | name 118 | bar | v 24, gaps 6, bars 8 px high, widths value x 5 % of the bar column (21-v for lower-is-better), track #343740, tint = fillRect
+    QColor(82,176,255,20) / QColor(215,124,255,20); loser fill with alpha 115.  Group summary row 34 / bars 10.  Role rows: line 1 family + duty (12 / 11 secondary), line 2 pct 46 | bar | bar | pct 46, bars 6 px,
+    width = percent.  Pitch = pitchSVG geometry x 0.477 (k = field width / 386).
+  Pros: the clearest 'who wins what': a winner on every row, a headline score, group tallies; role and position data are there without a decision screen; mirrors the way people read a tale of the tape.
+  Cons: 41-52 rows to scroll; the headline '21 - 17' weights every attribute equally (a Jumping Reach counts like Passing) and says nothing about the role; the three columns are tight at 1062 wide; the pitch overlay is
+    thin when players only play one position.
+
+C) DECISION VIEW  ('?v=c', for scouts choosing a signing)
+  Layout: toolbar 'Compare as' (position chips) + 'Role' + Current | Full Potential.  Left 'Role fit': every role at the chosen position, percent bars for both, '+13.4' difference in the leader's colour, click
+  a row to choose the role (it drives 'In your squad' and the verdict).  Centre: 'Value by age' overlay (both players on a shared age axis; solid = expected, band = typical range, dotted = at full potential, arrow = contract
+  ends; the ESTIMATE pill and its tooltip are the player-window wording) and 'Development' (CA, PA, Dev Rate as stars or numbers).  Right: 'Flags from the save' (contract, age trend, injury proneness, consistency,
+  dirtiness, position familiarity, CA = PA; severity chips Watch / Note / Fine; thresholds are named constants) and 'In your squad' (rank of A and B among your own players in the chosen role; ONLY drawn when the user
+  manages a club; the squad figures here are samples).  Bottom 'Verdict': one sentence naming which measures favour whom (role fit, attributes, headroom to PA, age, contract length; 'level' inside a tolerance) and
+  six computed lines (role fit, best role at the position, attribute counts + the two largest group gaps, development, money now / in 3 years as a TREND ESTIMATE, contract).  No adjectives, no score, no hype: all text is
+  assembled from the numbers by fm_editor/compare.py (thresholds: role 1.5 points, attributes 3, headroom 4 CA, age 1.5 years, contract 0.3 years).
+  Data: A + B roles at the position, value curves (fm_editor/valuecurve.curve for both; empty chart message when a value is 0 / Not for Sale: not drawn in this mockup), contract end + years left, age, CA/PA/Dev,
+    Injury Prone / Consistency / Dirtiness, position ratings; the user's squad (human club) with raw_attrs for the role percent.
+  QPainter: reuse ValueChart for one series each (second chart code path: bands first, A .11 / B .10 alpha, dotted full-potential pen 1.25 [1.2,2.8] round cap, expected pen 2, B dash [3.5,1.5], markers r2.6 / r4.6
+    for 'now', contract arrow = line 9 + triangle 8 x 5 at the baseline; 424 x 206, margins L48 T16 R14 B26; 'now' label 10/700 with a 3 px #1A2226 outline (drawPath stroke then fill)).  Role rows 51 high: name 12 + 2 bars
+    of 6 px with 46 px percent labels; selected row = selection_bg + 3 px accent edge (the Role Rating tab treatment).
+  Pros: answers the actual question (which one for my team, in this role, with this contract) and is the only variant that uses the value model, contract and squad; every sentence is traceable to a number.
+  Cons: needs the most logic and the most data (squad, curves, thresholds); more text; the verdict thresholds are judgment calls to be tuned and the value lines are estimates (a factor 2-3 off for individuals, see the
+    player-window notes); 'Compare as' requires picking a position (default = best shared); weakest on 'overall shape' (no radar).  At 640 high the verdict and the squad panel are reduced / hidden.
+
+D) FINGERPRINT AND DUELS  ('?v=d', the unusual one)
+  Layout: left 'Fingerprint against peers': a 12-slice pizza (keepers 10).  Each slice is a SITUATION made of 2-4 attributes (Finishing, Passing range, Carrying the ball, Keeping the ball, Set pieces, Winning the ball,
+  Reading the game, Aerial duels, Pace, Engine, Availability, Big matches; keeper set in the code), slice length = PERCENTILE of that slice among peers in the save (same position group, CA >= 100), A in the left half
+  of every slice and B in the right half so both are readable at once (two overlapping pizzas hide each other), dashed ring = peer median, alternate shading = phase of play, labels with both percentiles, centre disc
+  'MATCH 37' = profile similarity.  Right 'Who wins each situation': 12 duel cards (tug-of-war bar from the two slice means, '+4.5' in the winner's colour, 'level' under 0.5, the attributes behind it in the card).
+  Action strip adds 'Save comparison image...' (QWidget.grab of both panels to a PNG: the shareable card).
+  Research (see the list below): percentile pizzas against position peers (StatsBomb / FBref), similarity scores from cosine similarity of centred vectors, 'tale of the tape' split layouts, FM26's own tabs, player
+  archetypes as sets of skills rather than positions, PNG export of comparison cards.
+  Data: everything A needs + peer distributions: for each position group the sorted list of every slice mean over all players of the loaded save with CA >= 100 (77k players loaded: 12 slice means each, computed once per
+    load, optionally cached with the parse; the sample figures PEER are illustrative); percentile = rank in the sorted list (bisect), NOT the normal curve the mockup uses; similarity = cosine of (slice mean - peer mean)
+    vectors for A and B mapped (cos+1)/2 x 100 (it ignores level, 50 = unrelated).
+  QPainter: wedge = QPainterPath: arcMoveTo(outerRect, -a0) (SVG angle degrees clockwise from 3 o'clock = Qt -angle), arcTo(outerRect, -a0, -(a1-a0)), arcTo(innerRect, -a1, +(a1-a0)), closeSubpath.  N = 12, span 30 deg, start
+    at 12 o'clock (-90); A [a0+1.4, mid-0.7], B [mid+0.7, a1-1.4]; r(p) = 40 + 110 x max(p,3) / 100 at R 150 (svg 556 x 496, centre (278,250)); fills #52B0FF / #D77CFF with a .8 #14151A pen; rings p 25 50 75 100,
+    50 dashed [4,4] white a .34, others a .10; phase wedges QColor(255,255,255,9); spokes a .10; centre disc r 38 #14151A pen white a .18; labels at R+11 anchored by cos(angle) (> .1 left aligned, < -.1 right aligned,
+    else centred; top / bottom rows get the two lines above / below), name 10/700 caps #8B96A8, values 12/700.  Cards: 2 columns, 74+ high, 2 px top edge in the winner's colour, bar 8 px split by value share.
+  Pros: tells you WHAT KIND of player each is in terms scouts use (relative to peers, not an abstract 1-20); the situation cards answer 'who wins the aerial duel / the sprint' directly; the PNG card is shareable;
+    clearly different from FM's own screen.
+  Cons: slices are OUR grouping (not from the game, like the radar groups) and are attribute readings, not match statistics (the save has no event data); needs peer distributions (a new computation + a cache bump);
+    percentiles inside a small pool (a few hundred keepers) are coarse; the pizza needs 10 px labels, so at 640 high it is legible but small; similarity is our own number and must be labelled as such.
+
+RESEARCH FOR D (6 to 10 sources; F = page fetched and read, S = only the search-result summary was available, the page itself blocked / rate limited the fetch)
+  1. FM Genie Scout guide, 'Compare With' (two players side by side)                 https://www.fmscout.com/a-genie-scout-guide.html   (S)  -> the feature this window is the equivalent of
+  2. FM26 'How to compare two players': Overview (best roles, radar of groups), Attributes (side-by-side bars), Statistics, Positions & Roles, Report tabs   https://sortitoutsi.net/content/75612/fm26-how-to-compare-two-players   (S; fetch 403)
+     -> in-game comparison is limited to squad / shortlist players; ours opens on ANY player of the save; its Overview radar + Attributes bars = variants A and B
+  3. FM-Arena 'FM Player Comparison and Analysis Tool' (weighted attribute score table of two players)    https://fm-arena.com/thread/14057-fm-player-comparison-and-analysis-tool/   (F)  -> role-weighted totals instead of raw counts (our role %)
+  4. Renderfoot 'Football Player Comparison': overlaid radars + percentile bars, downloadable PNG card     https://www.renderfoot.com/player-comparison   (F)  -> overlay A, shareable image button in D
+  5. FBCharts 'Football Radar and Comparison charts'                                               https://fbcharts.com/   (S)  -> same two ideas, confirms the PNG card
+  6. mplsoccer 'Advanced Player Radars' + percentile pizzas                                         https://steveaq.github.io/Advanced-Player-Radars/   (S)   and   https://www.gettingbluefingers.com/pages/tutorials/RadarPizzaChart/index.html   (S; fetch 429)
+     and ggshakeR 'Guide to Creating Pizza Plots'  https://abhiamishra.github.io/ggshakeR/articles/Guide_to_PizzaPlots.html   (S)
+     -> the pizza: slice length = percentile among players of the same position group, a comparison pizza for two players
+  7. 'How to Build Football Player Pizza Charts in Python' (FBref scouting reports = StatsBomb percentiles against players in a similar position)   https://medium.com/@vickyfrissdekereki/how-to-build-football-player-pizza-charts-in-python-4d781a4584b4   (S)
+     -> percentile against position peers, with the pool stated under the chart ('Percentile among 2,846 ...')
+  8. 'How to Compare Football Players the Data Way' (per-90 normalisation, PCA, cosine similarity as a ranking)   https://dreamdataball.substack.com/p/how-to-compare-football-players-the   (F)   and   https://en.wikipedia.org/wiki/Similarity_score   (S)
+     -> the centre 'MATCH' number (cosine of centred vectors; we have 12 slice values, not 90-minute stats)
+  9. Hudl / StatsBomb 'Modern Scouting Workflows: 4 Player Archetypes'                                 https://www.hudl.com/blog/modern-scouting-workflows-player-archetypes-statsbomb   (F)
+     -> archetypes are skill sets, not positions: the situation cards (aerial duels, press resistance...) rather than raw attribute names
+  10. Berkeley Sports Analytics, 'Decoding Transfermarkt: player values versus performance' (inverted-U of market value over age)   https://sportsanalytics.studentorg.berkeley.edu/articles/transfer-values.html   (S)
+     -> the age-axis overlay in C (our own curves come from fm_editor/valuecurve.py, measured on simulated FM24 careers)
+  Ideas considered and left out: spatial / heat-map role fit (the save has no spatial data), 'players like him' lists (a separate feature on the Players page; the similarity code of D would feed it), live match
+  duels (no match data), per-90 statistics (only current-season totals exist).
+
+WHAT NEEDS DATA WE DO NOT HAVE (be honest)
+  - Match statistics per 90, xG, passing maps: not in the save; D and C use attributes only.  Season stats exist (apps, goals, assists, avg rating) and could become a small panel later; omitted here (current season only).
+  - Hidden player reputation, asking price, contract bonuses / clauses, squad status: not in the save, not shown (the Key facts use market value and wage).  Value lines are estimates (valuecurve notes).
+  - Role lists per position (POS_ROLES) are from memory of FM24 and unverified in game (same caveat as the Role Rating tab); the percent scale was never compared with Genie Scout.
+  - C 'In your squad' needs a human-managed club with the squad's raw_attrs: hide it otherwise (as the Club page hides rows without data).  Sample squad here.
+  - D peer pool: percentile quality depends on the pool size; a keeper pool of ~700 is coarse; the app should print the pool size (as drawn) and fall back to hiding the pizza when a pool has fewer than ~100.
+  - Personality (7 bars) is available but unused: could become a 'Mind' slice or a row in A.
+
+RECOMMENDATION (also in the report): build B's layout as the default view (scoreboard + butterfly + role ratings + pitch), swap its scoreboard row for A's overlaid radar if the radar widget is cheap to reuse, and
+  add C as a second tab 'Decision' (role fit, value overlay, flags, verdict) because it is the only one that answers 'should I sign him'.  Keep D's pizza as an optional third tab once a peer-percentile helper exists; its
+  cards and 'Save comparison image' need no new data.  If only ONE can be built: A (cheapest, closest to Genie Scout) or C (most useful), see the report for the reasoning.
+
+OPEN QUESTIONS
+  1. Identity colours blue / orchid OK? (one line each in the :root block, variables a and b)
+  2. Attribute counts treat all attributes equally; keep 'attributes won' or weight by the chosen role (B / C could count only the role's key attributes)?
+  3. Should the keeper's outfield Technical group be hidden instead of 'not counted'?
+  4. Compare from lists: exactly 2 rows -> direct, 1 row -> picker; OK?
+=====================================================================================================================
+
+-->
+<style>
+:root{
+  --bg:#14151A; --surface:#1A2226; --elev:#292B32; --border:#343740; --border2:#454A58;
+  --tx:#FFFFFF; --tx2:#8B96A8; --tx3:#525B68;
+  --acc:#6933BD; --acc2:#735CE4; --sel:#2A1B4A; --alt:#1E292E; --semi:500;
+  --pot:#9A8AF5; --hg:#5AA0D1;
+  --c1:#E8696A; --c2:#E0973C; --c3:#8B96A8; --c4:#E6EAF0; --c5:#EAD95C; --c6:#52C287;
+  --k1:rgba(232,105,106,.14); --k2:rgba(224,151,60,.14); --k3:rgba(139,150,168,.14); --k4:rgba(230,234,240,.14); --k5:rgba(234,217,92,.14); --k6:rgba(82,194,135,.14);
+  /* PLAYER IDENTITY COLOURS (new for Compare; no tier colour is blue or violet, so a player colour never reads as a rating) A = sky blue, B = orchid. Both >= 5.8:1 on #1A2226 (AA text). */
+  --a:#52B0FF; --b:#D77CFF; --a-fill:rgba(82,176,255,.20); --b-fill:rgba(215,124,255,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0E0F13;color:var(--tx);font:12px/normal "Noto Sans","Liberation Sans",Arial,sans-serif;padding:16px 24px 48px}
+button,select,input{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer}
+button[disabled]{cursor:default}
+svg{display:block}
+svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
+:focus-visible{outline:2px solid var(--acc2);outline-offset:1px}
+html.bare .rv,html.bare .cap,html.bare .os{display:none}
+html.bare body{padding:0;background:var(--bg);overflow:hidden}
+html.bare .viewport{max-width:none;overflow:visible}
+html.bare .frame{border:none;margin:0;width:1122px}
+html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{height:640px}
+/* review bar (NOT part of the window) */
+.rv{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 auto 12px;max-width:1124px}
+.rv h1{font-size:13px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-right:6px}
+.rv .lab{color:var(--tx2);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-right:-6px}
+.rseg{display:inline-flex;border:1px solid var(--border);border-radius:3px;overflow:hidden}
+.rseg button{height:28px;padding:0 12px;font-weight:700;color:var(--tx2);background:var(--surface)}
+.rseg button.on{background:var(--acc);color:#fff}
+.tg{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--tx2);font-weight:var(--semi)}
+.tg.on{border-color:var(--acc2);color:#fff;background:var(--sel)}
+.cap{max-width:1124px;margin:10px auto 0;color:var(--tx2);font-size:11px;line-height:1.5}
+.viewport{max-width:1124px;margin:0 auto;overflow:auto}
+.frame{width:1124px;border:1px solid var(--border);background:var(--bg);margin:0 auto}
+.os{height:30px;background:#101116;display:flex;align-items:center;padding:0 12px;color:var(--tx2);font-size:12px;border-bottom:1px solid var(--border)}
+.os span:first-child{flex:1;text-align:center;padding-left:54px}
+.os i{display:inline-block;width:10px;height:10px;border:1px solid var(--tx3);margin-left:8px}
+.win{height:760px;display:flex;flex-direction:column;background:var(--bg);position:relative;overflow:hidden}
+.body{flex:1;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px}
+.main{flex:1;min-height:0;display:flex;gap:12px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+/* shared atoms (as player-window.html) */
+.pn{background:var(--surface);border:1px solid var(--border);border-radius:3px;min-width:0;display:flex;flex-direction:column;min-height:0}
+.ph{height:36px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2);white-space:nowrap}
+.ph .r{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-weight:400}
+.pnote{font-size:11px;font-weight:400;color:var(--tx2);text-transform:none;letter-spacing:0}
+.scr{overflow-y:auto;overflow-x:hidden;min-height:0;flex:1}
+.scr::-webkit-scrollbar{width:6px}.scr::-webkit-scrollbar-track{background:var(--surface)}.scr::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.c1{color:var(--c1)}.c2{color:var(--c2)}.c3{color:var(--c3)}.c4{color:var(--c4)}.c5{color:var(--c5)}.c6{color:var(--c6)}
+.f1{background:var(--c1)}.f2{background:var(--c2)}.f3{background:var(--c3)}.f4{background:var(--c4)}.f5{background:var(--c5)}.f6{background:var(--c6)}
+.k1{background:var(--k1)}.k2{background:var(--k2)}.k3{background:var(--k3)}.k4{background:var(--k4)}.k5{background:var(--k5)}.k6{background:var(--k6)}
+.ca{color:var(--a)}.cb{color:var(--b)}
+.badge{display:inline-flex;align-items:center;justify-content:center;height:16px;min-width:28px;padding:0 5px;border-radius:2px;font-size:10px;font-weight:700;color:#fff;flex:none}
+.bGK{background:#C07B2A}.bD{background:#3A6BA8}.bDM{background:#5A3A8A}.bM{background:#3A8A5A}.bST{background:#A83A3A}
+.tile{height:20px;min-width:26px;padding:0 4px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:3px;font-size:11px;font-weight:var(--semi);background:var(--elev);color:#fff;white-space:nowrap;gap:6px}
+.chip.soon{border-radius:10px;padding:0 10px;font-size:10px;font-weight:700;letter-spacing:.88px;background:transparent;border:1px solid var(--border2);color:var(--tx2)}
+.btn{height:32px;padding:0 16px;border-radius:3px;font-weight:700;font-size:12px;border:1px solid transparent;white-space:nowrap}
+.b1{background:var(--acc);color:#fff}.b1:hover{background:var(--acc2)}
+.b2{background:var(--surface);border-color:var(--border2);color:#fff}.b2:hover{background:var(--elev)}
+.sg{display:inline-flex;border:1px solid var(--border2);border-radius:3px;overflow:hidden;background:var(--bg)}
+.sg button{white-space:nowrap;height:24px;padding:0 12px;font-size:11px;font-weight:700;color:var(--tx2);background:var(--bg)}
+.sg button.on{background:var(--acc);color:#fff}
+.sg button:hover:not(.on){color:#fff}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}.dot.sq{border-radius:1px;transform:rotate(45deg);width:7px;height:7px}
+.bar{height:6px;background:var(--border);position:relative;min-width:0;flex:1}.bar i{position:absolute;left:0;top:0;bottom:0;display:block}
+/* persistent compare header: two player panels + VS */
+.hdr{display:flex;gap:0;flex:none;height:80px}
+.hp{flex:1;min-width:0;height:80px;flex-direction:row;padding:0 14px;display:flex;align-items:center;gap:12px;border-top:3px solid var(--a)}
+.hp.pb{border-top-color:var(--b);flex-direction:row-reverse}
+.vs{width:40px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--tx2)}
+.avatar{width:54px;height:64px;background:var(--elev);border-radius:3px;flex:none;overflow:hidden}
+.avatar svg{width:100%;height:100%}
+.hid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pb .hid{align-items:flex-end}
+.hid .r1{display:flex;align-items:center;gap:8px;height:24px;max-width:100%}
+.pb .hid .r1{flex-direction:row-reverse}
+.hid .nm{font-size:20px;font-weight:700;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hid .r2{display:flex;align-items:center;gap:6px;color:var(--tx2);font-size:12px;height:16px;white-space:nowrap;overflow:hidden;max-width:100%}
+.pb .hid .r2{flex-direction:row-reverse}
+.hid .r2 .fl{font:14px/16px "Noto Color Emoji",sans-serif}
+.hid .r2 .sep{color:var(--tx3)}
+.hid .r2 .club{display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden}
+.pb .hid .r2 .club{flex-direction:row-reverse}
+.hid .r2 .club span{overflow:hidden;text-overflow:ellipsis}
+.bdg{width:16px;height:16px;flex:none}
+.cab{width:100px;height:56px;padding:6px 8px 0 10px;display:flex;flex-direction:column;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:3px;flex:none}
+.cab small{display:block;height:14px;line-height:14px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);white-space:nowrap}
+.cab .stars{height:24px;display:flex;align-items:center;gap:2px}
+.cab .nv{height:24px;display:flex;align-items:center;gap:6px}.cab .nv b{font-size:20px;line-height:24px;font-weight:700}
+/* action strip: Close is the LAST button */
+.strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:8px;padding:9px 12px 0;flex:none}
+.strip .sp{flex:1}
+/* ---- VARIANT A ---- */
+.a-left{flex:0 0 33%;min-width:300px}.a-left.gk{flex-basis:29%}.rd{max-width:100%;height:auto}
+.a-leg{display:flex;align-items:center;gap:14px;padding:0 12px 4px;font-size:11px;color:var(--tx2);flex-wrap:wrap}
+.a-leg span{display:inline-flex;align-items:center;gap:6px;color:#fff;font-weight:var(--semi)}
+.a-edge{padding:6px 12px 8px;border-top:1px solid var(--border);color:var(--tx2);flex:none}
+.a-edge .eh{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;height:20px;line-height:20px}
+.dvr{display:flex;align-items:center;gap:8px;height:20px}.dvr .nm{width:78px;white-space:nowrap}.dvr b{width:30px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;color:var(--tx2)}.dvr b.ca{color:var(--a)}.dvr b.cb{color:var(--b)}
+.dv{flex:1;display:flex;gap:2px}.dv .h{flex:1;display:flex;height:8px;background:var(--border)}.dv .h.l{justify-content:flex-end}.dv .h i{display:block;height:8px}
+
+.a-cols{display:flex;gap:10px;padding:0 10px 8px;flex:1;min-height:0}
+.a-cols>div{flex:1;min-width:0}
+.ach{height:22px;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx2)}
+.ach .m{margin-left:auto;display:flex;gap:6px;letter-spacing:0;text-transform:none;font-weight:700}
+.ar{height:22px;display:flex;align-items:center;gap:4px}
+.ar .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar .df{width:34px;text-align:center;font-size:11px;font-weight:700;flex:none;color:var(--tx3)}
+.ar.gk .an{font-size:11px}.ar.gk .df{width:28px}.ar.gk .tile{min-width:22px;padding:0 3px}
+.ar:hover{background:var(--alt)}
+.facts{display:grid;grid-template-columns:repeat(6,1fr);gap:0;padding:0 4px 8px}
+.fact{padding:2px 10px 0;min-width:0;border-left:1px solid var(--border)}
+.fact:first-child{border-left:none}
+.fact small{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);height:18px;line-height:18px;white-space:nowrap}
+.fact div{display:flex;align-items:center;gap:6px;height:22px;font-weight:var(--semi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fact em{font-style:normal;color:var(--tx2);font-size:11px;white-space:nowrap;margin:0 5px 0 2px}
+.fact .d{height:18px;color:var(--tx2);font-size:11px;font-weight:400}
+/* ---- VARIANT B ---- */
+.score{padding:6px 14px 10px;border-bottom:1px solid var(--border);flex:none}
+.score .big{display:flex;align-items:baseline;justify-content:center;gap:14px}
+.score .big b{font-size:34px;line-height:38px;font-weight:700;font-variant-numeric:tabular-nums}
+.score .big span{font-size:13px;color:var(--tx2)}
+.score .sb{display:flex;height:8px;margin:4px 0 6px;gap:2px}
+.score .sb i{display:block;height:8px}
+.score .gl{display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--tx2);flex-wrap:wrap}
+.score .gl span b{font-weight:700;color:#fff}
+details.bg{border-bottom:1px solid var(--border)}
+details.bg>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;background:var(--alt)}
+details.bg>summary::-webkit-details-marker{display:none}
+details.bg>summary .ar2{width:10px;color:var(--tx2);font-size:9px;transition:none}
+details.bg[open]>summary .ar2{transform:rotate(90deg)}
+.bfr{display:flex;align-items:center;height:22px;padding:0 12px;gap:6px}
+.bfr .v{width:24px;text-align:center;font-weight:700;font-size:12px;font-variant-numeric:tabular-nums;color:var(--tx2)}
+.bfr .nm{width:118px;text-align:center;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.bfr .bl,.bfr .br{flex:1;display:flex;height:8px;background:var(--border);min-width:0}
+.bfr .bl{justify-content:flex-end}
+.bfr .bl i,.bfr .br i{display:block;height:8px}
+.bfr.wa{background:rgba(82,176,255,.08)}.bfr.wb{background:rgba(215,124,255,.08)}
+.bfr.wa .v:first-child,.bfr.wb .v:last-child{color:#fff}
+.bfr.wa .nm,.bfr.wb .nm{color:#fff}
+.bfr.sum{height:34px;padding:0;background:none;flex:1}
+.bfr.sum .bl,.bfr.sum .br{height:10px}.bfr.sum .nm{color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.bfr.sum .v{font-size:13px;width:36px}
+.won{font-size:11px;font-weight:700;color:var(--tx2);white-space:nowrap;display:flex;gap:4px;align-items:center}
+.pos-chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 8px}
+.pchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1px solid var(--border2);border-radius:13px;background:var(--bg);color:var(--tx2);font-weight:700;font-size:11px}
+.pchip.on{background:var(--sel);border-color:var(--acc2);color:#fff}
+.pchip:hover:not(.on){color:#fff}
+.rrow{padding:3px 12px 5px;border-top:1px solid rgba(52,55,64,.5)}
+.rrow .rn{display:flex;justify-content:space-between;gap:6px;height:16px;font-size:12px;color:#fff;white-space:nowrap}
+.rrow .rn em{font-style:normal;color:var(--tx2);font-size:11px}
+.rrow .rb{display:flex;align-items:center;gap:6px;height:12px}
+.rrow .rb b{font-size:11px;font-weight:700;width:46px;font-variant-numeric:tabular-nums;color:var(--tx2)}
+.rrow .rb .bl{flex:1;display:flex;justify-content:flex-end;height:6px;background:var(--border)}
+.rrow .rb .br{flex:1;display:flex;height:6px;background:var(--border)}
+.rrow .rb i{display:block;height:6px}
+.rrow.wa{background:rgba(82,176,255,.07)}.rrow.wb{background:rgba(215,124,255,.07)}
+.rrow.wa .rb b:first-child,.rrow.wb .rb b:last-child{color:#fff}
+.rrow .rb b:last-child{text-align:right}
+/* ---- VARIANT C ---- */
+.bar2{display:flex;align-items:center;gap:12px;padding:0 12px;height:44px;flex:none}
+.bar2 .lb{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2)}
+.bar2 .sel{height:26px;background:var(--bg);border:1px solid var(--border2);border-radius:3px;padding:0 8px;min-width:210px;font-weight:var(--semi)}
+.crow{display:flex;flex-direction:column;gap:3px;padding:5px 12px 6px;border-top:1px solid rgba(52,55,64,.5);cursor:pointer;border-left:3px solid transparent;text-align:left;width:100%}
+.crow:hover{background:var(--alt)}
+.crow.on{background:var(--sel);border-left-color:var(--acc)}
+.crow .t{display:flex;justify-content:space-between;gap:8px;height:16px;white-space:nowrap}
+.crow .t span:first-child{color:#fff;overflow:hidden;text-overflow:ellipsis}
+.crow .t em{font-style:normal;font-weight:700;font-size:11px;white-space:nowrap}
+.crow .l2{display:flex;align-items:center;gap:6px;height:9px}
+.crow .l2 b{width:46px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--tx2);flex:none}
+.crow .l2 .bar{height:6px}
+.crow.win .l2 b.w{color:#fff}
+.devr{display:flex;align-items:center;gap:10px;padding:0 12px;height:24px}
+.devr .lb{width:56px;color:var(--tx2);font-size:11px}
+.devr .lb.n{width:auto;flex:1;color:#fff;font-weight:var(--semi)}
+.devr .hr{margin-left:auto;font-size:11px;color:var(--tx2);white-space:nowrap}
+.flg{display:flex;gap:8px;align-items:flex-start;padding:4px 12px;line-height:16px}
+.flg .sev{flex:none;width:44px;height:16px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;margin-top:0}
+.sev.w{background:var(--k2);color:var(--c2)}.sev.n{background:var(--k5);color:var(--c5)}.sev.ok{background:var(--k6);color:var(--c6)}
+.flg .tx{color:#fff;flex:1;min-width:0}
+.flh{padding:6px 12px 2px;display:flex;align-items:center;gap:6px;font-weight:700;color:#fff}
+.sqr{display:flex;align-items:center;gap:8px;height:22px;padding:0 12px}
+.sqr .rk{width:14px;color:var(--tx2);font-size:11px;text-align:right}
+.sqr .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--tx2)}
+.sqr b{width:46px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--tx2)}
+.sqr.me{background:var(--sel)}.sqr.me .nm,.sqr.me b{color:#fff;font-weight:700}
+.verd{flex:none}
+.verd .head{padding:0 14px 6px;font-size:14px;font-weight:700;line-height:20px}
+.verd ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:2px 22px;padding:0 14px 10px}
+.verd li{line-height:16px;color:var(--tx2);padding-left:0}
+.verd li b{color:#fff;font-weight:var(--semi)}
+/* ---- VARIANT D ---- */
+.d-duel{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(74px,1fr);gap:8px;padding:0 12px 12px;min-height:100%}
+.dc{display:flex;flex-direction:column;justify-content:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:6px 10px 7px;min-width:0;border-top-width:2px}
+.dc.wa{border-top-color:var(--a)}.dc.wb{border-top-color:var(--b)}.dc.tie{border-top-color:var(--border2)}
+.dc .t{display:flex;justify-content:space-between;gap:6px;height:16px;white-space:nowrap}
+.dc .t b{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#fff;overflow:hidden;text-overflow:ellipsis}
+.dc .t em{font-style:normal;font-size:11px;font-weight:700;white-space:nowrap}
+.dc .at{font-size:10px;color:var(--tx2);height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dc .tw{display:flex;align-items:center;gap:6px;height:16px;margin-top:2px}
+.dc .tw b{width:30px;font-size:12px;font-variant-numeric:tabular-nums}
+.dc .tw b:last-child{text-align:right}
+.dc .tg2{flex:1;display:flex;height:8px;gap:2px;min-width:0}
+.dc .tg2 i{display:block;height:8px}
+/* picker */
+.scrim{position:absolute;inset:0;background:rgba(10,11,14,.66);display:flex;align-items:flex-start;justify-content:center;padding-top:78px;z-index:50}
+.dlg{width:540px;background:var(--surface);border:1px solid var(--border2);border-radius:4px;display:flex;flex-direction:column;overflow:hidden}
+.dlg .th{padding:14px 16px 4px}.dlg .th b{font-size:16px;display:block}.dlg .th span{color:var(--tx2);font-size:12px}
+.dlg .srch{margin:8px 16px 8px;display:flex;align-items:center;gap:8px;height:38px;border:1px solid var(--acc2);border-radius:3px;background:var(--bg);padding:0 10px}
+.dlg .srch input{flex:1;background:none;border:none;outline:none;font-size:14px;min-width:0}
+.dlg .srch svg{width:16px;height:16px;stroke:var(--tx2);fill:none;stroke-width:1.6;stroke-linecap:round}
+.dlg .flt{display:flex;gap:6px;padding:0 16px 8px;flex-wrap:wrap;align-items:center}
+.dlg .lbl{padding:6px 16px 4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2)}
+.opt{display:flex;align-items:center;gap:10px;height:50px;padding:0 16px;border-left:3px solid transparent;cursor:pointer;width:100%;text-align:left}
+.opt .av{width:30px;height:36px;border-radius:2px;background:var(--elev);overflow:hidden;flex:none}.opt .av svg{width:100%;height:100%}
+.opt .tx{flex:1;min-width:0}.opt .tx b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.opt .tx b mark{background:none;color:var(--acc2);font-weight:700;text-decoration:underline}
+.opt .tx span{display:flex;align-items:center;gap:5px;color:var(--tx2);font-size:11px;height:16px;white-space:nowrap}
+.opt:hover,.opt.on{background:var(--sel);border-left-color:var(--acc)}
+.opt[aria-disabled=true]{opacity:.5;cursor:default}
+.dlg .ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);margin-top:6px}
+.dlg .hint{padding:2px 16px 4px;color:var(--tx2);font-size:11px}
+.toast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:12px;z-index:60}
+html.min .fnote,html.min .pfoot,html.min .sq-panel{display:none}
+.verd .scr{display:block}
+
+</style>
+</head>
+<body>
+<div class="rv">
+  <h1>Compare players</h1>
+  <span class="lab">variant</span><div class="rseg" id="vSeg" role="group" aria-label="Variant"></div>
+  <span class="lab">pair</span><div class="rseg" id="pSeg" role="group" aria-label="Sample pair"></div>
+  <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+</div>
+<div class="viewport"><div class="frame" id="frame"></div></div>
+<div class="cap"><p>All players are fictional (names, clubs, nations, shields and faces are synthetic placeholders; the app draws the facepack PNG and logo-pack PNG). Attributes, role percentages (FMScout Community preset), Full Potential values and value curves were produced by the app's own logic (rolepos.role_score, potential.project_attrs, valuecurve.curve) on those fictional attributes. Percentile peer statistics in variant D and the squad in variant C are SAMPLE figures: the app computes them from the loaded save.</p></div>
+<script>
+/* =====================================================================================================================
+   1. SAMPLE DATA (fictional). GENERATED by the app's own logic, see the notes at the top of this file. Do not hand edit.
+   ===================================================================================================================== */
+const RR_NAMES=["Goalkeeper (D)", "Goalkeeper (S)", "Sweeper Keeper (D)", "Sweeper Keeper (S)", "Sweeper Keeper (A)", "Ball-Playing Defender (D)", "Ball-Playing Defender (S)", "Central Defender (D)", "Central Defender (S)", "Central Defender (Cover)", "Libero (D)", "Libero (S)", "No-Nonsense Centre-Back", "Stopper (D)", "Complete Wing-Back (S)", "Complete Wing-Back (A)", "Full Back (D)", "Full Back (S)", "Full Back (A)", "Inverted Wing-Back (D)", "Inverted Wing-Back (S)", "Inverted Wing-Back (A)", "No-Nonsense Full Back", "Wide Centre-Back (D)", "Wide Centre-Back (S)", "Wide Centre-Back (A)", "Wing-Back (D)", "Wing-Back (S)", "Anchor (D)", "Ball-Winning Midfielder (D)", "Ball-Winning Midfielder (S)", "Deep-Lying Playmaker (D)", "Deep-Lying Playmaker (S)", "Defensive Midfielder (D)", "Defensive Midfielder (S)", "Half-Back (D)", "Segundo Volante (S)", "Segundo Volante (A)", "Box-to-Box Midfielder (S)", "Carrilero (S)", "Central Midfielder (D)", "Central Midfielder (S)", "Central Midfielder (A)", "Mezzala (S)", "Mezzala (A)", "Roaming Playmaker (S)", "Advanced Playmaker (S)", "Advanced Playmaker (A)", "Attacking Midfielder (D)", "Attacking Midfielder (S)", "Attacking Midfielder (A)", "Enganche (S)", "Shadow Striker (A)", "Trequartista (A)", "Defensive Winger (D)", "Defensive Winger (S)", "Inside Forward (S)", "Inside Forward (A)", "Inverted Winger (S)", "Inverted Winger (A)", "Raumdeuter (A)", "Wide Midfielder (D)", "Wide Midfielder (S)", "Wide Midfielder (A)", "Wide Playmaker (D)", "Wide Playmaker (S)", "Wide Playmaker (A)", "Winger (S)", "Winger (A)", "Advanced Forward (A)", "Complete Forward (S)", "Complete Forward (A)", "Deep-Lying Forward (S)", "Deep-Lying Forward (A)", "False Nine (S)", "Poacher (A)", "Pressing Forward (D)", "Pressing Forward (S)", "Pressing Forward (A)", "Target Man (S)", "Target Man (A)"];
+const PL={
+ mferrer:{"id":"mferrer","name":"Mateo Ferrer","pos":"MC","nat":"Spain","age":25,"born":"14 Mar 2001","club":"Veridian United","ca":148,"pa":158,"dev":14,"until":"Jun 2030","yl":3.7,"start":"Jul 2024","wage":"£95K p/w","value":52000000,"height":"184 cm","weight":"77 kg","traits":["Gets Forward Whenever Possible","Plays One-Twos","Tries Killer Balls Often"],"stats":{"apps":31,"starts":29,"subs":2,"goals":6,"assists":7,"min":2610,"potm":3,"avg":7.21},"posr":{"GK":1,"SW":3,"DL":5,"DC":7,"DR":5,"WBL":6,"WBR":6,"DM":15,"ML":11,"MC":19,"MR":11,"AML":7,"AMC":13,"AMR":7,"ST":6},"g":{"tech":[["Corners",8,8],["Crossing",9,10],["Dribbling",12,13],["Finishing",10,11],["First Touch",14,15],["Free Kick",9,10],["Heading",10,11],["Long Shots",12,13],["Long Throws",6,6],["Marking",11,12],["Passing",13,14],["Penalties",9,10],["Tackling",14,15],["Technique",13,14]],"ment":[["Aggression",13,13],["Anticipation",14,15],["Bravery",13,14],["Composure",13,14],["Concentration",13,14],["Decisions",14,15],["Determination",16,16],["Flair",10,10],["Leadership",11,12],["Off the Ball",13,14],["Positioning",12,13],["Teamwork",15,15],["Vision",12,13],["Work Rate",17,17]],"phys":[["Acceleration",15,15],["Agility",14,14],["Balance",14,14],["Jumping Reach",11,12],["Natural Fitness",15,15],["Pace",14,14],["Stamina",18,18],["Strength",14,14]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",13,13],["Dirtiness",9,9,1],["Important Matches",14,14],["Injury Prone",6,6,1],["Versatility",13,13]],"foot":[["Left Foot",11,11],["Right Foot",17,17]]},"rr":{"cur":[21.86,21.86,40.62,44.47,47.8,62.86,62.81,62.63,62.63,63.9,64.65,64.61,62.27,65.0,68.83,67.8,67.41,66.34,67.61,66.07,66.34,67.88,64.54,64.31,64.91,66.27,67.25,66.79,65.86,69.73,69.73,66.07,66.07,66.12,66.12,64.38,66.03,66.85,69.0,66.27,67.78,67.78,65.0,64.24,66.16,64.87,63.4,63.4,65.92,65.58,64.38,62.64,68.02,58.44,68.66,68.26,65.0,64.77,61.79,63.59,69.72,65.92,65.73,65.19,65.89,65.89,65.83,64.92,63.82,65.45,64.83,64.26,66.9,64.11,64.66,64.74,72.46,72.46,70.99,62.29,62.42],"pot":[22.52,22.52,42.31,46.42,50.02,66.34,66.3,66.13,66.13,67.21,67.98,67.95,65.35,68.09,71.63,70.72,70.49,69.56,70.52,69.31,69.56,70.78,67.7,67.72,68.26,69.39,70.36,69.95,69.12,72.01,72.01,69.31,69.31,69.36,69.36,67.79,69.28,69.93,71.94,69.49,70.86,70.86,68.34,67.66,69.24,68.23,66.24,66.24,69.18,68.87,67.79,65.56,70.94,61.63,71.4,70.99,68.13,67.93,65.31,66.87,72.36,69.16,68.99,68.5,69.15,69.15,69.1,67.98,67.01,68.52,68.05,67.39,70.06,67.54,67.84,67.88,74.43,74.43,73.14,65.3,65.45]},"vc":{"full":true,"runsOut":false,"pts":[[25,52000000,52000000,52000000,52000000],[26,49508818,30028616,81626242,61120280],[27,53408993,26522121,107552504,73403899],[28,61210516,27503658,136226508,89859175],[29,69844622,31070943,157004283,81380598],[30,54223869,23881908,123115286,70109106],[31,39171090,15688673,97801408,55978264],[32,21397574,7793403,58749202,36060135],[33,10952533,3627598,33068156,20108799],[34,4093123,1232825,13589645,8794139],[35,1535215,439846,5358427,3280851],[36,732238,199558,2686800,1290334]]}},
+ jlindahl:{"id":"jlindahl","name":"Jonas Lindahl","pos":"MC","nat":"Sweden","age":28,"born":"2 Nov 1997","club":"FC Saltmere","ca":150,"pa":150,"dev":11,"until":"Jun 2028","yl":1.7,"start":"Aug 2022","wage":"£110K p/w","value":38000000,"height":"181 cm","weight":"74 kg","traits":["Tries Long Range Passes","Likes To Switch Ball To Other Flank","Dwells On Ball","Plays One-Twos"],"stats":{"apps":33,"starts":32,"subs":1,"goals":3,"assists":11,"min":2880,"potm":4,"avg":7.34},"posr":{"GK":1,"SW":4,"DL":4,"DC":6,"DR":4,"WBL":5,"WBR":4,"DM":18,"ML":9,"MC":20,"MR":9,"AML":6,"AMC":15,"AMR":6,"ST":5},"g":{"tech":[["Corners",10,10],["Crossing",11,11],["Dribbling",13,13],["Finishing",10,10],["First Touch",16,16],["Free Kick",12,12],["Heading",9,9],["Long Shots",13,13],["Long Throws",7,7],["Marking",12,12],["Passing",17,17],["Penalties",10,10],["Tackling",12,12],["Technique",16,16]],"ment":[["Aggression",9,9],["Anticipation",15,15],["Bravery",10,10],["Composure",15,15],["Concentration",15,15],["Decisions",16,16],["Determination",13,13],["Flair",11,11],["Leadership",14,14],["Off the Ball",12,12],["Positioning",14,14],["Teamwork",15,15],["Vision",16,16],["Work Rate",12,12]],"phys":[["Acceleration",10,10],["Agility",12,12],["Balance",13,13],["Jumping Reach",9,9],["Natural Fitness",13,13],["Pace",10,10],["Stamina",12,12],["Strength",11,11]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",15,15],["Dirtiness",5,5,1],["Important Matches",14,14],["Injury Prone",7,7,1],["Versatility",12,12]],"foot":[["Left Foot",13,13],["Right Foot",18,18]]},"rr":{"cur":[23.64,23.64,44.45,50.59,55.27,65.77,66.57,63.95,63.95,62.33,72.24,72.17,57.33,58.24,63.4,65.54,69.02,70.62,64.3,74.46,75.27,69.04,61.76,71.08,69.55,65.0,68.04,69.82,69.06,59.02,59.02,79.51,79.51,71.29,71.29,69.08,69.31,65.62,74.5,77.46,76.67,76.67,77.02,72.65,67.38,76.36,75.14,75.14,75.85,76.08,74.08,73.85,70.85,66.31,59.38,58.59,60.9,61.09,64.2,61.48,65.66,70.53,68.33,68.02,79.55,79.55,78.25,57.78,57.21,59.36,63.39,63.16,74.8,70.97,75.62,60.18,57.82,57.82,57.3,55.17,55.4],"pot":[23.64,23.64,44.45,50.59,55.27,65.77,66.57,63.95,63.95,62.33,72.24,72.17,57.33,58.24,63.4,65.54,69.02,70.62,64.3,74.46,75.27,69.04,61.76,71.08,69.55,65.0,68.04,69.82,69.06,59.02,59.02,79.51,79.51,71.29,71.29,69.08,69.31,65.62,74.5,77.46,76.67,76.67,77.02,72.65,67.38,76.36,75.14,75.14,75.85,76.08,74.08,73.85,70.85,66.31,59.38,58.59,60.9,61.09,64.2,61.48,65.66,70.53,68.33,68.02,79.55,79.55,78.25,57.78,57.21,59.36,63.39,63.16,74.8,70.97,75.62,60.18,57.82,57.82,57.3,55.17,55.4]},"vc":{"full":false,"runsOut":false,"pts":[[28,38000000,38000000,38000000,38000000],[29,33436904,20280508,55128136,33436904],[30,30773237,15281537,61969688,30773237],[31,24015937,10791056,53448451,24015937],[32,15209210,6765940,34188904,15209210],[33,8019356,3531978,18207947,8019356],[34,3245547,1299896,8103402,3245547],[35,1059150,385763,2908005,1059150],[36,412536,136636,1245539,412536],[37,197065,59355,654278,197065]]}},
+ astrand:{"id":"astrand","name":"Anders Strand","pos":"GK","nat":"Norway","age":27,"born":"9 Jun 1999","club":"Ostmark SC","ca":143,"pa":150,"dev":12,"until":"Jun 2029","yl":2.7,"start":"Jul 2023","wage":"£70K p/w","value":30000000,"height":"191 cm","weight":"86 kg","traits":["Comes For Crosses","Distributes To Centre-Backs"],"stats":{"apps":34,"starts":34,"subs":0,"goals":0,"assists":1,"min":3060,"potm":3,"avg":7.08},"posr":{"GK":20,"SW":3,"DL":1,"DC":1,"DR":1,"WBL":1,"WBR":1,"DM":1,"ML":1,"MC":1,"MR":1,"AML":1,"AMC":1,"AMR":1,"ST":1},"g":{"tech":[["Corners",3,3],["Crossing",3,3],["Dribbling",5,5],["Finishing",2,2],["First Touch",10,11],["Free Kick",4,4],["Heading",5,5],["Long Shots",3,3],["Long Throws",8,8],["Marking",3,3],["Passing",12,13],["Penalties",4,4],["Tackling",3,3],["Technique",10,10]],"ment":[["Aggression",7,7],["Anticipation",14,14],["Bravery",13,13],["Composure",15,15],["Concentration",14,14],["Decisions",15,15],["Determination",14,14],["Flair",6,6],["Leadership",12,13],["Off the Ball",2,2],["Positioning",15,15],["Teamwork",13,13],["Vision",13,13],["Work Rate",9,10]],"phys":[["Acceleration",13,13],["Agility",15,15],["Balance",13,13],["Jumping Reach",12,12],["Natural Fitness",14,14],["Pace",12,12],["Stamina",11,11],["Strength",12,12]],"gk":[["Aerial Reach",14,14],["Command of Area",15,15],["Communication",16,16],["Eccentricity",5,5,1],["Handling",15,15],["Kicking",16,16],["One on Ones",15,15],["Punching",11,11],["Reflexes",16,16],["Rushing Out",16,16],["Throwing",13,13]],"hid":[["Consistency",14,14],["Dirtiness",4,4,1],["Important Matches",14,14],["Injury Prone",6,6,1],["Versatility",4,4]],"foot":[["Left Foot",12,12],["Right Foot",18,18]]},"rr":{"cur":[75.17,75.17,74.61,72.57,69.52,50.54,51.01,49.93,49.93,51.51,58.71,57.94,43.53,48.94,46.42,48.49,57.14,53.93,55.92,60.8,60.0,60.64,46.48,56.67,54.91,54.92,52.06,51.7,52.81,45.18,45.18,64.26,64.26,51.03,51.03,50.69,43.36,44.25,52.25,65.16,61.83,61.83,51.06,41.36,46.28,52.6,54.86,54.86,56.46,54.67,51.23,51.35,60.47,39.84,49.11,52.61,41.39,40.16,35.27,39.45,65.66,47.89,40.0,37.64,58.12,58.12,54.92,40.63,38.38,43.18,45.83,44.68,54.9,47.5,55.27,55.18,58.24,58.24,55.07,53.39,51.29],"pot":[76.93,76.93,76.39,74.49,71.36,51.72,52.21,51.06,51.06,52.73,60.28,59.47,44.46,50.23,48.09,50.21,58.85,55.58,57.52,62.53,61.78,62.5,47.75,58.06,56.39,56.43,53.37,53.33,54.27,46.34,46.34,66.5,66.5,52.43,52.43,51.92,44.57,45.44,54.16,67.34,64.05,64.05,52.9,42.67,47.75,54.21,56.43,56.43,58.02,56.22,52.67,52.71,62.34,40.67,50.47,54.16,42.71,41.41,36.37,40.6,67.48,49.75,41.47,38.97,60.12,60.12,56.77,41.6,39.28,44.45,47.08,45.86,56.61,48.88,57.1,56.66,60.23,60.23,56.92,54.62,52.46]},"vc":{"full":true,"runsOut":false,"pts":[[27,30000000,30000000,30000000,30000000],[28,29800710,18075044,49133064,37692610],[29,33266914,16519860,66991337,44150197],[30,35912696,16136614,79925175,46321091],[31,35394759,15745644,79564162,39417082],[32,27040728,11909593,61395969,33592455],[33,19450336,7790183,48563117,26876650],[34,10985618,4001170,30162123,17926810],[35,3681425,1219328,11115048,7477865],[36,1238066,372898,4110524,2181379],[37,471018,134949,1644015,842894]]}},
+ mhlavaty:{"id":"mhlavaty","name":"Marek Hlavatý","pos":"GK","nat":"Czechia","age":31,"born":"23 Jan 1995","club":"Corvale FC","ca":146,"pa":146,"dev":9,"until":"Jun 2027","yl":0.7,"start":"Jul 2019","wage":"£85K p/w","value":17000000,"height":"196 cm","weight":"92 kg","traits":["Stays On His Line","Likes To Punch Ball"],"stats":{"apps":36,"starts":36,"subs":0,"goals":0,"assists":0,"min":3240,"potm":5,"avg":7.19},"posr":{"GK":19,"SW":2,"DL":1,"DC":1,"DR":1,"WBL":1,"WBR":1,"DM":1,"ML":1,"MC":1,"MR":1,"AML":1,"AMC":1,"AMR":1,"ST":1},"g":{"tech":[["Corners",2,2],["Crossing",2,2],["Dribbling",3,3],["Finishing",2,2],["First Touch",8,8],["Free Kick",3,3],["Heading",4,4],["Long Shots",2,2],["Long Throws",7,7],["Marking",2,2],["Passing",9,9],["Penalties",3,3],["Tackling",2,2],["Technique",7,7]],"ment":[["Aggression",6,6],["Anticipation",14,14],["Bravery",16,16],["Composure",14,14],["Concentration",16,16],["Decisions",14,14],["Determination",15,15],["Flair",5,5],["Leadership",15,15],["Off the Ball",2,2],["Positioning",16,16],["Teamwork",13,13],["Vision",10,10],["Work Rate",9,9]],"phys":[["Acceleration",9,9],["Agility",14,14],["Balance",11,11],["Jumping Reach",15,15],["Natural Fitness",16,16],["Pace",8,8],["Stamina",10,10],["Strength",14,14]],"gk":[["Aerial Reach",17,17],["Command of Area",16,16],["Communication",17,17],["Eccentricity",8,8,1],["Handling",18,18],["Kicking",12,12],["One on Ones",14,14],["Punching",16,16],["Reflexes",18,18],["Rushing Out",10,10],["Throwing",14,14]],"hid":[["Consistency",15,15],["Dirtiness",6,6,1],["Important Matches",15,15],["Injury Prone",5,5,1],["Versatility",3,3]],"foot":[["Left Foot",8,8],["Right Foot",15,15]]},"rr":{"cur":[79.58,79.58,75.31,71.45,65.81,49.58,49.27,50.46,50.46,49.65,51.12,50.33,45.13,47.89,36.54,37.96,58.21,52.86,49.58,57.59,55.71,52.05,49.81,54.51,52.77,50.76,49.61,48.39,52.97,45.18,45.18,55.33,55.33,48.62,48.62,48.08,39.14,38.7,43.83,58.17,54.29,54.29,41.44,33.18,35.35,42.92,45.56,45.56,48.85,46.08,43.31,41.82,52.45,32.62,39.46,41.74,30.57,29.61,25.36,27.97,56.23,41.45,34.9,32.55,47.14,47.14,44.67,30.63,29.12,33.55,37.83,36.84,49.2,42.42,46.44,48.42,53.45,53.45,50.59,57.37,55.08],"pot":[79.58,79.58,75.31,71.45,65.81,49.58,49.27,50.46,50.46,49.65,51.12,50.33,45.13,47.89,36.54,37.96,58.21,52.86,49.58,57.59,55.71,52.05,49.81,54.51,52.77,50.76,49.61,48.39,52.97,45.18,45.18,55.33,55.33,48.62,48.62,48.08,39.14,38.7,43.83,58.17,54.29,54.29,41.44,33.18,35.35,42.92,45.56,45.56,48.85,46.08,43.31,41.82,52.45,32.62,39.46,41.74,30.57,29.61,25.36,27.97,56.23,41.45,34.9,32.55,47.14,47.14,44.67,30.63,29.12,33.55,37.83,36.84,49.2,42.42,46.44,48.42,53.45,53.45,50.59,57.37,55.08]},"vc":{"full":false,"runsOut":true,"pts":[[31,17000000,17000000,17000000,17000000],[32,19601342,11888815,32317149,19601342],[33,14892726,7395509,29990267,14892726],[34,9518639,4277000,21184120,9518639],[35,3832935,1705112,8616085,3832935],[36,1454072,640420,3301471,1454072],[37,602256,241214,1503698,602256]]}},
+ tsalvador:{"id":"tsalvador","name":"Tiago Salvador","pos":"AMR","nat":"Portugal","age":19,"born":"8 Sep 2007","club":"Atlético Brava","ca":121,"pa":178,"dev":18,"until":"Jun 2029","yl":2.7,"start":"Jan 2025","wage":"£28K p/w","value":42000000,"height":"176 cm","weight":"68 kg","traits":["Cuts Inside From Both Wings","Runs With Ball Down Right","Likes To Round Keeper"],"stats":{"apps":24,"starts":15,"subs":9,"goals":7,"assists":5,"min":1480,"potm":2,"avg":7.02},"posr":{"GK":1,"SW":1,"DL":3,"DC":2,"DR":3,"WBL":6,"WBR":8,"DM":3,"ML":12,"MC":8,"MR":14,"AML":11,"AMC":13,"AMR":18,"ST":12},"g":{"tech":[["Corners",8,8],["Crossing",12,16],["Dribbling",16,18],["Finishing",13,16],["First Touch",14,17],["Free Kick",9,14],["Heading",7,13],["Long Shots",12,16],["Long Throws",5,5],["Marking",5,12],["Passing",12,16],["Penalties",9,14],["Tackling",6,13],["Technique",15,17]],"ment":[["Aggression",9,9],["Anticipation",10,15],["Bravery",8,14],["Composure",11,15],["Concentration",9,14],["Decisions",11,15],["Determination",15,15],["Flair",16,18],["Leadership",6,6],["Off the Ball",14,17],["Positioning",8,14],["Teamwork",9,14],["Vision",11,15],["Work Rate",12,16]],"phys":[["Acceleration",18,19],["Agility",17,18],["Balance",14,17],["Jumping Reach",9,14],["Natural Fitness",14,14],["Pace",17,18],["Stamina",13,16],["Strength",9,14]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",10,10],["Dirtiness",10,10,1],["Important Matches",9,9],["Injury Prone",8,8,1],["Versatility",12,12]],"foot":[["Left Foot",17,17],["Right Foot",11,11]]},"rr":{"cur":[18.05,18.05,33.44,37.24,43.06,42.62,43.76,40.2,40.2,45.81,55.06,55.89,38.47,46.2,71.3,69.62,43.93,46.34,59.01,50.45,51.52,60.96,37.78,46.27,46.61,53.14,49.51,51.52,41.48,43.12,43.12,59.18,59.18,42.59,42.59,42.69,45.17,52.26,56.67,53.57,54.21,54.21,61.25,65.23,70.41,63.77,64.44,64.44,61.23,62.83,63.0,66.15,63.96,67.3,64.82,70.54,76.07,75.31,71.61,74.53,67.17,60.13,62.19,61.98,62.95,62.95,63.42,76.98,76.1,73.82,67.11,67.37,60.2,61.45,63.15,65.7,60.63,60.63,60.92,46.19,47.34],"pot":[23.19,23.19,45.54,50.65,56.74,70.22,70.81,68.96,68.96,71.88,76.68,77.11,64.54,70.96,85.1,84.23,70.9,72.15,78.73,74.28,74.84,79.74,66.24,72.12,72.29,75.68,73.8,74.84,69.63,65.76,65.76,78.81,78.81,70.2,70.2,70.26,71.54,75.22,77.51,75.9,76.23,76.23,79.89,81.95,84.64,81.19,81.55,81.55,79.88,80.71,80.8,82.43,81.3,83.03,81.74,84.71,87.58,87.19,85.26,86.78,82.96,79.31,80.38,80.27,80.77,80.77,81.01,88.05,87.6,86.41,82.93,83.06,79.34,79.99,80.88,82.2,75.84,75.84,76.24,69.83,70.54]},"vc":{"full":true,"runsOut":false,"pts":[[19,42000000,42000000,42000000,42000000],[20,57539070,34899210,94865888,58158359],[21,78522468,38993104,158124832,93309285],[22,96459780,43342173,214675189,136745238],[23,97260685,43267200,218633070,170539957],[24,91375945,40244859,207469068,192543022],[25,94765279,37955070,236607604,220174325],[26,109847975,40008717,301598712,240331596],[27,121283539,40170428,366182230,266632050],[28,130869152,39417031,434500887,285610186],[29,129985405,37241442,453693643,310418668],[30,117657195,32065326,431719155,301352543]]}},
+ cwhitby:{"id":"cwhitby","name":"Callum Whitby","pos":"AMR","nat":"England","age":27,"born":"30 Apr 1999","club":"Northgate Rovers","ca":156,"pa":158,"dev":12,"until":"Jun 2027","yl":0.7,"start":"Aug 2021","wage":"£160K p/w","value":72000000,"height":"178 cm","weight":"73 kg","traits":["Cuts Inside From Both Wings","Gets Into Opposition Area","Likes To Round Keeper"],"stats":{"apps":35,"starts":34,"subs":1,"goals":16,"assists":11,"min":3010,"potm":6,"avg":7.46},"posr":{"GK":1,"SW":1,"DL":3,"DC":2,"DR":3,"WBL":5,"WBR":7,"DM":4,"ML":12,"MC":10,"MR":17,"AML":15,"AMC":14,"AMR":20,"ST":16},"g":{"tech":[["Corners",11,11],["Crossing",15,15],["Dribbling",17,17],["Finishing",15,15],["First Touch",16,16],["Free Kick",12,12],["Heading",8,8],["Long Shots",14,14],["Long Throws",6,6],["Marking",6,6],["Passing",14,14],["Penalties",12,12],["Tackling",8,8],["Technique",16,16]],"ment":[["Aggression",10,10],["Anticipation",12,12],["Bravery",11,11],["Composure",15,15],["Concentration",12,12],["Decisions",14,14],["Determination",15,15],["Flair",15,15],["Leadership",10,10],["Off the Ball",16,16],["Positioning",10,10],["Teamwork",12,12],["Vision",14,14],["Work Rate",14,14]],"phys":[["Acceleration",17,17],["Agility",16,16],["Balance",15,15],["Jumping Reach",9,9],["Natural Fitness",15,15],["Pace",16,16],["Stamina",14,14],["Strength",11,11]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",14,14],["Dirtiness",8,8,1],["Important Matches",15,15],["Injury Prone",5,5,1],["Versatility",13,13]],"foot":[["Left Foot",12,12],["Right Foot",18,18]]},"rr":{"cur":[20.59,20.59,39.14,43.75,50.32,52.26,53.48,50.0,50.0,53.9,65.12,65.89,47.2,54.01,77.53,76.77,55.36,57.77,65.63,62.77,63.84,68.78,48.43,56.67,56.79,61.44,60.49,62.59,52.73,52.5,52.5,72.3,72.3,53.45,53.45,53.92,55.17,60.21,68.17,66.98,67.62,67.62,72.88,75.76,77.33,75.26,74.44,74.44,73.54,75.33,75.31,75.47,73.4,76.23,70.71,75.87,80.57,80.08,78.93,79.84,74.34,72.37,73.96,73.58,74.38,74.38,74.75,80.32,79.93,79.36,74.11,74.05,72.3,72.98,74.18,71.67,66.76,66.76,67.3,54.32,55.56],"pot":[20.77,20.77,39.57,44.22,50.79,53.3,54.5,51.09,51.09,54.89,65.89,66.64,48.2,54.97,78.0,77.26,56.34,58.71,66.37,63.6,64.64,69.45,49.5,57.63,57.75,62.28,61.35,63.41,53.79,53.34,53.34,72.91,72.91,54.48,54.48,54.95,56.17,61.08,68.86,67.72,68.34,68.34,73.49,76.3,77.81,75.81,75.01,75.01,74.13,75.88,75.86,76.02,73.97,76.76,71.32,76.35,80.97,80.49,79.38,80.26,74.87,72.97,74.53,74.16,74.95,74.95,75.31,80.71,80.33,79.79,74.67,74.61,72.92,73.58,74.75,72.26,67.31,67.31,67.85,55.15,56.37]},"vc":{"full":false,"runsOut":true,"pts":[[27,72000000,72000000,72000000,72000000],[28,106638727,64679658,175817538,106638727],[29,107811045,53537380,217104783,107811045],[30,97024771,43596040,215932599,97024771],[31,80292207,35718636,180489494,80292207],[32,48648489,21426335,110456387,48648489],[33,23994836,9610331,59909713,23994836],[34,10058840,3663620,27617560,10058840],[35,3367171,1115244,10166244,3367171],[36,1296871,390610,4305764,1296871],[37,625645,179250,2183717,625645]]}},
+ ikessler:{"id":"ikessler","name":"Ivor Kessler","pos":"MC","nat":"Germany","age":34,"born":"17 Feb 1992","club":"Rheinau 04","ca":138,"pa":150,"dev":6,"until":"Jun 2027","yl":0.7,"start":"Jul 2024","wage":"£60K p/w","value":4500000,"height":"186 cm","weight":"82 kg","traits":["Tries Long Range Passes","Marks Opponent Tightly","Dwells On Ball"],"stats":{"apps":29,"starts":24,"subs":5,"goals":2,"assists":6,"min":2190,"potm":2,"avg":7.12},"posr":{"GK":1,"SW":5,"DL":4,"DC":8,"DR":4,"WBL":5,"WBR":5,"DM":17,"ML":7,"MC":19,"MR":7,"AML":5,"AMC":11,"AMR":5,"ST":4},"g":{"tech":[["Corners",10,10],["Crossing",10,11],["Dribbling",11,12],["Finishing",9,10],["First Touch",15,16],["Free Kick",11,12],["Heading",11,12],["Long Shots",13,14],["Long Throws",8,8],["Marking",14,15],["Passing",16,16],["Penalties",10,11],["Tackling",15,16],["Technique",15,16]],"ment":[["Aggression",13,13],["Anticipation",16,16],["Bravery",13,14],["Composure",16,16],["Concentration",16,16],["Decisions",17,17],["Determination",16,16],["Flair",9,9],["Leadership",16,16],["Off the Ball",10,11],["Positioning",15,16],["Teamwork",16,16],["Vision",15,16],["Work Rate",12,13]],"phys":[["Acceleration",9,10],["Agility",11,12],["Balance",12,13],["Jumping Reach",11,12],["Natural Fitness",12,12],["Pace",9,10],["Stamina",10,11],["Strength",13,14]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",16,16],["Dirtiness",8,8,1],["Important Matches",16,16],["Injury Prone",9,9,1],["Versatility",15,15]],"foot":[["Left Foot",13,13],["Right Foot",16,16]]},"rr":{"cur":[24.66,24.66,46.17,51.51,54.84,72.92,73.03,72.37,72.37,69.19,73.82,73.44,68.73,66.55,58.77,60.86,76.07,75.8,66.27,78.48,78.75,70.13,72.5,76.47,74.82,68.9,70.98,72.23,76.17,69.11,69.11,78.77,78.77,78.02,78.02,76.31,75.17,69.18,73.75,78.97,78.25,78.25,74.13,68.41,62.97,73.51,71.88,71.88,74.23,73.58,71.38,69.66,70.47,60.9,58.21,55.76,55.16,55.62,57.41,54.92,66.04,68.16,64.38,64.43,76.61,76.61,74.83,51.43,50.96,54.73,61.11,60.68,73.6,69.03,72.81,59.12,62.18,62.18,61.05,64.66,63.95],"pot":[25.11,25.11,47.48,52.96,56.61,75.82,75.93,75.33,75.33,72.33,76.58,76.25,71.58,69.82,62.85,64.77,78.66,78.47,69.56,80.85,81.09,73.03,75.26,79.06,77.6,72.07,74.04,75.22,78.8,71.7,71.7,81.11,81.11,80.44,80.44,78.92,77.91,72.37,76.53,81.29,80.65,80.65,76.98,71.89,66.69,76.43,74.13,74.13,77.07,76.49,74.54,72.19,73.44,64.22,62.15,59.89,59.61,60.04,61.83,59.42,69.21,71.56,68.21,68.28,79.19,79.19,77.61,56.16,55.79,59.17,65.06,64.51,76.51,72.44,75.56,63.1,65.32,65.32,64.38,67.85,67.26]},"vc":{"full":false,"runsOut":true,"pts":[[34,4500000,4500000,4500000,4500000],[35,1917309,1162907,3161108,1917309],[36,550609,273424,1108789,550609],[37,239335,107540,532650,239335]]}},
+};
+
+/* =====================================================================================================================
+   2. SHARED CONSTANTS (copied from player-window.html so the two mockups stay one language)
+   ===================================================================================================================== */
+const POS=['GK','SW','DL','DC','DR','WBL','WBR','DM','ML','MC','MR','AML','AMC','AMR','ST'];
+const CODE={GK:'GK',SW:'SW',DL:'D(L)',DC:'D(C)',DR:'D(R)',WBL:'WB(L)',WBR:'WB(R)',DM:'DM',ML:'M(L)',MC:'M(C)',MR:'M(R)',AML:'AM(L)',AMC:'AM(C)',AMR:'AM(R)',ST:'ST'};
+const FULL={GK:'Goalkeeper',SW:'Sweeper',DL:'Defender (Left)',DC:'Defender (Centre)',DR:'Defender (Right)',WBL:'Wing Back (Left)',WBR:'Wing Back (Right)',DM:'Defensive Midfielder',ML:'Midfielder (Left)',MC:'Midfielder (Centre)',MR:'Midfielder (Right)',AML:'Attacking Mid (Left)',AMC:'Attacking Mid (Centre)',AMR:'Attacking Mid (Right)',ST:'Striker'};
+const BADGE={GK:'bGK',SW:'bD',DL:'bD',DC:'bD',DR:'bD',WBL:'bD',WBR:'bD',DM:'bDM',ML:'bM',MC:'bM',MR:'bM',AML:'bM',AMC:'bM',AMR:'bM',ST:'bST'};
+const SLOTS={ST:[.50,.11],AML:[.16,.25],AMC:[.50,.25],AMR:[.84,.25],ML:[.12,.40],MC:[.50,.40],MR:[.88,.40],DM:[.50,.535],WBL:[.08,.60],WBR:[.92,.60],DL:[.20,.72],DC:[.50,.72],DR:[.80,.72],SW:[.50,.835],GK:[.50,.94]};
+const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
+const HEX=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
+const word=v=>v>=20?'Natural':v>=15?'Accomplished':v>=10?'Competent':v>=5?'Unconvincing':v>=2?'Awkward':'Ineffective';   // fm_editor/words.py POSITION_WORDS
+const rnd=v=>{const f=Math.floor(v),d=v-f;return d<.5-1e-9?f:d>.5+1e-9?f+1:(f%2?f+1:f)};
+const rtier=v=>tier(rnd(v/5));                         // role percent -> the 1-20 tier of the Best-by-Role report
+const pct=v=>v.toFixed(2)+'%';
+const fmtM=v=>v>=1e7?'£'+Math.round(v/1e6)+'M':v>=1e6?'£'+(Math.round(v/1e5)/10)+'M':v>=1e3?'£'+Math.round(v/1e3)+'K':'£'+Math.round(v);
+const NATFLAG={Spain:'\u{1F1EA}\u{1F1F8}',Sweden:'\u{1F1F8}\u{1F1EA}',Norway:'\u{1F1F3}\u{1F1F4}',Czechia:'\u{1F1E8}\u{1F1FF}',Portugal:'\u{1F1F5}\u{1F1F9}',Germany:'\u{1F1E9}\u{1F1EA}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};
+/* 6-axis radar groups (gui/pw_widgets.py RADAR_OUT / RADAR_GK; own groups, not the game's) */
+const RADAR_OUT=[['Attacking',['Finishing','Long Shots','Dribbling','Penalties','Free Kick','Off the Ball','Flair']],
+ ['Creativity',['Passing','Vision','Technique','First Touch','Crossing','Corners','Long Throws']],
+ ['Athleticism',['Pace','Acceleration','Agility','Balance','Stamina','Strength','Jumping Reach','Natural Fitness']],
+ ['Defending',['Tackling','Marking','Heading','Positioning','Anticipation','Bravery']],
+ ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Versatility']],
+ ['Mentality',['Aggression','Composure','Concentration','Decisions','Determination','Leadership','Teamwork','Work Rate']]];
+const RADAR_GK=[['Shot-stopping',['Reflexes','Handling','One on Ones','Punching']],['Command',['Aerial Reach','Command of Area','Communication','Rushing Out']],
+ ['Athleticism',RADAR_OUT[2][1]],['Distribution',['Kicking','Throwing','Passing','First Touch']],
+ ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Eccentricity']],['Mentality',RADAR_OUT[5][1].concat(['Anticipation','Positioning','Bravery'])]];
+/* POS_ROLES (fm_editor/rolepos.py; FROM MEMORY OF FM24, unverified in game: same caveat as the Role Rating tab) */
+const rl=(f,...d)=>d.length?d.map(x=>`${f} (${x})`):[f];
+const POS_ROLES=(()=>{
+  const CD=[...rl('Ball-Playing Defender','D','S'),...rl('Central Defender','D','S','Cover'),...rl('Libero','D','S'),...rl('No-Nonsense Centre-Back'),...rl('Stopper','D')];
+  const WBs=[...rl('Wing-Back','D','S'),...rl('Complete Wing-Back','S','A'),...rl('Inverted Wing-Back','D','S','A')];
+  const FB=[...rl('Full Back','D','S','A'),...WBs,...rl('No-Nonsense Full Back'),...rl('Wide Centre-Back','D','S','A')];
+  const WM=[...rl('Defensive Winger','D','S'),...rl('Wide Midfielder','D','S','A'),...rl('Winger','S','A'),...rl('Wide Playmaker','D','S','A'),...rl('Inverted Winger','S','A')];
+  const AW=[...rl('Winger','S','A'),...rl('Inside Forward','S','A'),...rl('Inverted Winger','S','A'),...rl('Raumdeuter','A'),...rl('Wide Playmaker','S','A'),...rl('Advanced Playmaker','S','A')];
+  return {GK:[...rl('Goalkeeper','D','S'),...rl('Sweeper Keeper','D','S','A')],SW:[...rl('Libero','D','S'),...rl('Central Defender','Cover'),...rl('Ball-Playing Defender','D')],DL:FB,DC:CD,DR:FB,WBL:WBs,WBR:WBs,
+   DM:[...rl('Anchor','D'),...rl('Ball-Winning Midfielder','D','S'),...rl('Deep-Lying Playmaker','D','S'),...rl('Defensive Midfielder','D','S'),...rl('Half-Back','D'),...rl('Segundo Volante','S','A')],
+   ML:WM,MC:[...rl('Box-to-Box Midfielder','S'),...rl('Carrilero','S'),...rl('Central Midfielder','D','S','A'),...rl('Mezzala','S','A'),...rl('Roaming Playmaker','S'),...rl('Ball-Winning Midfielder','D','S'),...rl('Deep-Lying Playmaker','D','S'),...rl('Advanced Playmaker','S','A')],MR:WM,
+   AML:AW,AMC:[...rl('Advanced Playmaker','S','A'),...rl('Attacking Midfielder','D','S','A'),...rl('Enganche','S'),...rl('Shadow Striker','A'),...rl('Trequartista','A')],AMR:AW,
+   ST:[...rl('Advanced Forward','A'),...rl('Complete Forward','S','A'),...rl('Deep-Lying Forward','S','A'),...rl('False Nine','S'),...rl('Poacher','A'),...rl('Pressing Forward','D','S','A'),...rl('Target Man','S','A'),...rl('Trequartista','A')]};
+})();
+Object.entries(POS_ROLES).forEach(([p,l])=>l.forEach(n=>{if(!RR_NAMES.includes(n))throw new Error('POS_ROLES '+p+': unknown role '+n)}));
+
+/* =====================================================================================================================
+   3. STATE + DATA ACCESS
+   ===================================================================================================================== */
+const qs=new URLSearchParams(location.search),hq=new URLSearchParams(location.hash.replace(/^#/,'').replace(/\+/g,'&'));
+const has=k=>qs.has(k)||hq.has(k),getq=k=>qs.get(k)||hq.get(k);
+const PAIRS={out:['mferrer','jlindahl'],gk:['astrand','mhlavaty'],young:['tsalvador','cwhitby'],veteran:['ikessler','mferrer']};
+const PAIR_NAMES={out:'Two midfielders',gk:'Two goalkeepers',young:'Young high-PA vs prime',veteran:'Veteran vs prime'};
+const VARS={a:'A Overlaid radars',b:'B Mirrored head-to-head',c:'C Decision view',d:'D Fingerprint and duels'};
+const S={v:(getq('v')||'a').toLowerCase(),pair:getq('pair')||'out',nums:has('nums'),pot:has('pot'),pick:has('pick'),min:has('min'),noface:has('noface'),swap:has('swap'),rp:null,role:null,q:getq('q')||'lind',pickSel:0,sameType:true};
+if(!VARS[S.v])S.v='a';if(!PAIRS[S.pair])S.pair='out';
+if(has('bare'))document.documentElement.classList.add('bare');
+if(S.min)document.documentElement.classList.add('min');
+const ids=()=>{const p=S.ids||PAIRS[S.pair];return S.swap?[p[1],p[0]]:p.slice()};
+const A=()=>PL[ids()[0]],B=()=>PL[ids()[1]];
+const isGK=p=>p.pos==='GK';
+const sn=p=>p.name.split(' ').slice(-1)[0];
+Object.values(PL).forEach(p=>{p._m={};Object.values(p.g).forEach(l=>l.forEach(a=>p._m[a[0]]=a))});
+const gv=a=>S.pot?a[2]:a[1];                 // value shown: Current or Full Potential
+const good=a=>a[3]?21-gv(a):gv(a);           // lower-is-better attributes inverted for ranking / averages
+const AT=(p,n)=>p._m[n];
+const mean=(p,names)=>names.reduce((s,n)=>s+good(AT(p,n)),0)/names.length;
+const axes=p=>(isGK(p)?RADAR_GK:RADAR_OUT).map(([n,names])=>({n,names,v:mean(p,names)}));
+const tileV=(a)=>{const t=tier(good(a));return `<span class="tile k${t} c${t}">${gv(a)}</span>`};
+const badge=(p,w)=>`<span class="badge ${BADGE[p]}">${CODE[p]}</span>`;
+const dec=n=>n.toFixed(1);
+const rv=(p)=>{const a=p.rr[S.pot?'pot':'cur'];return n=>a[RR_NAMES.indexOf(n)]};
+const roleOk=(pos,p)=>(pos==='GK')===isGK(p);
+/* groups of the attribute table = the Profile's (Footedness is the feet panel in the player window; here its two rows close the table so all 54 attributes are present) */
+const GRPN={tech:'Technical',ment:'Mental',phys:'Physical',hid:'Hidden',gk:'Goalkeeping',foot:'Footedness'};
+const grpKeys=p=>isGK(p)?['gk','tech','ment','phys','hid','foot']:['tech','ment','phys','hid','foot'];   // outfield: the 11 goalkeeping attributes are not listed (as the Profile)
+const counted=(p,k)=>k!=='foot'&&!(isGK(p)&&k==='tech');   // attributes won: Footedness is not 'better or worse', and a keeper's outfield Technical group is listed but not counted
+function tally(a,b){let wa=0,wb=0,lv=0;const by={};grpKeys(a).filter(k=>k!=='foot').forEach(k=>{let x=0,y=0,z=0;a.g[k].forEach((t,i)=>{const d=good(t)-good(b.g[k][i]);d>0?x++:d<0?y++:z++});by[k]=[x,y,z];if(counted(a,k)){wa+=x;wb+=y;lv+=z}});return{wa,wb,lv,by}}
+const gmean=(p,k)=>p.g[k].reduce((s,t)=>s+good(t),0)/p.g[k].length;
+
+/* ---- synthetic faces, club shields (the app draws the facepack PNG / logo pack PNG here) ---- */
+const FACE={mferrer:['#C9A58A','#2A2018','#6B2A33'],jlindahl:['#E7C3A5','#C9A860','#2B3A55'],astrand:['#E2BFA0','#8A5A32','#3D5A3A'],mhlavaty:['#D2AD8E','#3A2C20','#5A4A8A'],
+ tsalvador:['#B88A68','#1D1712','#8A2A2A'],cwhitby:['#E5C3A8','#6A4A2A','#2A4A7A'],ikessler:['#DDB899','#9A9A9A','#2A2A30']};
+const faceSvg=id=>{const [s,h,k]=FACE[id];return `<svg viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice" aria-hidden="true"><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="${k}"/><rect x="108" y="150" width="44" height="60" rx="14" fill="${s}"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="${s}"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="${h}"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/><path d="M112 150Q130 162 148 150" stroke="#6E4A3A" stroke-width="4" fill="none" stroke-linecap="round"/></svg>`};
+const sil='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6" style="width:30px;height:30px;margin:17px 12px" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+const avatar=id=>S.noface?sil:faceSvg(id);
+const CLUBC={'Veridian United':['#7A1F2B','#F2F4F7'],'FC Saltmere':['#1D5FA8','#F2F4F7'],'Ostmark SC':['#1F6B3A','#F2F4F7'],'Corvale FC':['#2A2A30','#E0973C'],'Atlético Brava':['#B02A2A','#F2F4F7'],'Northgate Rovers':['#132B5E','#F2F4F7'],'Rheinau 04':['#E0C03C','#2A2A30']};
+const clubBadge=c=>{const [f,g]=CLUBC[c]||['#454A58','#fff'];return `<svg class="bdg" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 14.2 2.6V8.2C14.2 11.4 11.6 13.9 8 15.2 4.4 13.9 1.8 11.4 1.8 8.2V2.6Z" fill="${g}"/><path d="M8 2.2 12.8 3.6V8.1C12.8 10.7 10.8 12.7 8 13.8 5.2 12.7 3.2 10.7 3.2 8.1V3.6Z" fill="${f}"/><path d="M5.6 6.2H10.4M5.6 8.6H10.4" stroke="${g}" stroke-width="1.3"/></svg>`};
+/* stars: ability_stars (value/40 nearest half, ties up, clamp .5..5); Dev Rate value/4. Numbers mode keeps the raw number (stars: raw number in the title). */
+let _sid=0;
+const star=(v,div=40,sz=13)=>{const n=Math.max(.5,Math.min(5,Math.floor(v/div*2+.5)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i)),id='s'+(_sid++);s+=`<svg width="${sz}" height="${sz}" viewBox="0 0 15 15" aria-hidden="true"><defs><clipPath id="${id}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#${id})"/></svg>`}return s};
+const abil=(label,code,v,col,div=40)=>S.nums?`<div class="cab" title="${code} ${v}"><small>${label}</small><div class="nv"><b style="color:${col}">${v}</b><div class="bar"><i style="width:${div===4?v*5:v/2}%;background:${col}"></i></div></div></div>`
+  :`<div class="cab" title="${code} ${v}"><small>${label}</small><div class="stars">${star(v,div)}</div></div>`;
+const segc=(act,items,cur)=>`<span class="sg" role="group">${items.map(([k,l])=>`<button data-act="${act}" data-v="${k}" aria-pressed="${k===cur}" class="${k===cur?'on':''}">${l}</button>`).join('')}</span>`;
+const potSeg=()=>segc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur');
+const ph=(t,r='')=>`<div class="ph"><span>${t}</span>${r?`<span class="r">${r}</span>`:''}</div>`;
+const legend=()=>`<span class="a-leg" style="padding:0"><span><i class="dot ca" style="background:var(--a)"></i>${sn(A())}</span><span><i class="dot sq" style="background:var(--b)"></i>${sn(B())}</span></span>`;
+const bestPos=p=>POS.slice().sort((x,y)=>p.posr[y]-p.posr[x]||(y===p.pos)-(x===p.pos)||POS.indexOf(x)-POS.indexOf(y))[0];
+
+/* ---- persistent header + action strip ---- */
+function pblock(p,cls){
+  const fl=`<span class="fl" title="${p.nat}">${NATFLAG[p.nat]||''}</span>`,dot='<span class="sep">·</span>';
+  return `<div class="pn hp ${cls}" role="group" aria-label="${cls==='pb'?'Player B':'Player A'}: ${p.name}"><div class="avatar">${avatar(p.id)}</div>
+    <div class="hid"><div class="r1"><span class="nm" title="${p.name}">${p.name}</span>${badge(p.pos)}</div><div class="r2">${fl}<span class="club">${clubBadge(p.club)}<span>${p.club}</span></span>${dot}<span title="Born ${p.born}">${p.age} years</span></div></div>
+    ${abil('Current','CA',p.ca,'#735CE4')}${abil('Potential','PA',p.pa,'#9A8AF5')}</div>`;
+}
+const header=()=>`<div class="hdr">${pblock(A(),'pa')}<div class="vs" aria-hidden="true">VS</div>${pblock(B(),'pb')}</div>`;
+function actionStrip(){
+  return `<div class="strip"><button class="btn b2" data-act="swap" title="Swap sides: A becomes B and B becomes A">Swap sides</button><button class="btn b2" data-act="pick" title="Choose another player to compare with ${sn(A())}">Change player B…</button>${S.v==='d'?'<button class="btn b2" data-act="img" title="Save the fingerprint and the situation cards as one PNG image">Save comparison image…</button>':''}
+    <span class="sp"></span><button class="btn b2" data-act="short" title="Add both players to the Player Shortlist">Add both to Shortlist</button><button class="btn b2" data-act="close">Close</button></div>`;
+}
+/* shared: positions both players can be compared at (rated >= 10 by at least one, role-able), best combined first; default = the best shared position */
+function posOptions(){const a=A(),b=B();return POS.filter(p=>roleOk(p,a)&&Math.max(a.posr[p],b.posr[p])>=10).sort((x,y)=>(b.posr[y]+a.posr[y])-(b.posr[x]+a.posr[x])||POS.indexOf(x)-POS.indexOf(y)).slice(0,4)}
+const selPos=()=>{const o=posOptions();return S.rp&&o.includes(S.rp)?S.rp:o[0]};
+const posChips=()=>`<div class="pos-chips" role="group" aria-label="Compare as position">${posOptions().map(p=>`<button class="pchip${p===selPos()?' on':''}" data-act="rp" data-v="${p}" aria-pressed="${p===selPos()}" title="${FULL[p]}: ${sn(A())} ${A().posr[p]} (${word(A().posr[p])}), ${sn(B())} ${B().posr[p]} (${word(B().posr[p])})">${badge(p)}<span style="color:var(--a)">${A().posr[p]}</span><span style="color:var(--b)">${B().posr[p]}</span></button>`).join('')}</div>`;
+function famName(n){const x=/^(.*) \((D|S|A|Cover)\)$/.exec(n);return x?{f:x[1],d:{D:'Defend',S:'Support',A:'Attack',Cover:'Cover'}[x[2]]}:{f:n,d:'Defend'}}
+const roleRows=pos=>{const ra=rv(A()),rb=rv(B());return POS_ROLES[pos].map(n=>({n,a:ra(n),b:rb(n),...famName(n)})).sort((x,y)=>(y.a+y.b)-(x.a+x.b)||x.n.localeCompare(y.n))};
+
+/* =====================================================================================================================
+   4A. VARIANT A - OVERLAID RADARS
+   ===================================================================================================================== */
+function radarAB(ax,bx){
+  const W=358,H=336,cx=179,cy=170,R=106,f1=x=>x.toFixed(1),pt=(i,k)=>{const t=(-90+i*60)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=(arr,k)=>arr.map((v,i)=>pt(i,k(v)).map(f1).join(',')).join(' ');
+  let s=[.25,.5,.75,1].map(k=>`<polygon points="${ax.map((_,i)=>pt(i,k).map(f1).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,${k===1?.22:.10})"/>`).join('');
+  s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${f1(p[0])}" y2="${f1(p[1])}" stroke="rgba(255,255,255,.10)"/>`}).join('');
+  [10,20].forEach(v=>{const x=cx+Math.cos(-60*Math.PI/180)*R*v/20,y=cy+Math.sin(-60*Math.PI/180)*R*v/20;s+=`<text x="${f1(x-3)}" y="${f1(y-2)}" text-anchor="end" font-size="9" fill="#8B96A8">${v}</text>`});   // ring scale
+  s+=`<polygon points="${poly(bx,a=>a.v/20)}" fill="rgba(215,124,255,.18)" stroke="#D77CFF" stroke-width="1.75" stroke-dasharray="6 3" stroke-linejoin="round"/>`;
+  s+=`<polygon points="${poly(ax,a=>a.v/20)}" fill="rgba(82,176,255,.22)" stroke="#52B0FF" stroke-width="1.75" stroke-linejoin="round"/>`;
+  s+=ax.map((a,i)=>{const b=bx[i],pa=pt(i,a.v/20),pb=pt(i,b.v/20),q=pt(i,1),side=i%3?(i<3?'start':'end'):'middle',x=side==='middle'?q[0]:q[0]+(side==='start'?7:-7),y1=i===0?q[1]-24:i===3?q[1]+14:q[1]-2;
+    const tip=`${a.n} (mean of ${a.names.length} attributes): ${sn(A())} ${dec(a.v)}, ${sn(B())} ${dec(b.v)}. ${a.names.join(', ')}`;
+    return `<g><title>${tip}</title><circle cx="${f1(pa[0])}" cy="${f1(pa[1])}" r="4" fill="#52B0FF" stroke="#14151A" stroke-width="1.5"/><rect x="${f1(pb[0]-3.6)}" y="${f1(pb[1]-3.6)}" width="7.2" height="7.2" fill="#D77CFF" stroke="#14151A" stroke-width="1.5" transform="rotate(45 ${f1(pb[0])} ${f1(pb[1])})"/>
+      <text x="${f1(x)}" y="${f1(y1)}" text-anchor="${side}" font-size="9" font-weight="700" fill="#8B96A8">${a.n.toUpperCase()}</text>
+      <text x="${f1(x)}" y="${f1(y1+14)}" text-anchor="${side}" font-size="12" font-weight="700"><tspan fill="${a.v>=b.v?'#52B0FF':'#52B0FF'}" ${a.v>b.v?'':'opacity=".85"'}>${dec(a.v)}</tspan><tspan fill="#8B96A8" font-weight="400"> / </tspan><tspan fill="#D77CFF">${dec(b.v)}</tspan></text></g>`}).join('');
+  return `<svg class="rd" style="margin:0 auto" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Overlaid radar of six attribute groups for ${A().name} and ${B().name}">${s}</svg>`;
+}
+function attrCol(p,q,key,gk){
+  return `<div class="ach"><span>${GRPN[key]}</span><span class="m"><span class="ca" title="${sn(p)} group mean">${dec(gmean(p,key))}</span><span class="cb" title="${sn(q)} group mean">${dec(gmean(q,key))}</span></span></div>`+p.g[key].map((a,i)=>{const b=q.g[key][i],d=good(a)-good(b),ad=Math.abs(d);
+    const df=d===0?`<span class="df" title="Level">=</span>`:d>0?`<span class="df ca" title="${sn(p)} higher by ${ad}">‹ ${ad}</span>`:`<span class="df cb" title="${sn(q)} higher by ${ad}">${ad} ›</span>`;
+    return `<div class="ar${gk?' gk':''}" title="${a[0]}: ${sn(p)} ${gv(a)}, ${sn(q)} ${gv(b)}${a[3]?' (lower is better)':''}"><span class="an">${a[0]}</span>${tileV(a)}${df}${tileV(b)}</div>`}).join('');
+}
+function attrPanelAB(){
+  const p=A(),q=B(),gk=isGK(p),t=tally(p,q);
+  const cols=gk?[['gk','foot'],['tech'],['ment'],['phys','hid']]:[['tech','foot'],['ment'],['phys','hid']];
+  return `<div class="pn" style="flex:1;min-height:0">${ph('Attributes',`<span class="pnote"><b class="ca">${t.wa}</b> to <b class="cb">${t.wb}</b>, ${t.lv} level</span>`)}
+    <div class="a-cols scr">${cols.map(c=>`<div>${c.map((k,i)=>(i?'<div style="height:6px"></div>':'')+attrCol(p,q,k,gk)).join('')}</div>`).join('')}</div></div>`;
+}
+function factsAB(){
+  const p=A(),q=B(),yrs=x=>x.yl.toFixed(1)+' yrs';
+  const row=(a,b,d)=>`<div><span class="dot ca" style="background:var(--a)"></span><span>${a}</span></div><div><span class="dot sq" style="background:var(--b)"></span><span>${b}</span></div><div class="d">${d||'&nbsp;'}</div>`;
+  const dv=Math.abs(p.value-q.value),dy=Math.abs(p.age-q.age),dc=Math.abs(p.yl-q.yl);
+  const F=[['Age',row(`${p.age}`,`${q.age}`,dy?`${dy} year${dy>1?'s':''} apart`:'same age')],
+   ['Contract',row(`${p.until}`,`${q.until}`,dc>=.05?`${dc.toFixed(1)} yrs difference`:'same length')],
+   ['Value',row(fmtM(p.value),fmtM(q.value),dv?`${fmtM(dv)} apart`:'equal')],
+   ['Wage',row(p.wage.replace(' p/w','<em>p/w</em>'),q.wage.replace(' p/w','<em>p/w</em>'),'')],
+   ['Height / weight',row(`${p.height.replace(' cm','')}<em>cm</em> ${p.weight.replace(' kg','')}<em>kg</em>`,`${q.height.replace(' cm','')}<em>cm</em> ${q.weight.replace(' kg','')}<em>kg</em>`,'')],
+   ['Traits',row(`${p.traits.length}`,`${q.traits.length}`,p.traits.length===q.traits.length?'same count':'')]];
+  return `<div class="pn" style="flex:none">${ph('Key facts','<span class="pnote">Values are the save\'s market value and wage</span>')}<div class="facts">${F.map(([l,h])=>`<div class="fact"><small>${l}</small>${h}</div>`).join('')}</div></div>`;
+}
+function edges(ax,bx){
+  const rows=ax.map((a,i)=>{const d=a.v-bx[i].v,ad=Math.abs(d),w=Math.min(100,ad/4*100),c=d>.05?'ca':d<-.05?'cb':'';
+    return `<div class="dvr" title="${a.n}: ${sn(A())} ${dec(a.v)}, ${sn(B())} ${dec(bx[i].v)}"><span class="nm">${a.n}</span><span class="dv"><span class="h l"><i style="width:${d>0?w:0}%;background:var(--a)"></i></span><span class="h r"><i style="width:${d<0?w:0}%;background:var(--b)"></i></span></span><b class="${c}">${ad<.05?'=':(d>0?'':'')+(ad).toFixed(1)}</b></div>`}).join('');
+  return `<div class="a-edge"><div class="eh">Difference by group (mean of 1 to 20)</div>${rows}</div>`;
+}
+function variantA(){
+  const ax=axes(A()),bx=axes(B());
+  return `<div class="main"><div class="col a-left${isGK(A())?' gk':''}"><div class="pn" style="flex:1">${ph('Attribute groups',potSeg())}<div class="scr"><div style="padding:0 0 4px">${radarAB(ax,bx)}</div>
+    <div class="a-leg"><span><i class="dot" style="background:var(--a)"></i>${A().name}</span><span><i class="dot sq" style="background:var(--b)"></i>${B().name}</span><span style="color:var(--tx2);font-weight:400;font-size:10px">solid / dashed outline · ring 10 and 20</span></div>${edges(ax,bx)}</div></div></div>
+    <div class="col" style="flex:1">${attrPanelAB()}${factsAB()}</div></div>`;
+}
+
+/* =====================================================================================================================
+   4B. VARIANT B - MIRRORED HEAD-TO-HEAD ('tale of the tape')
+   ===================================================================================================================== */
+function butterflyRow(a,b,nm,cls=''){const ga=good(a),gb=good(b),w=ga>gb?'wa':ga<gb?'wb':'';
+  return `<div class="bfr ${w}${cls}" title="${nm}: ${sn(A())} ${gv(a)}, ${sn(B())} ${gv(b)}${a[3]?' (lower is better, bars show 21 minus the value)':''}"><span class="v">${gv(a)}</span><span class="bl"><i style="width:${ga*5}%;background:var(--a);opacity:${w==='wb'?.45:1}"></i></span><span class="nm">${nm}</span><span class="br"><i style="width:${gb*5}%;background:var(--b);opacity:${w==='wa'?.45:1}"></i></span><span class="v">${gv(b)}</span></div>`}
+function pitchOverlay(p,q,W,H,M){
+  const k=(W-2*M)/386,g={boxW:238*k,boxD:88*k,sixW:108*k,sixD:29*k,circR:54*k,spotD:58*k,goalW:43*k,goalD:6*k},LN='rgba(255,255,255,0.42)',x0=M,y0=M,w=W-2*M,h=H-2*M,cx=x0+w/2,cy=y0+h/2,y1=y0+h,n=12,bh=H/n;
+  let s=`<rect width="${W}" height="${H}" fill="#15301F"/>`;for(let i=1;i<n;i+=2)s+=`<rect x="0" y="${(i*bh).toFixed(1)}" width="${W}" height="${bh.toFixed(1)}" fill="#1D4229"/>`;
+  const st=`fill="none" stroke="${LN}" stroke-width="1"`;
+  s+=`<rect x="${x0+.5}" y="${y0+.5}" width="${w}" height="${h}" ${st}/><line x1="${x0}" y1="${cy}" x2="${x0+w}" y2="${cy}" stroke="${LN}"/><circle cx="${cx}" cy="${cy}" r="${g.circR}" ${st}/>`;
+  [0,1].forEach(bot=>{const bx=cx-g.boxW/2,sx=cx-g.sixW/2,by=bot?y1-g.boxD:y0,sy=bot?y1-g.sixD:y0;s+=`<rect x="${bx}" y="${by+.5}" width="${g.boxW}" height="${g.boxD}" ${st}/><rect x="${sx}" y="${sy+.5}" width="${g.sixW}" height="${g.sixD}" ${st}/>`});
+  const dots=[];POS.forEach(pos=>{const x=M+SLOTS[pos][0]*w,y=M+SLOTS[pos][1]*h,ra=p.posr[pos],rb=q.posr[pos],ga=ra>=10,gb=rb>=10;
+    if(!ga&&!gb)return;const off=ga&&gb?8.5:0;
+    dots.push(`<text x="${x}" y="${y-17}" text-anchor="middle" font-size="9" font-weight="700" fill="rgba(255,255,255,.78)">${CODE[pos]}</text>`);
+    if(ga)dots.push(`<g><title>${sn(p)} at ${FULL[pos]}: ${ra} (${word(ra)})</title>${ra>=20?`<circle cx="${x-off}" cy="${y}" r="11" fill="none" stroke="#fff" stroke-width="1.5"/>`:''}<circle cx="${x-off}" cy="${y}" r="8.5" fill="#52B0FF" stroke="#14151A" stroke-width="1"/><text x="${x-off}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#14151A">${ra}</text></g>`);
+    if(gb)dots.push(`<g><title>${sn(q)} at ${FULL[pos]}: ${rb} (${word(rb)})</title>${rb>=20?`<circle cx="${x+off}" cy="${y}" r="11" fill="none" stroke="#fff" stroke-width="1.5"/>`:''}<rect x="${x+off-8}" y="${y-8}" width="16" height="16" rx="3" fill="#D77CFF" stroke="#14151A" stroke-width="1"/><text x="${x+off}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#14151A">${rb}</text></g>`)});
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Pitch with the positions each player is rated 10 or more at">${s}${dots.join('')}</svg>`}
+function variantB(){
+  const p=A(),q=B(),t=tally(p,q),tot=t.wa+t.wb+t.lv,pos=selPos(),rr=roleRows(pos);
+  const groups=grpKeys(p).filter(k=>k!=='foot').map(k=>{const x=gmean(p,k),y=gmean(q,k),[wa,wb,lv]=t.by[k],w=x>y+.05?'wa':y>x+.05?'wb':'';
+    return `<details class="bg" open><summary><span class="ar2" aria-hidden="true">▶</span><div class="bfr sum ${w}" title="${GRPN[k]} mean: ${sn(p)} ${dec(x)}, ${sn(q)} ${dec(y)}. Attributes won ${wa} to ${wb}, ${lv} level"><span class="v" style="color:${w==='wa'?'#fff':'var(--tx2)'}">${dec(x)}</span><span class="bl"><i style="width:${x*5}%;background:var(--a);opacity:${w==='wb'?.45:1}"></i></span><span class="nm">${GRPN[k]}</span><span class="br"><i style="width:${y*5}%;background:var(--b);opacity:${w==='wa'?.45:1}"></i></span><span class="v" style="color:${w==='wb'?'#fff':'var(--tx2)'}">${dec(y)}</span></div><span class="won">${counted(p,k)?`<span class="ca">${wa}</span>–<span class="cb">${wb}</span>`:'<span title="A goalkeeper\'s outfield attributes are listed but not counted in the score" style="font-weight:400">not counted</span>'}</span></summary>${p.g[k].map((a,i)=>butterflyRow(a,q.g[k][i],a[0])).join('')}</details>`}).join('');
+  const lg=grpKeys(p).filter(k=>counted(p,k)).map(k=>`<span title="${GRPN[k]}: ${sn(p)} ${t.by[k][0]}, ${sn(q)} ${t.by[k][1]}, level ${t.by[k][2]}">${GRPN[k]} <b><span class="ca">${t.by[k][0]}</span>–<span class="cb">${t.by[k][1]}</span></b></span>`).join('');
+  const roles=rr.slice(0,24).map(r=>{const w=r.a>r.b+.005?'wa':r.b>r.a+.005?'wb':'';return `<div class="rrow ${w}" title="${r.n}: ${sn(p)} ${pct(r.a)}, ${sn(q)} ${pct(r.b)}"><div class="rn"><span>${r.f}</span><em>${r.d}</em></div><div class="rb"><b>${pct(r.a)}</b><span class="bl"><i style="width:${r.a}%;background:var(--a);opacity:${w==='wb'?.45:1}"></i></span><span class="br"><i style="width:${r.b}%;background:var(--b);opacity:${w==='wa'?.45:1}"></i></span><b>${pct(r.b)}</b></div></div>`}).join('');
+  return `<div class="main"><div class="pn" style="flex:1 1 0;min-width:420px">${ph('Head to head',potSeg())}
+    <div class="score"><div class="big"><b class="ca" title="${p.name} better in ${t.wa} attributes">${t.wa}</b><span>attributes won${t.lv?` · ${t.lv} level`:''}</span><b class="cb" title="${q.name} better in ${t.wb} attributes">${t.wb}</b></div>
+      <div class="sb" role="img" aria-label="${t.wa} attributes to ${p.name}, ${t.lv} level, ${t.wb} to ${q.name}"><i style="width:${t.wa/tot*100}%;background:var(--a)"></i><i style="width:${t.lv/tot*100}%;background:var(--border2)"></i><i style="width:${t.wb/tot*100}%;background:var(--b)"></i></div>
+      <div class="gl">${lg}</div></div>
+    <div class="scr">${groups}</div></div>
+    <div class="pn" style="flex:0 0 288px">${ph('Role ratings',`<span class="pnote">Rating %</span>`)}${posChips()}<div class="scr">${roles}</div>
+      <div style="padding:6px 12px 8px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;line-height:15px">${FULL[pos]}, weights: FMScout Community. Roles from memory of FM24, unverified in game.</div></div>
+    <div class="pn" style="flex:0 0 232px">${ph('Positions',`<span class="pnote">rated 10+</span>`)}<div style="padding:0 9px 0;flex:1;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center">${pitchOverlay(p,q,212,430,14)}</div>
+      <div style="padding:8px 12px 10px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;line-height:17px;display:flex;flex-direction:column;gap:2px"><span style="color:#fff"><i class="dot" style="background:var(--a)"></i> ${sn(p)} <i class="dot sq" style="background:var(--b);margin-left:8px"></i> ${sn(q)}</span><span>Number = position rating, ring = Natural (20)</span></div></div></div>`;
+}
+
+/* =====================================================================================================================
+   4C. VARIANT C - DECISION VIEW (signing: which of the two for a position / role)
+   ===================================================================================================================== */
+const SQUAD={mid:[['Daniel Whitlock','MC',71.5],['Sami Rahimi','MC',69.0],['Lewis Brennan','DM',66.5],['Pavel Novák','MC',63.0],['Tom Harker','AMC',60.5]],
+  wing:[['Kai Ostrowski','AMR',77.0],['Ruben Alves','AML',73.5],['Joe Pritchard','AMR',70.0],['Ilan Cohen','ML',66.0],['Ben Sutcliffe','MR',61.0]],gk:[['Callum Rudd','GK',70.5],['Olek Wrona','GK',62.0]]};   // SAMPLE squad (see the data notes): the app reads the user's own club
+const peerKey=p=>p.pos==='GK'?'gk':['AMR','AML','ML','MR','ST'].includes(p.pos)?'wing':'mid';
+const hash=s=>{let h=7;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h};
+const squadAt=(p,role)=>SQUAD[peerKey(p)].map(([n,pos,b])=>({n,pos,v:Math.min(95,b+((hash(n+role)%70)/10-3.5))}));   // role % of the sample squad (seeded jitter around the base, SAMPLE)
+function trendSVG(p,q){
+  const W=424,H=S.min?150:206,L=48,R=14,T=16,Bm=26,pw=W-L-R,ph_=H-T-Bm,E=['#52B0FF','#D77CFF'],pl=[p,q];
+  const a0=Math.min(p.vc.pts[0][0],q.vc.pts[0][0]),a1=Math.max(p.vc.pts.at(-1)[0],q.vc.pts.at(-1)[0]),n=a1-a0;
+  const mx=Math.max(...pl.map(x=>Math.max(...x.vc.pts.map(r=>Math.max(r[1],x.vc.full?r[4]:0)))))*1.04,raw=mx/4,mag=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/mag,step=(m<=1?1:m<=2?2:m<=5?5:10)*mag,top=Math.ceil(mx/step-1e-9)*step;
+  const X=a=>L+(a-a0)/n*pw,Y=v=>T+ph_-Math.min(v,top)/top*ph_,f=x=>x.toFixed(1),tk=v=>v===0?'£0':step>=1e6?'£'+Math.round(v/1e6)+'M':step>=1e5?'£'+(Math.round(v/1e5)/10)+'M':'£'+Math.round(v/1e3)+'K';
+  let g='';for(let v=0;v<=top+1;v+=step)g+=`<line x1="${L}" x2="${L+pw}" y1="${f(Y(v)+.5)}" y2="${f(Y(v)+.5)}" stroke="${v?'#343740':'#454A58'}"/><text x="${L-8}" y="${f(Y(v)+4)}" text-anchor="end" font-size="10" fill="#8B96A8">${tk(v)}</text>`;
+  for(let a=a0;a<=a1;a+=n>14?2:1)g+=`<text x="${f(X(a))}" y="${T+ph_+17}" text-anchor="middle" font-size="10" fill="#8B96A8">${a}</text>`;
+  pl.forEach((x,k)=>{const P=x.vc.pts,c=E[k];g+=`<polygon points="${P.map(r=>f(X(r[0]))+','+f(Y(r[3]))).join(' ')} ${P.map(r=>f(X(r[0]))+','+f(Y(r[2]))).reverse().join(' ')}" fill="${k?'rgba(215,124,255,.10)':'rgba(82,176,255,.11)'}"/>`});
+  pl.forEach((x,k)=>{const P=x.vc.pts,c=E[k];if(x.vc.full)g+=`<polyline points="${P.map(r=>f(X(r[0]))+','+f(Y(r[4]))).join(' ')}" fill="none" stroke="${c}" stroke-width="1.25" stroke-dasharray="1.5 3.5" stroke-linecap="round" opacity=".9"/>`;
+    g+=`<polyline points="${P.map(r=>f(X(r[0]))+','+f(Y(r[1]))).join(' ')}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"${k?' stroke-dasharray="7 3"':''}/>`;
+    P.forEach((r,i)=>{const sx=f(X(r[0])),sy=f(Y(r[1])),rr=i?2.6:4.6;g+=k?`<rect x="${sx-rr}" y="${sy-rr}" width="${2*rr}" height="${2*rr}" fill="${c}" transform="rotate(45 ${sx} ${sy})"${i?'':' stroke="#14151A" stroke-width="1.5"'}/>`:`<circle cx="${sx}" cy="${sy}" r="${rr}" fill="${c}"${i?'':' stroke="#14151A" stroke-width="1.5"'}/>`});
+    const ye=p.age,ce=x.age+x.yl;if(ce<=a1)g+=`<g><title>${x.name}: contract ends ${x.until}</title><path d="M${f(X(ce))} ${T+ph_} v-9" stroke="${c}" stroke-width="2"/><path d="M${f(X(ce))-4} ${T+ph_-9} h8 l-4 -5 z" fill="${c}"/></g>`;
+    g+=`<text x="${f(X(x.vc.pts[0][0])+8)}" y="${f(Y(x.vc.pts[0][1])-9)}" font-size="10" font-weight="700" fill="${c}" stroke="#1A2226" stroke-width="3" paint-order="stroke">${sn(x)} now ${fmtM(x.vc.pts[0][1])}</text>`});
+  for(let a=a0;a<=a1;a++){const r=pl.map(x=>x.vc.pts.find(z=>z[0]===a));const t=`Age ${a}\n`+pl.map((x,k)=>r[k]?`${sn(x)}  ${fmtM(r[k][1])}  (range ${fmtM(r[k][2])} - ${fmtM(r[k][3])})`+(x.vc.full?`  at full potential ${fmtM(r[k][4])}`:''):`${sn(x)}  (outside the modelled years)`).join('\n');
+    g+=`<rect x="${f(X(a)-pw/n/2)}" y="${T}" width="${f(pw/n)}" height="${ph_}" fill="transparent"><title>${t}</title></rect>`}
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;max-height:100%" role="img" aria-label="Estimated market value by age for ${p.name} and ${q.name}">${g}</svg>`;
+}
+function flagsFor(p,pos){const F=[],v3=p.vc.pts[3]?p.vc.pts[3][1]:null,ch=v3?Math.round((v3/p.value-1)*100):null;
+  if(p.yl<1)F.push(['w',`Ends ${p.until}: ${Math.round(p.yl*12)} months left.`]);
+  else if(p.yl<2)F.push(['n',`To ${p.until}: ${p.yl.toFixed(1)} years left, renewal due.`]);
+  else F.push(['ok',`To ${p.until}: ${p.yl.toFixed(1)} years left.`]);
+  if(p.age>=29&&v3)F.push([p.age>=33?'w':'n',`Age ${p.age}: trend value ${ch>0?'+':''}${ch}% in 3 years (estimate).`]);
+  else if(p.age<=21)F.push(['n',`Age ${p.age}, CA ${p.pa-p.ca} below PA: growth not certain.`]);
+  else if(p.pa<=p.ca)F.push(['ok',`CA equals PA (${p.ca}): no growth modelled.`]);
+  const ip=AT(p,'Injury Prone')[1];if(ip>=11)F.push(['w',`Injury Prone ${ip} out of 20 (lower is better).`]);
+  const cs=AT(p,'Consistency')[1];if(cs<=10)F.push(['n',`Consistency ${cs} out of 20.`]);
+  const dt=AT(p,'Dirtiness')[1];if(dt>=13)F.push(['n',`Dirtiness ${dt} out of 20 (lower is better).`]);
+  if(p.posr[pos]<15)F.push(['n',`Rated ${p.posr[pos]} (${word(p.posr[pos])}) at ${CODE[pos]}.`]);
+  return F.sort((x,y)=>'wnok'.indexOf(x[0])-'wnok'.indexOf(y[0])).slice(0,3);
+}
+function verdict(p,q,pos,role,rr){
+  const L=[];
+  const d=role.a-role.b,ad=Math.abs(d),lead=d>0?p:q,trail=d>0?q:p,t=tally(p,q);
+  const rd=ad<1.5?`too close to call (${ad.toFixed(1)} points)`:`${sn(lead)} ahead by ${ad.toFixed(1)} points`;
+  L.push(`<b>Role fit</b>: ${sn(p)} ${pct(role.a)}, ${sn(q)} ${pct(role.b)}; ${rd}.`);
+  const bq=[...rr].sort((x,y)=>y.b-x.b)[0],bpa=[...rr].sort((x,y)=>y.a-x.a)[0];
+  L.push(`<b>Best role at ${CODE[pos]}</b>: ${sn(p)} ${bpa.f} (${bpa.d[0]}) ${pct(bpa.a)}; ${sn(q)} ${bq.f} (${bq.d[0]}) ${pct(bq.b)}.`);
+  const ax=axes(p),bx=axes(q),gd=ax.map((a,i)=>({n:a.n,d:a.v-bx[i].v})).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)),g1=gd[0],g2=gd.find(x=>x.d*g1.d<0);
+  L.push(`<b>Attributes</b>: ${t.wa} to ${t.wb}, ${t.lv} level. ${g1.n} ${g1.d>0?sn(p):sn(q)} +${Math.abs(g1.d).toFixed(1)}${g2?`, ${g2.n} ${g2.d>0?sn(p):sn(q)} +${Math.abs(g2.d).toFixed(1)}`:''}.`);
+  L.push(`<b>Development</b>: ${sn(p)} ${p.age}, ${p.pa-p.ca} CA to PA; ${sn(q)} ${q.age}, ${q.pa-q.ca} CA to PA.`);
+  const v3=x=>x.vc.pts[3]?fmtM(x.vc.pts[3][1]):'n/a';
+  L.push(`<b>Money</b>: ${fmtM(p.value)} and ${fmtM(q.value)} now; ${v3(p)} and ${v3(q)} in 3 years (trend estimate).`);
+  L.push(`<b>Contract</b>: ${sn(p)} ${p.yl.toFixed(1)} years left, ${sn(q)} ${q.yl.toFixed(1)}.`);
+  const fa=[],fb=[],fe=[],mk=(n,x,y,eq)=>x>y+eq?fa.push(n):y>x+eq?fb.push(n):fe.push(n);
+  mk('role fit',role.a,role.b,1.5);mk('attributes',t.wa,t.wb,3);mk('headroom to PA',p.pa-p.ca,q.pa-q.ca,4);mk('age',q.age,p.age,1.5);mk('contract length',p.yl,q.yl,.3);
+  const head=[fa.length?`Favour ${sn(p)}: ${fa.join(', ')}.`:'',fb.length?`Favour ${sn(q)}: ${fb.join(', ')}.`:'',fe.length?`Level: ${fe.join(', ')}.`:''].filter(Boolean).join(' ');
+  return `<div class="head">${head}</div><ul>${L.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+}
+function variantC(){
+  const p=A(),q=B(),pos=selPos(),rr=roleRows(pos),role=rr.find(r=>r.n===S.role)||[...rr].sort((x,y)=>(y.a+y.b)-(x.a+x.b))[0];
+  const rows=rr.map(r=>{const d=r.a-r.b,w=Math.abs(d)<.005?'':d>0?'a':'b',on=r.n===role.n;
+    return `<button class="crow${on?' on':''}" data-act="role" data-v="${r.n}" aria-pressed="${on}" title="${r.n}: ${sn(p)} ${pct(r.a)}, ${sn(q)} ${pct(r.b)}"><div class="t"><span>${r.n}</span><em class="${w?'c'+w:''}">${w?(w==='a'?sn(p):sn(q))+' +'+Math.abs(d).toFixed(1):'level'}</em></div>
+      <div class="l2"><b class="${d>0?'w':''}">${pct(r.a)}</b><span class="bar"><i style="width:${r.a}%;background:var(--a)"></i></span></div><div class="l2"><b class="${d<0?'w':''}">${pct(r.b)}</b><span class="bar"><i style="width:${r.b}%;background:var(--b)"></i></span></div></button>`}).join('');
+  const dev=pl=>{const c=pl===p?'var(--a)':'var(--b)',cell=(v,div,col)=>S.nums?`<span title="${v}" style="display:flex;align-items:center;gap:6px;width:76px"><b style="font-size:14px;color:${col}">${v}</b><span class="bar" style="width:30px;flex:none"><i style="width:${div===4?v*5:v/2}%;background:${col}"></i></span></span>`:`<span title="${div===4?'Dev Rate '+v+' out of 20':v}" style="display:flex;gap:1px;width:76px">${star(v,div,13)}</span>`;
+    return `<div class="devr" style="height:30px"><span class="lb n"><i class="dot ${pl===q?'sq':''}" style="background:${c};margin-right:6px"></i>${sn(pl)}</span>${cell(pl.ca,40,'#735CE4')}${cell(pl.pa,40,'#9A8AF5')}${cell(pl.dev,4,HEX[tier(pl.dev)])}</div>`};
+  const sq=squadAt(p,role.n),all=[...sq.map(x=>({...x,k:''})),{n:p.name,v:role.a,k:'a'},{n:q.name,v:role.b,k:'b'}].sort((x,y)=>y.v-x.v),rk=k=>all.findIndex(x=>x.k===k)+1;
+  const fl=pl=>`<div class="flh"><i class="dot ${pl===q?'sq':''}" style="background:${pl===p?'var(--a)':'var(--b)'}"></i>${pl.name}</div>`+flagsFor(pl,pos).map(([s,t])=>`<div class="flg"><span class="sev ${s}">${{w:'Watch',n:'Note',ok:'Fine'}[s]}</span><span class="tx">${t}</span></div>`).join('');
+  return `<div class="main" style="flex-direction:column;gap:12px"><div class="pn" style="flex:none;flex-direction:row;align-items:center"><div class="bar2"><span class="lb">Compare as</span>${posChips().replace('class="pos-chips"','class="pos-chips" style="padding:0"')}</div><div class="bar2" style="flex:1;min-width:0"><span class="lb">Role</span><span class="chip" style="height:26px;border:1px solid var(--border2);background:var(--bg)" title="Click a role in the list to change it">${role.n}</span></div><div class="bar2">${potSeg()}</div></div>
+    <div style="flex:1;min-height:0;display:flex;gap:12px">
+      <div class="pn" style="flex:0 0 340px">${ph('Role fit',`<span class="pnote">Rating %, click to choose</span>`)}<div class="scr">${rows}</div></div>
+      <div class="col" style="flex:1 1 0;min-width:0"><div class="pn" style="flex:1 1 0;min-height:0">${ph('Value by age <span class="chip soon" style="height:18px;margin-left:8px" title="Estimated from how values changed over time in simulated FM24 careers; not FM\'s own formula.">ESTIMATE</span>',`<span class="pnote"><i class="dot" style="background:var(--a)"></i> ${sn(p)} &nbsp;<i class="dot sq" style="background:var(--b)"></i> ${sn(q)}</span>`)}<div style="padding:0 8px 0;flex:1;min-height:0">${trendSVG(p,q)}</div><div class="fnote" style="padding:0 12px 7px;font-size:11px;color:var(--tx2)">Solid = expected, band = typical range, dotted = at full potential, arrow = contract ends.</div></div>
+        <div class="pn" style="flex:none">${ph('Development',`<span class="pnote" style="display:flex;gap:0"><span style="width:76px;margin-right:10px">Current</span><span style="width:76px;margin-right:10px">Potential</span><span style="width:76px">Dev rate</span></span>`)}${dev(p)}${dev(q)}<div style="height:6px"></div></div></div>
+      <div class="col" style="flex:0 0 330px"><div class="pn" style="flex:1 1 0"><div class="ph"><span>Flags from the save</span></div><div class="scr">${fl(p)}${fl(q)}</div></div>
+        <div class="pn sq-panel" style="flex:none">${ph('In your squad',`<span class="pnote">sample squad</span>`)}${all.slice(0,5).map((x,i)=>`<div class="sqr${x.k?' me':''}"><span class="rk">${i+1}</span>${x.k?`<i class="dot ${x.k==='b'?'sq':''}" style="background:var(--${x.k})"></i>`:''}<span class="nm">${x.n}</span><b>${pct(x.v)}</b></div>`).join('')}<div style="padding:4px 12px 8px;font-size:11px;color:var(--tx2);line-height:15px">${sn(p)} would rank ${rk('a')}, ${sn(q)} ${rk('b')} of ${all.length}.</div></div></div></div>
+    <div class="pn verd" style="${S.min?'max-height:104px;':''}">${ph('Verdict',`<span class="pnote">Computed from the numbers above, no weighting beyond the five measures</span>`)}<div class="scr">${verdict(p,q,pos,role,rr)}</div></div></div>`;
+}
+
+/* =====================================================================================================================
+   4D. VARIANT D - FINGERPRINT AND DUELS (peer percentile pizza + situation duels + profile similarity)
+   ===================================================================================================================== */
+/* situation slices: attribute lists (current / potential per the toggle; lower-is-better attributes inverted). phase = tint of the pizza background. */
+const SL_OUT=[['Finishing',['Finishing','Off the Ball','Long Shots'],0],['Passing range',['Passing','Vision','Crossing'],0],['Carrying the ball',['Dribbling','Agility','Flair'],0],['Keeping the ball',['Composure','First Touch','Technique','Balance'],0],['Set pieces',['Free Kick','Corners','Penalties','Long Throws'],0],
+ ['Winning the ball',['Tackling','Marking','Anticipation','Aggression'],1],['Reading the game',['Positioning','Concentration','Decisions','Teamwork'],1],['Aerial duels',['Heading','Jumping Reach','Strength','Bravery'],1],
+ ['Pace',['Pace','Acceleration'],2],['Engine',['Stamina','Work Rate','Natural Fitness','Determination'],2],['Availability',['Injury Prone','Natural Fitness'],2],['Big matches',['Important Matches','Consistency','Leadership'],3]];
+const SL_GK=[['Shot-stopping',['Reflexes','Handling','One on Ones'],0],['Command of area',['Command of Area','Aerial Reach','Communication'],0],['Sweeping',['Rushing Out','Anticipation','Acceleration'],0],['Short distribution',['Passing','First Touch','Technique'],1],['Long distribution',['Kicking','Throwing'],1],
+ ['Positioning',['Positioning','Concentration','Decisions'],2],['Aerial presence',['Aerial Reach','Jumping Reach','Bravery'],2],['Agility',['Agility','Balance','Acceleration'],2],['Big matches',['Important Matches','Consistency','Composure'],3],['Availability',['Injury Prone','Natural Fitness'],3]];
+/* PEER STATS = [mean, sd] of each slice (1-20 scale) over the peer pool. SAMPLE values here; the app computes them from the loaded save:
+   pool = players whose best position is in the same group (mid = DM/MC/AMC, wing = ML/MR/AML/AMR/ST, gk) and CA >= 100, per slice mean of good(attribute); percentile = rank in the sorted pool (bisect), not a normal curve. */
+const PEER={mid:{n:2846,name:'central midfielders',s:[[10.6,2.4],[12.9,2.3],[11.4,2.6],[12.8,2.2],[9.4,2.9],[12.0,2.4],[12.4,2.0],[10.3,2.6],[12.0,2.8],[14.0,2.0],[13.5,2.4],[12.5,2.0]]},
+ wing:{n:3302,name:'wide players and strikers',s:[[12.5,2.5],[11.8,2.4],[14.0,2.4],[12.6,2.2],[9.5,2.9],[8.8,2.8],[10.8,2.2],[8.4,2.6],[14.8,2.4],[13.0,2.1],[13.2,2.4],[12.0,2.0]]},
+ gk:{n:742,name:'goalkeepers',s:[[12.8,2.6],[12.3,2.5],[11.0,2.8],[9.6,2.8],[11.5,2.9],[12.8,2.2],[13.0,2.4],[11.5,2.5],[12.4,2.3],[13.2,2.4]]}};
+const erf=x=>{const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x))};
+const cdf=z=>.5*(1+erf(z/Math.SQRT2));
+const sliceVal=(p,names)=>mean(p,names);
+const ordn=n=>{const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])};
+function dData(){const p=A(),q=B(),SL=isGK(p)?SL_GK:SL_OUT,pe=PEER[peerKey(p)];
+  const rows=SL.map(([n,names,ph_],i)=>{const va=sliceVal(p,names),vb=sliceVal(q,names),[m,sd]=pe.s[i];return{n,names,ph:ph_,va,vb,pa:Math.round(cdf((va-m)/sd)*100),pb:Math.round(cdf((vb-m)/sd)*100),m,sd}});
+  const ca=rows.map(r=>r.va-r.m),cb=rows.map(r=>r.vb-r.m),dot=(x,y)=>x.reduce((s,v,i)=>s+v*y[i],0),cos=dot(ca,cb)/Math.sqrt(dot(ca,ca)*dot(cb,cb));
+  return{rows,pe,sim:Math.round((cos+1)/2*100)};}
+function pizzaSVG(d){
+  const p=A(),q=B(),N=d.rows.length,W=556,H=496,cx=278,cy=250,R=150,r0=40,span=360/N,P=(r,a)=>{const t=a*Math.PI/180;return[cx+r*Math.cos(t),cy+r*Math.sin(t)]},f=x=>x.toFixed(1),rr=pc=>r0+(R-r0)*Math.max(pc,3)/100;
+  const wedge=(a0,a1,ri,ro)=>{const A0=P(ro,a0),A1=P(ro,a1),B1=P(ri,a1),B0=P(ri,a0);return `M${f(A0[0])} ${f(A0[1])}A${f(ro)} ${f(ro)} 0 0 1 ${f(A1[0])} ${f(A1[1])}L${f(B1[0])} ${f(B1[1])}A${f(ri)} ${f(ri)} 0 0 0 ${f(B0[0])} ${f(B0[1])}Z`};
+  let s='';d.rows.forEach((r,i)=>{if(r.ph%2===0)s+=`<path d="${wedge(-90+i*span,-90+(i+1)*span,r0,R)}" fill="rgba(255,255,255,.035)"/>`});
+  [25,50,75,100].forEach(k=>s+=`<circle cx="${cx}" cy="${cy}" r="${f(rr(k))}" fill="none" stroke="${k===50?'rgba(255,255,255,.34)':'rgba(255,255,255,.10)'}"${k===50?' stroke-dasharray="4 4"':''}/>`);
+  d.rows.forEach((r,i)=>{const a0=-90+i*span,m=a0+span/2,e=P(R,a0),b=P(r0,a0);s+=`<line x1="${f(b[0])}" y1="${f(b[1])}" x2="${f(e[0])}" y2="${f(e[1])}" stroke="rgba(255,255,255,.10)"/>`;
+    const ta=`${sn(p)}: ${ordn(r.pa)} percentile of ${d.pe.name} in your save (this slice ${dec(r.va)}, peer mean ${dec(r.m)}). ${r.names.join(', ')}`,tb=`${sn(q)}: ${ordn(r.pb)} percentile of ${d.pe.name} in your save (this slice ${dec(r.vb)}, peer mean ${dec(r.m)}). ${r.names.join(', ')}`;
+    s+=`<path d="${wedge(a0+1.4,m-.7,r0,rr(r.pa))}" fill="#52B0FF" stroke="#14151A" stroke-width=".8"><title>${ta}</title></path><path d="${wedge(m+.7,a0+span-1.4,r0,rr(r.pb))}" fill="#D77CFF" stroke="#14151A" stroke-width=".8"><title>${tb}</title></path>`});
+  d.rows.forEach((r,i)=>{const m=-90+(i+.5)*span,[lx,ly]=P(R+11,m),c=Math.cos(m*Math.PI/180),sI=Math.sin(m*Math.PI/180),anc=c>.1?'start':c<-.1?'end':'middle',top=sI<-.7,bot=sI>.7,
+      y1=top?ly-17:bot?ly+10:ly-2,y2=top?ly-4:bot?ly+24:ly+12;
+    s+=`<g><title>${r.n}: ${r.names.join(', ')}</title><text x="${f(lx)}" y="${f(y1)}" text-anchor="${anc}" font-size="10" font-weight="700" fill="#8B96A8">${r.n.toUpperCase()}</text><text x="${f(lx)}" y="${f(y2)}" text-anchor="${anc}" font-size="12" font-weight="700"><tspan fill="#52B0FF">${r.pa}</tspan><tspan fill="#8B96A8" font-weight="400"> / </tspan><tspan fill="#D77CFF">${r.pb}</tspan></text></g>`});
+  s+=`<circle cx="${cx}" cy="${cy}" r="${r0-2}" fill="#14151A" stroke="rgba(255,255,255,.18)"/><g><title>Profile similarity: how alike the two shapes are once the peer average is removed (cosine of the 12 slice differences, mapped to 0-100). 50 = unrelated, 100 = identical shape. It ignores overall level.</title><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">${d.sim}</text><text x="${cx}" y="${cy-12}" text-anchor="middle" font-size="8" font-weight="700" fill="#8B96A8" letter-spacing=".6">MATCH</text></g>`;
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;max-height:100%;margin:0 auto" role="img" aria-label="Percentile fingerprint of ${p.name} and ${q.name} against ${d.pe.name}, one slice per situation">${s}</svg>`;
+}
+function duelCards(d){const p=A(),q=B();
+  return d.rows.map(r=>{const df=r.va-r.vb,w=Math.abs(df)<.5?'tie':df>0?'wa':'wb',t=r.va+r.vb;
+    return `<div class="dc ${w}" title="${r.n}: ${sn(p)} ${dec(r.va)}, ${sn(q)} ${dec(r.vb)} (means of ${r.names.join(', ')})"><div class="t"><b>${r.n}</b><em class="${w==='wa'?'ca':w==='wb'?'cb':''}" style="${w==='tie'?'color:var(--tx2)':''}">${w==='tie'?'level':(w==='wa'?sn(p):sn(q))+' +'+Math.abs(df).toFixed(1)}</em></div><div class="at">${r.names.join(' · ')}</div>
+      <div class="tw"><b class="ca">${dec(r.va)}</b><span class="tg2"><i style="width:${r.va/t*100}%;background:var(--a);opacity:${w==='wb'?.45:1}"></i><i style="width:${r.vb/t*100}%;background:var(--b);opacity:${w==='wa'?.45:1}"></i></span><b class="cb">${dec(r.vb)}</b></div></div>`}).join('');}
+function variantD(){
+  const d=dData(),p=A(),q=B(),ca=d.rows.filter(r=>r.va-r.vb>=.5).length,cb=d.rows.filter(r=>r.vb-r.va>=.5).length,lv=d.rows.length-ca-cb;
+  return `<div class="main"><div class="pn" style="flex:0 0 560px">${ph('Fingerprint against peers',potSeg())}<div style="flex:1;min-height:0;padding:0 2px">${pizzaSVG(d)}</div>
+      <div class="pfoot" style="padding:6px 14px 9px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;line-height:16px"><span style="color:#fff">Percentile among ${d.pe.n.toLocaleString('en-GB')} ${d.pe.name}</span> in your save with CA 100 or more (sample figure). Slice length = percentile, dashed ring = peer median, alternating shading = phases of play (in possession, out of possession, physical, mind). Left half <span class="ca"><b>${sn(p)}</b></span>, right half <span class="cb"><b>${sn(q)}</b></span>.</div></div>
+    <div class="pn" style="flex:1">${ph('Who wins each situation',`<span class="pnote"><b class="ca">${ca}</b> ${sn(p)} · <b class="cb">${cb}</b> ${sn(q)} · ${lv} level</span>`)}<div class="scr"><div class="d-duel">${duelCards(d)}</div></div></div></div>`;
+}
+
+/* =====================================================================================================================
+   5. PICKER ('Compare with...' / 'Change player B...'): search box + suggestions. State ?pick (and ?q=text). Real app: QDialog 540 wide, QLineEdit + QListView
+      fed by the same index as the main search box (search_suggest.py), restricted to players of the same kind (goalkeepers only with goalkeepers).
+   ===================================================================================================================== */
+const hl=(t,q)=>{const i=q?t.toLowerCase().indexOf(q.toLowerCase()):-1;return i<0?t:t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length)};
+function pickList(){
+  const a=A(),q=S.q.trim().toLowerCase();
+  const all=Object.values(PL).filter(p=>p.id!==a.id&&(!S.sameType||isGK(p)===isGK(a))&&(!q||p.name.toLowerCase().includes(q)));
+  const same=all.filter(p=>p.pos===a.pos||(a.posr[p.pos]>=15&&p.posr[a.pos]>=15)),oth=all.filter(p=>!same.includes(p));
+  return {same,oth,flat:[...same,...oth]};
+}
+function optHTML(p,i,q){
+  return `<button class="opt${i===S.pickSel?' on':''}" role="option" aria-selected="${i===S.pickSel}" data-pid="${p.id}" data-i="${i}"><div class="av">${avatar(p.id)}</div><div class="tx"><b>${hl(p.name,S.q.trim())}</b><span>${badge(p.pos)} <span>${NATFLAG[p.nat]||''}</span> ${clubBadge(p.club)} <span>${p.club}</span> <span style="color:var(--tx3)">·</span> <span>${p.age} years</span></span></div>${S.nums?`<b style="font-size:14px;color:#735CE4">${p.ca}</b>`:`<span style="display:flex;gap:1px" title="CA ${p.ca}">${star(p.ca,40,11)}</span>`}</button>`;
+}
+function pickerHTML(){
+  const L=pickList(),a=A();let i=0;
+  const sec=(t,l)=>l.length?`<div class="lbl">${t}</div>`+l.map(p=>optHTML(p,i++)).join(''):'';
+  return `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true" aria-label="Compare with"><div class="th"><b>Compare with…</b><span>Compare ${a.name} with another player. Type a name, or pick from the lists.</span></div>
+    <div class="srch"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6L14 14"/></svg><input id="pq" type="text" value="${S.q}" placeholder="Search players by name" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="plist"></div>
+    <div class="flt"><button class="pchip${S.sameType?' on':''}" data-act="sametype" aria-pressed="${S.sameType}" title="${isGK(a)?'Goalkeepers can only be compared with goalkeepers':'Goalkeepers are not offered: their attributes are not comparable'}">${isGK(a)?'Goalkeepers only':'Outfield players only'}</button><span class="chip soon" style="height:26px" title="Select exactly two rows in a player list and press Compare to skip this dialog">From list selection (0)</span><span class="chip soon" style="height:26px">Shortlist</span></div>
+    <div id="plist" role="listbox" aria-label="Suggestions" style="min-height:${Math.max(150,L.flat.length*50+60)}px">${L.flat.length?sec('Same position as '+sn(a),L.same)+sec('Other players',L.oth):'<div class="hint" style="padding:18px 16px">No player matches “'+S.q+'”.</div>'}</div>
+    <div class="ft"><button class="btn b1" data-act="go"${L.flat.length?'':' disabled style="opacity:.5"'}>Compare</button><button class="btn b2" data-act="cancel">Cancel</button></div></div></div>`;
+}
+function wirePicker(){
+  const inp=document.getElementById('pq');if(!inp)return;
+  const refresh=()=>{const keep=inp.selectionStart;const w=document.querySelector('.scrim');w.outerHTML=pickerHTML();const n=document.getElementById('pq');n.focus();n.setSelectionRange(keep,keep);wirePicker()};
+  inp.oninput=()=>{S.q=inp.value;S.pickSel=0;refresh()};
+  inp.onkeydown=e=>{const n=pickList().flat.length;if(e.key==='ArrowDown'){S.pickSel=Math.min(n-1,S.pickSel+1);refresh();e.preventDefault()}else if(e.key==='ArrowUp'){S.pickSel=Math.max(0,S.pickSel-1);refresh();e.preventDefault()}
+    else if(e.key==='Enter'){commit();e.preventDefault()}else if(e.key==='Escape'){S.pick=false;render()}};
+  inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+}
+function commit(){const p=pickList().flat[S.pickSel];if(!p)return;S.ids=[A().id,p.id];S.swap=false;S.pair='custom';S.rp=null;S.role=null;S.pick=false;render()}
+
+/* =====================================================================================================================
+   6. PAGE WIRING (review bar, events) - not part of the window
+   ===================================================================================================================== */
+const VIEWS={a:variantA,b:variantB,c:variantC,d:variantD};
+let toastT=0;
+function toast(m){const w=document.querySelector('.win');if(!w)return;let t=w.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';w.appendChild(t)}t.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>t.remove(),2200)}
+function seg(id,items,cur,pick){const e=document.getElementById(id);e.innerHTML='';items.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.setAttribute('aria-pressed',cur===k);if(cur===k)b.className='on';b.onclick=()=>{pick(k);render()};e.appendChild(b)})}
+function render(){
+  _sid=0;
+  document.getElementById('frame').innerHTML=`<div class="os"><span>Compare players: ${A().name} and ${B().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}${VIEWS[S.v]()}</div>${actionStrip()}${S.pick?pickerHTML():''}</div>`;
+  seg('vSeg',Object.entries(VARS),S.v,k=>{S.v=k});
+  seg('pSeg',Object.entries(PAIR_NAMES),S.pair,k=>{S.pair=k;S.ids=null;S.rp=null;S.role=null;S.swap=false});
+  const tg=document.getElementById('tgs');tg.innerHTML='';
+  [['nums','Ability as numbers'],['pot','Full Potential'],['pick','Picker open'],['swap','Swapped'],['noface','No face pictures'],['min','Min size 1062 x 640']].forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.setAttribute('aria-pressed',!!S[k]);b.onclick=()=>{S[k]=!S[k];if(k==='min')document.documentElement.classList.toggle('min',S.min);render()};tg.appendChild(b)});
+  const q=new URLSearchParams();if(S.v!=='a')q.set('v',S.v);if(S.pair!=='out'&&S.pair!=='custom')q.set('pair',S.pair);['nums','pot','pick','swap','noface','min'].forEach(k=>{if(S[k])q.set(k,'')});if(S.pick&&S.q)q.set('q',S.q);if(document.documentElement.classList.contains('bare'))q.set('bare','1');
+  history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString().replace(/=(&|$)/g,'$1'):''));
+  document.title='Compare players - '+VARS[S.v];
+  if(S.pick)wirePicker();
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act],[data-pid]');if(!t||t.disabled)return;
+  if(t.dataset.pid){S.pickSel=+t.dataset.i;if(e.detail>1||true)commit();return}
+  const a=t.dataset.act,v=t.dataset.v;
+  if(a==='pot')S.pot=v==='pot';else if(a==='rp'){S.rp=v;S.role=null}else if(a==='role')S.role=v;
+  else if(a==='swap'){S.swap=!S.swap}else if(a==='pick'){S.pick=true;S.pickSel=0}else if(a==='cancel'){S.pick=false}else if(a==='go'){commit();return}
+  else if(a==='sametype'){S.sameType=!S.sameType;S.pickSel=0}
+  else if(a==='short'){S.short=!S.short;toast(S.short?'Both players added to the Player Shortlist (mockup).':'Removed from the Player Shortlist (mockup).')}
+  else if(a==='img'){toast('Would save comparison-'+sn(A())+'-'+sn(B())+'.png (mockup: no file is written).');return}
+  else if(a==='close'){toast('Close: the window closes (mockup).');return}else return;
+  render();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.pick&&document.activeElement.id!=='pq'){S.pick=false;render()}});
+render();
+
+</script>
+</body>
+</html>
