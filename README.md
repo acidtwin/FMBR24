@@ -129,7 +129,7 @@ FMBR24 reads your save and, only when you press Save Changes, writes the homegro
 - Every save is written to a temp file and checked before it replaces anything
 - It keeps two rolling backups next to your save (`.bk1`, the file before the last save, and `.bk2`, the one before that). Nothing is overwritten without them
 - It refuses to save if the file changed on disk since you loaded it
-- Loading a save that was edited with an HGC insert in FM24 itself is not yet verified in game
+- Saves edited this way have been loaded in FM24 and show the new homegrown tags correctly in the cases tested. It is still alpha: keep those backups
 
 Keep your own backups too. This is alpha software and FM saves are big, binary and undocumented.
 
