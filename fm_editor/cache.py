@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 30  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 31  # bump when schema changes to auto-invalidate old caches
 
 
 def file_signature(save_path):
@@ -79,6 +79,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
                  'birth_year': p['birth_year'], 'birth_day': p.get('birth_day', 0), 'end': p['end'], 'offset': p['offset'],
                  'hgp': p.get('hgp', False), 'personality': p.get('personality', []),
                  'trait_mask': p.get('trait_mask', 0)}
+        if p.get('uid'):
+            entry['uid'] = p['uid']  # identity UniqueID (face pictures, fm_editor/faces.py)
         if 'ca' in p:
             entry['ca'] = p['ca']
             entry['pa'] = p['pa']
