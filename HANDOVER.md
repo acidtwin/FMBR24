@@ -17,6 +17,7 @@ FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<nam
 - **Snapshot-gated** (`test_club_extra`, `test_player_stats`): in-game values move as the user plays; `tests/snapshot.py` runs exact checks only at `SNAPSHOT_DATE = 2028-01-02` (budget also needs the recorded game name), else "INVARIANTS ONLY". `FMBR24_SNAPSHOT_SAVE=<frozen copy>` forces exact.
 - **Golden** (`test_parse_golden`): hashes offset-INDEPENDENT fields only, so a re-save (HGC/HGP insert shifts offsets) does not break it. Re-baseline (delete the json, rerun) only after a deliberate parser change. `FMBR24_GOLDEN_SAVE=<path>` for another copy.
 - Headless UI check and mockup rules: `CLAUDE.md`.
+- README screenshots: `scripts/make_screenshots.py <save>` (or `FMBR24_SAVE`) regenerates every PNG in `docs/screenshots/` offscreen from a real save (fresh parse, manager name masked, one queued HGP shown in memory, nothing saved); add a shot = one function in its `SHOTS` dict.
 
 ## 2. Repo state
 

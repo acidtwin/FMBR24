@@ -43,6 +43,10 @@ FM players like stars. Any rating shown as a number or bar (CA, PA, Dev Rate, la
 - Dialog-scoped QSS: app QSS `QWidget{background}` paints every plain QWidget opaque; add `QDialog#x QWidget{background:transparent}` FIRST and prefix later rules with the same `QDialog#x` (equal specificity, later wins). Wrapped QLabels/Flow layouts and `replaceWidget` need `processEvents()` (twice) before `grab()` in offscreen checks.
 - Barlow Condensed / Inter are not installed (fallback Noto Sans)
 
+## README
+
+When features or UI change, run `python3 scripts/make_screenshots.py <save>` (read-only on the save, offscreen, writes `docs/screenshots/`) and refresh the README feature list.
+
 ## Repo / GitHub
 
 Own git repo (branch `main`, remote `git@github.com:acidtwin/FMBR24.git`, private). The parent `Claude Code Projects` folder is a separate monorepo: never push it. Commit/push only when asked, specific `git add` paths. SSH agent + `gh` details in memory `reference-github-setup.md`. Never store credentials/passphrases anywhere.
