@@ -230,7 +230,8 @@ faces.set_club_uids([727, 728, 729, 1735, 1736])
 mw = M.MainWindow()
 mw._set_header('Test FC', 'x', icon='club', club=clubs[0])
 lbl = mw._header_badge_lbl
-assert lbl.size().width() == 56 and lbl.pixmap().width() == 40 and lbl.pixmap().toImage().pixelColor(20, 20).blue() == 200   # logo in the circle
+assert lbl.size().width() == 56 and lbl.pixmap().width() == 50 and lbl.pixmap().toImage().pixelColor(25, 25).blue() == 200   # logo, no circle behind it
+assert 'transparent' in lbl.styleSheet() and 'border: none' in lbl.styleSheet()
 mw._set_header('Test FC', 'x', icon='club', club=clubs[2])                        # no logo: the page icon exactly as before
 assert lbl.pixmap().width() == mw._page_icon('club').width()
 mw._set_header('Squads', 'x', icon='squads')                                      # no club given: page icon
