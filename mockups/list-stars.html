@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>List stars (CA / PA columns)</title>
+<!--
+LIST STARS MOCKUP: CA / PA cells of the player lists (Squads, Reports, Players, Player Shortlist) as stars.
+Staff lists have no CA/PA columns, Dev column unchanged (numbers).
+Open with #nums for the Numbers mode (Settings > Ability display = Numbers: cell looks exactly as before).
+
+CELL SPEC (translated mechanically in gui/list_stars.py StarsDelegate)
+  star = the player-window _StarWidget geometry (gui/stars.py), 15px design box scaled to 10px: path centre 7.5, outer r 7.2, inner r 3.0, y +0.4 (scale 10/15)
+  fill #F5C518 (left part, 0 / .5 / 1), empty #3A4050.   5 stars, gap 2px  =>  5*10 + 4*2 = 58px wide, 10px high
+  mapping = fm_editor/abilitystars.py ability_stars (value / 40, nearest half, ties up, clamp .5..5)   same as the header boxes
+  left aligned: x = cell left + 10 (= the header text and the other cells' text inset), vertically centred in the row.   column width 76 (was 45; 10 + 58 + 8)
+  tooltip in stars mode: 'CA 149' / 'PA 170'   (numbers mode: no extra tooltip, as before)
+  sort order = raw number (unchanged).   Unknown value ('?' / '-') = the text, no stars.
+  selected row: #2A1B4A (app QSS), stars drawn on top unchanged.   Item hover: the app QSS has no item hover rule, so none here either.
+  queued row: rgba(234,217,92,.10) tint under the whole row (+ 3px #EAD95C bar on the Name cell), stars on top.
+-->
+<style>
+:root{--bg:#14151A;--alt:#161721;--sel:#2A1B4A;--hdr:#292B32;--bd:#343740;--tx:#fff;--tx2:#8B96A8;--dim:#525B68}
+body{margin:0;padding:16px;background:#101116;color:var(--tx);font:13px/1.2 "Noto Sans",sans-serif}
+h3{font-size:12px;font-weight:600;color:var(--tx2);margin:14px 0 6px}
+.bar{margin-bottom:8px;font-size:12px;color:var(--tx2)} .bar a{color:#9A7CFF;margin-right:10px}
+table{border-collapse:collapse;table-layout:fixed;background:var(--bg);width:max-content}
+th{background:var(--hdr);color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:400;text-align:left;padding:6px 10px;border-right:1px solid var(--bd);border-bottom:1px solid var(--bd);overflow:hidden;white-space:nowrap}
+td{height:27px;padding:0 10px;border-bottom:1px solid rgba(52,55,64,.6);overflow:hidden;white-space:nowrap;box-sizing:border-box;position:relative}
+tr:nth-child(even) td{background:var(--alt)}
+tr.sel td{background:var(--sel)}
+tr.q td{background-image:linear-gradient(rgba(234,217,92,.10),rgba(234,217,92,.10))}
+tr.q td:first-child:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#EAD95C}
+td.st{padding:0 0 0 10px}
+.stars{display:flex;gap:2px;align-items:center;height:100%}
+.stars svg{width:10px;height:10px;flex:none}
+.pos{display:inline-block;background:#2A2D35;color:var(--tx2);font:700 10px/16px sans-serif;padding:0 5px;border-radius:2px}
+</style></head><body>
+<div class="bar">Mode: <a href="#">Stars (default)</a><a href="#nums" onclick="setTimeout(()=>location.reload())">Numbers</a> &nbsp; selected row = 3rd, queued row = 4th</div>
+<h3>Squads / Reports / Players / Shortlist cell (widths: Name 150, INJ 35, Pos 55, CA 76, PA 76, Dev 45, Age 40)</h3>
+<table id="t"></table>
+<script>
+const NUMS=location.hash.includes('nums');
+const star=(v)=>{const n=Math.max(.5,Math.min(5,Math.floor(v/40*2+.5)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));
+ const P='M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z';
+ s+=`<svg viewBox="0 0 15 15"><defs><clipPath id="c${i}_${v}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="${P}" fill="#3A4050"/><path d="${P}" fill="#F5C518" clip-path="url(#c${i}_${v})"/></svg>`}return s};
+const W=NUMS?[150,35,55,45,45,45,40]:[150,35,55,76,76,45,40];
+const rows=[['Kylian Mbappe','','ST',187,188,17,25],['Jude Bellingham','','AMC',172,190,18,21],['Reece James','INJ','DR',160,171,12,24],['Lamine Yamal','','AMR',141,200,20,17],
+ ['Nick Woltemade','','ST',110,125,10,22],['Academy Kid','','MC',45,152,14,16],['Journeyman','','DC',86,86,8,34],['Unknown','','GK','?','?','?',30]];
+const cell=(v)=>v==='?'?'?':NUMS?v:`<div class="stars" title="">${star(v)}</div>`;
+let h='<tr>'+['Name','INJ','Pos','CA','PA','Dev','Age'].map((c,i)=>`<th style="width:${W[i]}px">${c}</th>`).join('')+'</tr>';
+rows.forEach((r,k)=>{h+=`<tr class="${k==2?'sel':''} ${k==3?'q':''}"><td>${r[0]}</td><td>${r[1]}</td><td><span class="pos">${r[2]}</span></td>`+
+ [3,4].map(i=>`<td class="${NUMS?'':'st'}" title="${NUMS||r[i]==='?'?'':(i==3?'CA ':'PA ')+r[i]}">${cell(r[i])}</td>`).join('')+`<td>${r[5]}</td><td>${r[6]}</td></tr>`});
+document.getElementById('t').innerHTML=h;
+</script></body></html>
