@@ -11,7 +11,16 @@ from PyQt6.QtGui import QColor
 HG_ROLE = Qt.ItemDataRole.UserRole + 1       # HGP/HGC cell: 'set' | 'queued' | ''
 ROWQ_ROLE = Qt.ItemDataRole.UserRole + 2     # row: True when that person has ANY queued edit
 HG_BASE_ROLE = Qt.ItemDataRole.UserRole + 3  # QTableWidget HG cells: value in the save (True/False/None unknown)
+MEDIA_UID_ROLE = Qt.ItemDataRole.UserRole + 4   # Name cell: the person's identity uid (face picture key)
+CLUB_UID_ROLE = Qt.ItemDataRole.UserRole + 5    # Club cell: the club's parsed save uid (badge key), None = no club
+NATION_ROLE = Qt.ItemDataRole.UserRole + 6      # Nation cell: our nation entity id (flag key)
 ROW_TINT = QColor(234, 217, 92, 26)          # rgba(234,217,92,.10): faint yellow under a queued row (painted by the delegates)
+
+
+def nation_label(nid):
+    """Nation name for our nation entity id (tooltip of the flag cell), or None."""
+    from fm_editor.nations import nation_name
+    return nation_name(nid) if nid is not None else None
 
 
 def num_key(v):
@@ -39,6 +48,10 @@ class PeopleModel(QAbstractTableModel):
         self.fg = {}                # col -> fn(row_tuple) -> QColor | None
         self.tooltip_fn = None      # fn(person, col) -> str | None
         self.hg_cols = {}           # col -> 'hgp'|'hgc': badge columns (row value = set in the save)
+        self.club_uid_idx = None    # index in a row tuple of the club's save uid (badge key); the tuple is longer than spec
+        self.tip_text_cols = set()  # columns whose tooltip is the cell text (club name behind a badge)
+        self.nation_col = None      # column whose tooltip is the nation's name
+        self.blank_header = set()   # columns whose header label is hidden (the 40 px club badge column)
         self.queued = {}            # person id -> {'hgp','hgc'} queued edits (set_queue)
         self._by_id = None          # person id -> src index, built lazily
 
@@ -146,9 +159,9 @@ class PeopleModel(QAbstractTableModel):
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and 0 <= section < len(self.cols):
             if role == Qt.ItemDataRole.DisplayRole:
-                return self.cols[section]
+                return '' if section in self.blank_header else self.cols[section]
             if role == Qt.ItemDataRole.ToolTipRole:
-                return self.tips.get(self.cols[section])
+                return self.tips.get(self.cols[section]) or (self.cols[section] if section in self.blank_header else None)
             if role == Qt.ItemDataRole.TextAlignmentRole:
                 return int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         return None
@@ -178,8 +191,21 @@ class PeopleModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.ForegroundRole:
             f = self.fg.get(c)
             return f(self.rows[self.view[r]]) if f else None
-        if role == Qt.ItemDataRole.ToolTipRole and self.tooltip_fn:
-            return self.tooltip_fn(self.src[self.view[r]], c)
+        if role == Qt.ItemDataRole.ToolTipRole:
+            tip = self.tooltip_fn(self.src[self.view[r]], c) if self.tooltip_fn else None
+            if tip is None:
+                if c in self.tip_text_cols:
+                    si = self.view[r]
+                    return self.spec[c][0](self.rows[si][c]) or None
+                if c == self.nation_col:
+                    return nation_label(self.src[self.view[r]].get('nation'))
+            return tip
+        if role == MEDIA_UID_ROLE:
+            return self.src[self.view[r]].get('uid')
+        if role == CLUB_UID_ROLE:
+            return self.rows[self.view[r]][self.club_uid_idx] if self.club_uid_idx is not None else None
+        if role == NATION_ROLE:
+            return self.src[self.view[r]].get('nation')
         if role == HG_ROLE:
             return self._hg_state(self.view[r], c) if c in self.hg_cols else None
         if role == ROWQ_ROLE:

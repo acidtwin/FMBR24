@@ -25,8 +25,9 @@ CELL SPEC (translated mechanically in gui/main_window.py: _FaceNameDelegate, _Cl
     tooltip = the club name (always, also when the club has no badge); sorting by this column = the club NAME (the item keeps the name)
     club without a badge (pack has no file, free agent shows nothing): the club NAME as text, 10px #8B96A8, elided to the 32px between x 4 and 36
     (the column is resizable: drag it wider to read the names), tooltip as above
-    badges OFF / no logo pack: the old text cell, width 160
-  NATION cell (flags ON = Settings > Show nation flags AND a nation picture for the id): picture 22 x 22 (fit, transparent) centred in the 50 px column;
+    HEADER of the 40 px column: no label (a 'CLUB' header needs ~75 px in the app's header style, it would elide to 'CL...'); tooltip 'Club'. Sort arrow and click-to-sort stay.
+    badges OFF / no logo pack: the old text cell, width 160 and the 'Club' header
+  NATION cell (flags ON = Settings > Show nation flags AND a nation picture for the id): picture 22 x 22 (fit, transparent) at x = cell left + 10 (under the header text; the Shortlist's last column is stretched), centred vertically;
     tooltip = nation name; no picture for that nation = the old emoji / text cell (14pt emoji) unchanged; flags OFF = the old cell
   queued row: rgba(234,217,92,.10) tint under the whole row (cells paint it themselves), pictures on top; selected row: #2A1B4A.
   Item hover: the app QSS has no item hover rule, so none here either; the tooltip is the hover feedback.
@@ -57,7 +58,7 @@ td.st{padding:0 0 0 10px}
 td.cl{padding:0}
 td.cl .b{position:absolute;left:10px;top:4px;width:22px;height:22px}
 td.cl .ct{position:absolute;left:4px;right:4px;top:0;bottom:0;display:flex;align-items:center;font-size:10px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-td.fl{padding:0;text-align:center}
+td.fl{padding:0 0 0 10px;text-align:left}
 td.fl .f{display:inline-block;width:22px;height:22px;vertical-align:middle}
 td.fl .em{font-size:14pt;line-height:30px}
 .tip{position:fixed;display:none;background:var(--elev);border:1px solid #454A58;border-radius:3px;padding:4px 8px;font-size:11px;color:#fff;z-index:20;pointer-events:none}
@@ -93,7 +94,7 @@ const tipEl=document.getElementById('tip');
 document.addEventListener('mousemove',e=>{const t=e.target.closest('[data-tip]');if(!t){tipEl.style.display='none';return}tipEl.textContent=t.dataset.tip;tipEl.style.display='block';tipEl.style.left=(e.clientX+12)+'px';tipEl.style.top=(e.clientY+16)+'px'});
 const nat=(r)=>{const n=r[7];return `<td class="fl" data-tip="${n[2]}">${NOFL?`<span class="em">${n[1].length>1?n[1]:'\u{1F3F3}'}</span>`:flag(n[0],n[1].length>1?n[1]:'\u{1F3F3}')}</td>`};
 const clubCell=(r)=>{const c=r[9];return `<td class="cl" data-tip="${c[1]}">${NOB?`<div style="position:absolute;left:10px;top:0;bottom:0;display:flex;align-items:center">${c[1]}</div>`:badge(c[0],c[1])}</td>`};
-let h='<tr>'+[['Name',WN],['INJ',35],['Pos',55],['CA',WS],['PA',WS],['Dev',WS],['Age',40],['Nation',50],['HGP',62],['Club',WC],['CtrE',65]].map(c=>`<th style="width:${c[1]}px">${c[0]}</th>`).join('')+'</tr>';
+let h='<tr>'+[['Name',WN],['INJ',35],['Pos',55],['CA',WS],['PA',WS],['Dev',WS],['Age',40],['Nation',50],['HGP',62],['Club',WC],['CtrE',65]].map(c=>`<th style="width:${c[1]}px"${c[0]=='Club'&&!NOB?' title="Club"':''}>${c[0]=='Club'&&!NOB?'':c[0]}</th>`).join('')+'</tr>';
 rows.forEach((r,k)=>{h+=`<tr class="${k==2?'sel':''} ${k==3?'q':''}"><td><div class="nm">${face(r[11])}<span class="nmt">${r[0]}</span></div></td><td>${r[1]}</td><td><span class="pos">${r[2]}</span></td>`+
  [[3,40,'CA '],[4,40,'PA '],[5,4,'Dev ']].map(([i,d,l])=>`<td class="${NUMS?'':'st'}" ${NUMS||r[i]==='?'?'':`data-tip="${l}${r[i]}"`}>${stars(r[i],d)}</td>`).join('')+`<td>${r[6]}</td>${nat(r)}<td>${r[8]}</td>${clubCell(r)}<td>${r[10]}</td></tr>`});
 document.getElementById('t1').innerHTML=h;

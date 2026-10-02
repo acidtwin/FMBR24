@@ -19,7 +19,7 @@ from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
 from fm_editor.rolepos import role_positions
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget, star_row_pixmap
-from fm_editor.abilitystars import ability_stars
+from fm_editor.abilitystars import ability_stars, dev_stars
 from fm_editor.nations import nation_name as _nation_name_long, nation_flag as _nation_flag
 from fm_editor.cache import clear_cache
 from gui.workers import ParseWorker, SaveWorker
@@ -28,7 +28,8 @@ from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
 from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
-from gui.people_model import PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT
+from gui.people_model import (PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT,
+                              MEDIA_UID_ROLE, CLUB_UID_ROLE, NATION_ROLE, nation_label)
 from gui.player_window import PlayerWindow
 from gui.faces import get_service as _faces_service
 from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref, get_ref as _get_age_ref
@@ -878,12 +879,14 @@ class StarsDelegate(_RowMarkDelegate):
     stars_on = True
     SIZE, GAP, INSET = 10, 2, 10
 
-    def __init__(self, label, parent=None):
+    def __init__(self, label, parent=None, stars_fn=ability_stars):
         super().__init__(parent)
         self._label = label
+        self._stars_fn = stars_fn   # raw value -> stars: ability_stars (CA/PA) or dev_stars (Dev Rate)
+        self.enabled = True         # False: the column holds something else right now (Best by Role's Rating) = plain text cell
 
     def _raw(self, index):
-        if not StarsDelegate.stars_on:
+        if not StarsDelegate.stars_on or not self.enabled:
             return None
         t = index.data(Qt.ItemDataRole.DisplayRole)
         return int(t) if isinstance(t, str) and t.isdigit() else None
@@ -898,7 +901,7 @@ class StarsDelegate(_RowMarkDelegate):
         v = self._raw(index)
         if v is None:
             return
-        pm = star_row_pixmap(ability_stars(v), self.SIZE, self.GAP, painter.device().devicePixelRatioF())
+        pm = star_row_pixmap(self._stars_fn(v), self.SIZE, self.GAP, painter.device().devicePixelRatioF())
         r = option.rect
         painter.drawPixmap(r.x() + self.INSET, r.y() + (r.height() - self.SIZE) // 2, pm)
 
@@ -921,9 +924,15 @@ def _ability_w():
     return _AB_W_STARS if StarsDelegate.stars_on else _AB_W_NUM
 
 
-def _set_star_delegates(table, ca_col, pa_col):
+def _set_star_delegates(table, ca_col, pa_col, dev_col=None):
+    """CA / PA (and Dev Rate when the list has the column) as stars; returns the Dev delegate (or None) for its on/off switch."""
     table.setItemDelegateForColumn(ca_col, StarsDelegate('CA', table))
     table.setItemDelegateForColumn(pa_col, StarsDelegate('PA', table))
+    if dev_col is None:
+        return None
+    dev = StarsDelegate('Dev', table, dev_stars)
+    table.setItemDelegateForColumn(dev_col, dev)
+    return dev
 
 
 class _PosBadgeDelegate(_RowMarkDelegate):
@@ -1018,6 +1027,173 @@ class _HGBadgeDelegate(_RowMarkDelegate):
 
     def sizeHint(self, option, index):
         return QSize(62, option.rect.height() or 28)  # fits '+ HGP'
+
+
+# -- Pictures in the player / staff lists (mockups/list-rows.html): face before the name, club badge, nation flag --------------
+_FACE_W, _FACE_H, _FACE_GAP, _FACE_X = 20, 24, 8, 10     # tile 20x24, 8 to the text, x = the cell's own text inset
+_BADGE_PX, _BADGE_COL_W, _NAME_COL_W = 22, 40, 150       # club badge 22x22 in a 40 px column; Name column base width (faces add 28)
+_FLAG_PX = 22
+_TILE_BG = QColor('#292B32')                             # = the player window avatar box
+_SILHOUETTE_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#525B68" '
+                   'stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>')
+_media_cache = {}
+
+
+def _silhouette_px(dpr):
+    """The 14px avatar silhouette glyph (cached per DPR)."""
+    k = ('sil', dpr)
+    px = _media_cache.get(k)
+    if px is None:
+        from PyQt6.QtSvg import QSvgRenderer
+        px = QPixmap(round(14 * dpr), round(14 * dpr))
+        px.setDevicePixelRatio(dpr)
+        px.fill(Qt.GlobalColor.transparent)
+        pa = QPainter(px)
+        QSvgRenderer(_SILHOUETTE_SVG.encode()).render(pa, QRectF(0, 0, 14, 14))
+        pa.end()
+        _media_cache[k] = px
+    return px
+
+
+def _spacer_icon(w):
+    """Transparent icon: makes the item style reserve `w` px before the text (selection, elide and sizeHint stay the style's)."""
+    ic = _media_cache.get(('sp', w))
+    if ic is None:
+        px = QPixmap(w, 1)
+        px.fill(Qt.GlobalColor.transparent)
+        ic = _media_cache[('sp', w)] = QIcon(px)
+    return ic
+
+
+def faces_active():
+    return _faces_service().active('person')
+
+
+def badges_active():
+    return _faces_service().active('club')
+
+
+def flags_active():
+    return _faces_service().active('nation')
+
+
+class _FaceNameDelegate(_RowMarkDelegate):
+    """Name cell with the person's face tile (20x24, the avatar crop) before the text; the silhouette when the packs have no
+    picture. Layout space comes from a transparent icon, so selection / tint / queued bar / elide come from the normal item
+    painting. No facepack loaded (setting off, loading, none installed) = the plain text cell."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if faces_active():
+            option.features |= QStyleOptionViewItem.ViewItemFeature.HasDecoration
+            option.icon = _spacer_icon(_FACE_W + _FACE_GAP)
+            option.decorationSize = QSize(_FACE_W + _FACE_GAP, 1)
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        if not faces_active():
+            return
+        r = option.rect
+        x, y = r.x() + _FACE_X, r.y() + (r.height() - _FACE_H) // 2
+        dpr = painter.device().devicePixelRatioF()
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(_TILE_BG)
+        painter.drawRoundedRect(QRectF(x, y, _FACE_W, _FACE_H), 2, 2)
+        px = _faces_service().pixmap(index.data(MEDIA_UID_ROLE), _FACE_W, _FACE_H, dpr, radius=2)
+        if px is not None:
+            painter.drawPixmap(x, y, px)
+        else:
+            painter.drawPixmap(x + (_FACE_W - 14) // 2, y + (_FACE_H - 14) // 2, _silhouette_px(dpr))
+        painter.restore()
+
+
+class _ClubBadgeDelegate(_RowMarkDelegate):
+    """Club cell as the club badge (22x22 in a 40 px column) with the club name as tooltip (the item's ToolTipRole); a club without
+    a badge shows its name as small elided text. Sorting stays on the item's text (the name). Badges off / no logo pack = the
+    plain text cell."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if badges_active():
+            option.text = ''
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        if not badges_active():
+            return
+        r = option.rect
+        px = _faces_service().club_pixmap(index.data(CLUB_UID_ROLE), _BADGE_PX, painter.device().devicePixelRatioF())
+        if px is not None:
+            painter.drawPixmap(r.x() + 10, r.y() + (r.height() - _BADGE_PX) // 2, px)
+            return
+        name = index.data(Qt.ItemDataRole.DisplayRole) or ''
+        if name:
+            painter.save()
+            f = QFont(painter.font())
+            f.setPixelSize(10)
+            painter.setFont(f)
+            painter.setPen(QColor(COLORS['text_secondary']))
+            tr = QRectF(r.x() + 4, r.y(), _BADGE_COL_W - 8, r.height())
+            painter.drawText(tr, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+                             painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight, int(tr.width())))
+            painter.restore()
+
+    def sizeHint(self, option, index):
+        sh = super().sizeHint(option, index)
+        return QSize(_BADGE_COL_W, sh.height()) if badges_active() else sh
+
+
+class _FlagDelegate(_RowMarkDelegate):
+    """Nation cell as the nation's picture (22x22, left at the text inset) when the packs have one for the nation id (NATION_ROLE); otherwise the
+    old emoji / text cell, untouched. Tooltip = the nation's name (item ToolTipRole)."""
+    def _has_pic(self, index):
+        return flags_active() and bool(_faces_service().path(index.data(NATION_ROLE), 'nation'))
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if self._has_pic(index):
+            option.text = ''
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        px = _faces_service().nation_pixmap(index.data(NATION_ROLE), _FLAG_PX, painter.device().devicePixelRatioF()) \
+            if flags_active() else None
+        if px is not None:
+            r = option.rect
+            painter.drawPixmap(r.x() + 10, r.y() + (r.height() - _FLAG_PX) // 2, px)   # left, under the header text (the Shortlist's last column is stretched)
+
+
+def _set_media_delegates(table, name_col=0, club_col=None, nation_col=None, mouse=True):
+    """Face / badge / flag delegates for a list's Name / Club / Nation columns (the table's default delegate stays the row mark)."""
+    table.setItemDelegateForColumn(name_col, _FaceNameDelegate(table))
+    if club_col is not None:
+        table.setItemDelegateForColumn(club_col, _ClubBadgeDelegate(table))
+    if nation_col is not None:
+        table.setItemDelegateForColumn(nation_col, _FlagDelegate(table))
+    if mouse:
+        table.setMouseTracking(True)
+
+
+def _nation_media(item, nid):
+    """Nation cell of a QTableWidget list: the flag key (NATION_ROLE) and the nation's name as tooltip."""
+    item.setData(NATION_ROLE, nid)
+    item.setToolTip(nation_label(nid) or '')
+
+
+def _club_media(item, club_uid, name):
+    """Club cell of a QTableWidget list: the badge key (CLUB_UID_ROLE) and the club name as tooltip."""
+    item.setData(CLUB_UID_ROLE, club_uid)
+    item.setToolTip(name or '')
+
+
+def _club_w(text_w=160):
+    """Width of a Club column: the 40 px badge column when badges show, else the text width."""
+    return _BADGE_COL_W if badges_active() else text_w
+
+
+def _name_w(base=_NAME_COL_W):
+    """Name column width: the base text width plus the face tile when faces show (text space unchanged)."""
+    return base + (_FACE_W + _FACE_GAP if faces_active() else 0)
 
 
 def _hg_apply(item, kind, set_, queued):
@@ -1875,6 +2051,7 @@ class MainWindow(QMainWindow):
         self._hdr_key = None        # view key of the current page header (re-applied when club badges become available)
         self._header_club = None    # club whose badge the page header circle shows (None = the page icon)
         _faces_service().ready.connect(self._refresh_badges)
+        _faces_service().ready.connect(self._refresh_media_cols)
         self._shortlist = []        # players only
         self._staff_shortlist = []  # staff only
         self._status_base = ''
@@ -2393,6 +2570,51 @@ class MainWindow(QMainWindow):
         if px is not None:
             self._si_badge.setPixmap(px)
         self._si_badge.setVisible(px is not None)
+
+    # (table attr, name col, club col) of every list that carries faces / club badges
+    _MEDIA_TABLES = (('_table', 0, None), ('_reports_table', 0, 9), ('_players_table', 0, 9), ('_shortlist_table', 0, 1),
+                     ('_staff_table', 0, 1), ('_staff_shortlist_table', 0, 1), ('_club_staff_table', 0, None))
+
+    def _refresh_media_cols(self):
+        """FaceService.ready (index loaded / Settings changed): Name column +28 px for the face tile, Club column 40 px when it shows
+        badges (and back), then repaint. The per-table state lives in self._media_cols (the widths already in the table)."""
+        try:
+            st = self.__dict__.setdefault('_media_cols', {})
+            face, badge = faces_active(), badges_active()
+            for name, ncol, ccol in self._MEDIA_TABLES:
+                t = getattr(self, name, None)
+                if t is None:
+                    continue
+                s = st.setdefault(name, {'face': False, 'badge': None})
+                if face != s['face']:
+                    t.setColumnWidth(ncol, max(40, t.columnWidth(ncol) + (_FACE_W + _FACE_GAP) * (1 if face else -1)))
+                    s['face'] = face
+                if ccol is not None:
+                    if badge and s['badge'] is None:
+                        s['badge'] = t.columnWidth(ccol)
+                        t.setColumnWidth(ccol, _BADGE_COL_W)
+                    elif not badge and s['badge'] is not None:
+                        t.setColumnWidth(ccol, s['badge'])
+                        s['badge'] = None
+                    self._set_club_header(t, ccol, badge)
+                t.viewport().update()
+        except RuntimeError:
+            pass   # window closing
+
+    @staticmethod
+    def _set_club_header(t, ccol, badge):
+        """The 40 px badge column has no header label ('CLUB' needs ~75 px in the header style): tooltip 'Club' instead."""
+        m = t.model()
+        if isinstance(m, PeopleModel):
+            if (ccol in m.blank_header) != badge:
+                (m.blank_header.add if badge else m.blank_header.discard)(ccol)
+                m.headerDataChanged.emit(Qt.Orientation.Horizontal, ccol, ccol)
+            return
+        it = t.horizontalHeaderItem(ccol)
+        if it is not None:
+            it.setText('' if badge else 'Club')
+            if badge:
+                it.setToolTip('Club')
 
     def _refresh_badges(self):
         """FaceService.ready (index / club key table loaded, or Settings changed): re-apply the club badges."""
@@ -3424,7 +3646,8 @@ class MainWindow(QMainWindow):
         self._table.setItemDelegate(_RowMarkDelegate(self._table))
         self._table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._table))
         self._table.setItemDelegateForColumn(9, _HGBadgeDelegate('hgc', self._table))
-        _set_star_delegates(self._table, 3, 4)
+        _set_star_delegates(self._table, 3, 4, 5)
+        _set_media_delegates(self._table, 0, None, 7)
         self._configure_table_for_mode('squad')
         vbox.addWidget(self._table)
 
@@ -3496,7 +3719,8 @@ class MainWindow(QMainWindow):
 
         self._staff_model, self._staff_table = self._make_scouting_view(
             self._make_staff_model(), _STAFF_COL_TOOLTIPS,
-            {0: 200, 1: 160, 2: 50, 3: 40}, 35, sort=(-1, Qt.SortOrder.AscendingOrder))
+            {0: _name_w(200), 1: _club_w(), 2: 50, 3: 40}, 35, sort=(-1, Qt.SortOrder.AscendingOrder))
+        _set_media_delegates(self._staff_table, 0, 1, 2)
         self._staff_table.doubleClicked.connect(self._on_staff_double_click)
         vbox.addWidget(self._staff_table, 1)
         return w
@@ -3528,9 +3752,13 @@ class MainWindow(QMainWindow):
         num = lambda v: '' if v is None else str(v)
         spec = [(str, None), (str, None), (str, None), (str, None)] \
             + [(num, num_key)] * (len(_STAFF_COACHING_COLS) + len(_STAFF_PERS_COLS))
-        return PeopleModel(_STAFF_COLS, spec, _STAFF_COL_TOOLTIPS)
+        m = PeopleModel(_STAFF_COLS, spec, _STAFF_COL_TOOLTIPS)
+        m.club_uid_idx = len(spec)   # the row tuple ends with the club's save uid (badge key)
+        m.tip_text_cols = {1}        # club name tooltip (the badge column shows no text)
+        m.nation_col = 2
+        return m
 
-    def _staff_row(self, p, club_by_id, club_by_entity, staff_club, employment):
+    def _staff_row(self, p, club_by_id, club_by_entity, staff_club, employment, club_uid_by_id=None):
         pid = p.get('id', -1)
         cid = staff_club.get(pid)
         if cid is not None:
@@ -3538,13 +3766,15 @@ class MainWindow(QMainWindow):
         else:
             eid = employment.get(pid)
             club_name = club_by_entity.get(eid, '') if eid else ''
+            cid = eid - 1 if eid else None
         nid = p.get('nation', 0)
         coaching = p.get('coaching', {})
         pers = p.get('personality', [])
         return (p.get('name', ''), club_name, _nation_cell(nid, ''),
                 _age(p),
                 *[coaching.get(_STAFF_COACHING_MAP.get(c, c)) for c in _STAFF_COACHING_COLS],
-                *[pers[i] if i < len(pers) else None for i in range(8)])
+                *[pers[i] if i < len(pers) else None for i in range(8)],
+                (club_uid_by_id or {}).get(cid) if club_name else None)
 
     def _make_staff_table(self):
         """Staff table (name/club/nation/age + coaching + personality); shared by Staff and Staff Shortlist."""
@@ -3569,11 +3799,13 @@ class MainWindow(QMainWindow):
                 tbl.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        widths = {0: 200, 1: 160, 2: 50, 3: 40}
+        widths = {0: _name_w(200), 1: _club_w(), 2: 50, 3: 40}
         for i in range(4, len(cols)):
             widths[i] = 35
         for i, cw in widths.items():
             tbl.setColumnWidth(i, cw)
+        tbl.setItemDelegate(_RowMarkDelegate(tbl))
+        _set_media_delegates(tbl, 0, 1, 2)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(False)
@@ -3585,6 +3817,7 @@ class MainWindow(QMainWindow):
         clubs = self._save_data.get('clubs', [])
         club_by_id = {c['id']: c['name'] for c in clubs}
         club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+        club_uid_by_id = {c['id']: c.get('uid') for c in clubs}
         # Build reverse map: person_id -> club_id from club_staff arrays
         staff_club: dict[int, int] = {}
         for cid, pids in club_staff.items():
@@ -3605,6 +3838,7 @@ class MainWindow(QMainWindow):
             else:
                 entity_id = employment.get(pid)
                 club_name = club_by_entity.get(entity_id, '') if entity_id else ''
+                cid = entity_id - 1 if entity_id else None
             nation_id = p.get('nation', 0)
             flag = _nation_cell(nation_id, '')
             age = _age(p)
@@ -3621,7 +3855,10 @@ class MainWindow(QMainWindow):
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            name_item.setData(MEDIA_UID_ROLE, p.get('uid'))
             items = [name_item, _SortItem(club_name), _SortItem(flag), _SortItem(str(age), age)] + coaching_items + pers_items
+            _club_media(items[1], club_uid_by_id.get(cid) if club_name else None, club_name)
+            _nation_media(items[2], nation_id)
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 tbl.setItem(row, col, item)
@@ -3808,11 +4045,12 @@ class MainWindow(QMainWindow):
                 self._club_staff_table.horizontalHeaderItem(i).setToolTip(_STAFF_COL_TOOLTIPS[col])
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        widths = {0: 220, 1: 45, 2: 38}
+        widths = {0: _name_w(220), 1: 45, 2: 38}
         for i in range(3, len(cols)):
             widths[i] = 35
         for i, cw in widths.items():
             self._club_staff_table.setColumnWidth(i, cw)
+        _set_media_delegates(self._club_staff_table, 0, None, 1)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(False)
@@ -3869,7 +4107,9 @@ class MainWindow(QMainWindow):
                 pers_items.append(_SortItem(str(v) if v is not None else '', v if v is not None else -1))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            name_item.setData(MEDIA_UID_ROLE, p.get('uid'))
             items = [name_item, _SortItem(flag), _SortItem(str(age), age)] + coaching_items + pers_items
+            _nation_media(items[1], nation_id)
             for col, item in enumerate(items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._club_staff_table.setItem(row, col, item)
@@ -4012,10 +4252,11 @@ class MainWindow(QMainWindow):
         self._shortlist_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: 150, 1: 160, 2: 55, 3: 55, 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50}.items():
+        for i, cw in {0: _name_w(), 1: _club_w(), 2: 55, 3: 55, 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
         self._shortlist_table.setItemDelegate(_RowMarkDelegate(self._shortlist_table))
-        _set_star_delegates(self._shortlist_table, 4, 5)
+        _set_star_delegates(self._shortlist_table, 4, 5)   # (no Dev column in the Player Shortlist)
+        _set_media_delegates(self._shortlist_table, 0, 1, 7)
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(True)
@@ -4076,6 +4317,7 @@ class MainWindow(QMainWindow):
         employment = self._save_data.get('employment', {}) if self._save_data else {}
         club_by_id = {c['id']: c['name'] for c in clubs}
         club_by_entity = {c['id'] + 1: c['name'] for c in clubs}
+        club_uid_by_id = {c['id']: c.get('uid') for c in clubs}
         staff_club: dict[int, int] = {}
         for cid, pids in club_staff.items():
             for ppid in pids:
@@ -4086,16 +4328,20 @@ class MainWindow(QMainWindow):
             is_player = 'ca' in p
             name = p.get('name', '')
             # Club
+            club_id = None
             if is_player:
                 cid = squads.get(pid)
                 club_name = club_by_id.get(cid, '') if cid else ''
+                club_id = cid
             else:
                 cid = staff_club.get(pid)
                 if cid is not None:
                     club_name = club_by_id.get(cid, '')
+                    club_id = cid
                 else:
                     eid = employment.get(pid)
                     club_name = club_by_entity.get(eid, '') if eid else ''
+                    club_id = eid - 1 if eid else None
             ptype = 'Player' if is_player else 'Staff'
             pos = _primary_pos(p['positions']) if is_player and p.get('positions') else '-'
             ca = str(p.get('ca', '-')) if is_player else '-'
@@ -4104,6 +4350,7 @@ class MainWindow(QMainWindow):
             nation = _nation_cell(p.get('nation', 0))
             name_item = _SortItem(name)
             name_item.setData(Qt.ItemDataRole.UserRole, pid)
+            name_item.setData(MEDIA_UID_ROLE, p.get('uid'))
             row_items = [
                 name_item,
                 _SortItem(club_name),
@@ -4114,6 +4361,8 @@ class MainWindow(QMainWindow):
                 _SortItem(str(age), age),
                 _SortItem(nation),
             ]
+            _club_media(row_items[1], club_uid_by_id.get(club_id) if club_id is not None else None, club_name)
+            _nation_media(row_items[7], p.get('nation', 0))
             for col, item in enumerate(row_items):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._shortlist_table.setItem(row, col, item)
@@ -4410,7 +4659,8 @@ class MainWindow(QMainWindow):
         self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
         self._reports_table.setItemDelegate(_RowMarkDelegate(self._reports_table))
         self._reports_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._reports_table))
-        _set_star_delegates(self._reports_table, 3, 4)
+        self._reports_dev_delegate = _set_star_delegates(self._reports_table, 3, 4, 5)   # off while the column is Best by Role's Rating
+        _set_media_delegates(self._reports_table, 0, 9, 7)
 
         rhdr = self._reports_table.horizontalHeader()
         rhdr.setHighlightSections(False)
@@ -4423,7 +4673,8 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}
+        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62,
+                        9: _club_w(), 10: 65}
         for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
         for i in range(11, len(cols)):
@@ -4508,10 +4759,13 @@ class MainWindow(QMainWindow):
         clubs = self._save_data.get('clubs', [])
         squads = self._save_data.get('squads', {})
         club_by_id = {c['id']: c['name'] for c in clubs}
+        club_uid_by_id = {c['id']: c.get('uid') for c in clubs}
         is_role = self._current_report_key == 'best_role'
         ratings = getattr(self, '_report_ratings', {})
         rhdr = self._reports_table.horizontalHeader()
         col4_label = 'Rating' if is_role else 'Dev'
+        self._reports_dev_delegate.enabled = not is_role   # Rating (0-100 role score) stays a number
+        self._reports_table.setColumnWidth(5, 45 if is_role else _ability_w())
         self._reports_table.setHorizontalHeaderItem(5, _SortItem(col4_label))
         self._reports_table.horizontalHeaderItem(5).setToolTip(_COL_TT.get(col4_label, ''))
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -4543,6 +4797,7 @@ class MainWindow(QMainWindow):
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
+            name_item.setData(MEDIA_UID_ROLE, p.get('uid'))
             hgp_item = _SortItem('')
             _hg_apply(hgp_item, 'hgp', bool(hgp), False)
             items = [
@@ -4564,6 +4819,8 @@ class MainWindow(QMainWindow):
                 items.append(_SortItem(str(dv), dv))
             while len(items) < 11 + 54:
                 items.append(_SortItem(''))
+            _nation_media(items[7], nation_id)
+            _club_media(items[9], club_uid_by_id.get(club_id) if club_id else None, club_name)
             for col, item in enumerate(items):
                 if col == 7:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
@@ -4769,15 +5026,16 @@ class MainWindow(QMainWindow):
         # Players table: virtualised QTableView + PeopleModel (all players, no cap)
         self._players_model, self._players_table = self._make_scouting_view(
             self._make_players_model(), _COL_TT,
-            {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62, 9: 160, 10: 65}, 35,
-            sort=(2, Qt.SortOrder.AscendingOrder))
+            {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62, 9: _club_w(),
+             10: 65}, 35, sort=(2, Qt.SortOrder.AscendingOrder))
         self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
         self._players_table.setItemDelegateForColumn(1, self._players_inj_delegate)
         self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
         self._players_table.setItemDelegate(_RowMarkDelegate(self._players_table))
         self._players_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._players_table))
-        _set_star_delegates(self._players_table, 3, 4)
+        _set_star_delegates(self._players_table, 3, 4, 5)
+        _set_media_delegates(self._players_table, 0, 9, 7)
         self._players_table.horizontalHeader().setStretchLastSection(True)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -4809,6 +5067,9 @@ class MainWindow(QMainWindow):
         f.setPointSize(14)
         m.big_font_cols = {7: f}
         m.hg_cols = {8: 'hgp'}
+        m.club_uid_idx = len(spec)   # the row tuple ends with the club's save uid (badge key)
+        m.tip_text_cols = {9}        # club name tooltip (the badge column shows no text)
+        m.nation_col = 7
         m.tooltip_fn = lambda p, c: (f"Out for {p.get('injury_days', 0)} days"
                                      if c == 1 and p.get('injured') and p.get('injury_days', 0) > 0
                                      else 'Queued: written when you click Save Changes'
@@ -4816,14 +5077,15 @@ class MainWindow(QMainWindow):
         return m
 
     @staticmethod
-    def _player_row(p, squads, club_by_id):
+    def _player_row(p, squads, club_by_id, club_uid_by_id=None):
         pos = _primary_pos(p['positions']) if p.get('positions') else '?'
         nid = p.get('nation', 0)
         cid = squads.get(p.get('id'))
         return (p.get('name', ''), bool(p.get('injured', False)), pos, p.get('ca'), p.get('pa'),
                 _progress_rate(p), _age(p),
                 _nation_cell(nid, ''), bool(p.get('hgp', False)),
-                club_by_id.get(cid, '') if cid else '', p.get('contract_end', ''))
+                club_by_id.get(cid, '') if cid else '', p.get('contract_end', ''),
+                (club_uid_by_id or {}).get(cid) if cid else None)
 
     def _open_players_view(self, players=None, highlight_name=None):
         """Navigate to Players view: everyone, or (players given) just those search results."""
@@ -5053,7 +5315,7 @@ class MainWindow(QMainWindow):
         self._table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: 150, 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: 45, 6: 40, 7: 50, 8: 62,
+        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62,
                         9: 62, 10: 65}  # 1=INJ, 8/9=HGP/HGC badges ('+ HGP' fits), 10=CtrE
         for i, cw in fixed_widths.items():
             self._table.setColumnWidth(i, cw)
@@ -5249,11 +5511,12 @@ class MainWindow(QMainWindow):
         del ks, order
         yield 15
         club_by_id = {c['id']: c['name'] for c in clubs}
+        club_uid_by_id = {c['id']: c.get('uid') for c in clubs}
         yield 16
         t0 = now()
         prows = []
         for i, p in enumerate(players):
-            prows.append(self._player_row(p, squads, club_by_id))
+            prows.append(self._player_row(p, squads, club_by_id, club_uid_by_id))
             if not (i & 255) and now() - t0 > BUDGET:
                 yield 16 + 44 * i // len(players)
                 t0 = now()
@@ -5268,7 +5531,7 @@ class MainWindow(QMainWindow):
         t0 = now()
         srows = []
         for i, p in enumerate(staff):
-            srows.append(self._staff_row(p, club_by_id, club_by_entity, staff_club, employment))
+            srows.append(self._staff_row(p, club_by_id, club_by_entity, staff_club, employment, club_uid_by_id))
             if not (i & 255) and now() - t0 > BUDGET:
                 yield 61 + 24 * i // len(staff)
                 t0 = now()
@@ -5278,7 +5541,8 @@ class MainWindow(QMainWindow):
         self._staff_model.set_data(staff, srows)
         yield 93
         # column widths: fit to the first rows, floored so long names/clubs further down aren't clipped
-        for tv, floor in ((self._players_table, {0: 260, 9: 240}), (self._staff_table, {0: 230, 1: 300})):
+        for tv, floor in ((self._players_table, {0: _name_w(260), 9: 0 if badges_active() else 240}),
+                          (self._staff_table, {0: _name_w(230), 1: 0 if badges_active() else 300})):
             for c in range(tv.model().columnCount()):
                 tv.resizeColumnToContents(c)
                 tv.setColumnWidth(c, max(tv.columnWidth(c), floor.get(c, 0)))
@@ -5602,6 +5866,7 @@ class MainWindow(QMainWindow):
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
+            name_item.setData(MEDIA_UID_ROLE, p.get('uid'))
             hgp_item, hgc_item = _SortItem(''), _SortItem('')
             _hg_apply(hgp_item, 'hgp', bool(hgp), False)
             _hg_apply(hgc_item, 'hgc', hgc, False)
@@ -5635,6 +5900,7 @@ class MainWindow(QMainWindow):
             while len(items) < 11 + 54:
                 items.append(_SortItem(''))
 
+            _nation_media(items[7], nation_id)
             for col, item in enumerate(items):
                 if col == 7:  # Nation flag — center
                     item.setTextAlignment(
@@ -5794,8 +6060,9 @@ class MainWindow(QMainWindow):
 
     def _refresh_ability_cols(self):
         """CA / PA columns of the player lists after the Ability display setting changed (tables may not exist yet)."""
-        for name, cols in (('_table', (3, 4)), ('_reports_table', (3, 4)), ('_players_table', (3, 4)),
-                           ('_shortlist_table', (4, 5))):
+        is_role = getattr(self, '_current_report_key', None) == 'best_role'   # Reports col 5 is Rating then: not stars
+        for name, cols in (('_table', (3, 4, 5)), ('_reports_table', (3, 4) if is_role else (3, 4, 5)),
+                           ('_players_table', (3, 4, 5)), ('_shortlist_table', (4, 5))):
             t = getattr(self, name, None)
             if t is not None:
                 for c in cols:
