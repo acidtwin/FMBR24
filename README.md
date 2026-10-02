@@ -40,6 +40,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Contract & Transfer: contract dates and wage, market value
 - Career history, recommended traits, and a Current / Full Potential projection (display only)
 - CA, PA and Development Rate as stars or raw numbers (Settings)
+- Face pictures from your installed FM24 facepacks in the player window and staff window (read only, optional, Settings)
 
 **Editing**
 - Homegrown flags (HGP / HGC) for the players of your own club: queue them from the player window or the Squads toolbar, then press Save Changes
