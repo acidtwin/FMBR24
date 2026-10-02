@@ -994,7 +994,7 @@ function valueChart(){
   const c=S.nov?null:VC[S.vs||S.smp],est=`<span class="est" title="${VC_EST}">ESTIMATE</span>`;
   if(!c)return `<div class="pn vcn">${ph('Value by age'+est)}<div class="empty"><b>No value curve</b><span>The save has no market value for this player (it is 0 or Not for Sale), so there is nothing to anchor an estimate on.</span></div></div>`;
   const lg=`<span class="lg"><span><i style="background:#EAD95C"></i>Expected</span>${c.full?'<span><i class="d"></i>At full potential</span>':''}<span><i class="b"></i>Typical range</span></span>`;
-  return `<div class="pn vcn">${ph('Value by age'+est,lg)}${vcSVG(c)}<div class="fn">${S.vs?`<em>Review sample: ${c.label}. The header above is the fictional sample.</em><br>`:''}${VC_EST} Based on 132,000 observed player value changes in 11 saves of 5 games, anchored on his current value. The band holds about half of real outcomes. Assumes he renews his contract.${c.full?'':' No full-potential line: past 28 or at potential.'}</div></div>`;
+  return `<div class="pn vcn">${ph('Value by age'+est,lg)}${vcSVG(c)}<div class="fn">${S.vs?`<em>Review sample: ${c.label}. The header above is the fictional sample.</em><br>`:''}${VC_EST} Based on how player values changed between saves of the same game years apart, anchored on his current value. The band holds about half of real outcomes. Assumes he renews his contract.${c.full?'':' No full-potential line: past 28 or at potential.'}</div></div>`;
 }
 
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------

@@ -19,7 +19,7 @@ BAND = QColor(234, 217, 92, 23)                       # rgba(234,217,92,.09)
 GUIDE = QColor(255, 255, 255, 56)                     # rgba(255,255,255,.22)
 TIP_BG, TIP_BORDER = QColor('#292B32'), QColor('#454A58')
 VC_EST = "Estimated from how values changed over time in simulated FM24 careers; not FM's own formula."
-VC_NOTE = (' Based on 132,000 observed player value changes in 11 saves of 5 games, anchored on his current value.'
+VC_NOTE = (' Based on how player values changed between saves of the same game years apart, anchored on his current value.'
            ' The band holds about half of real outcomes. Assumes he renews his contract.')
 EMPTY_T = 'No value curve'
 EMPTY_D = ('The save has no market value for this player (it is 0 or Not for Sale), '
