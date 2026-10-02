@@ -142,11 +142,12 @@ assert settings.load()['faces_enabled'] is False and settings.load()['faces_pack
 settings.load()['faces_pack_order'].append('x')
 assert settings.load()['faces_pack_order'] == ['B Pack'] and settings.DEFAULTS['faces_pack_order'] == []   # no shared list
 
-# disabled -> None everywhere
+# disabled -> None everywhere (club badges share the index: both switches off)
+assert settings.save({'logos_enabled': False})
 assert faces.configure(cache_dir=cache_dir) is None
 assert faces.ensure_loaded() is None and faces.face_path(100) is None
 # enabled + dir -> resolves (blocking load only via ensure_loaded), kind other than person -> None
-assert settings.save({'faces_enabled': True, 'faces_dir': fm, 'faces_pack_order': []})
+assert settings.save({'faces_enabled': True, 'logos_enabled': True, 'faces_dir': fm, 'faces_pack_order': []})
 assert faces.configure(cache_dir=cache_dir) is not None
 assert faces.face_path(100) is None                                      # configured but not loaded yet: never blocks
 faces.ensure_loaded()
