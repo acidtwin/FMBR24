@@ -106,6 +106,7 @@ SLOTS = {
     'GK': (.50, .94),
 }
 
+CLUB_BADGE_PX = 16      # mockup .hid .r2 .club .bdg: club badge box before the club name (row 2 is 16 tall)
 AVATAR_SIZE = (54, 64)   # mockup .avatar: the facepack cutout aspect (260:310), same box with or without a picture
 _PERSON_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#525B68" '
                'stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>')
@@ -526,12 +527,17 @@ class PlayerWindow(QDialog):
         from gui import main_window as mw
         return mw._club_pending_chip()        # existing PENDING chip; hidden when the setting is off
 
-    def _club_name(self):
+    def _club(self):
+        """The player's club dict (squad membership) or None."""
         sd = self._save_data or {}
         cid = (sd.get('squads') or {}).get(self._person.get('id'))
         if cid is None:
-            return ''
-        return next((c['name'] for c in sd.get('clubs', []) if c.get('id') == cid), '')
+            return None
+        return next((c for c in sd.get('clubs', []) if c.get('id') == cid), None)
+
+    def _club_name(self):
+        c = self._club()
+        return c['name'] if c else ''
 
     def _init_state(self):
         from gui import main_window as mw
@@ -796,6 +802,16 @@ class PlayerWindow(QDialog):
         lbl.setStyleSheet(f'QLabel#pwBadge {{ background:{bg}; padding:0 5px; }}')
         return lbl
 
+    def _refresh_club_badge(self):
+        """Club badge (Settings > Club badges) before the club name; no badge at all (the slot collapses) without a logo."""
+        try:
+            px = _faces_service().club_pixmap((self._club() or {}).get('uid'), CLUB_BADGE_PX, self.devicePixelRatioF())
+            self._club_badge.setVisible(px is not None)
+            if px is not None:
+                self._club_badge.setPixmap(px)
+        except (RuntimeError, AttributeError):
+            pass   # header rebuilt / window closing / player without a club
+
     def _refresh_avatar(self):
         """Facepack picture (Settings > Face pictures) or, without one, the silhouette (mockup .avatar 54x64, radius 3)."""
         w, h = AVATAR_SIZE
@@ -970,7 +986,18 @@ class PlayerWindow(QDialog):
         club = self._club_name()
         if club:
             r2.addWidget(_lab('·', 'pwSep', None, 16))
-            r2.addWidget(_ElideLabel(club, 'pwSub', natural=True))
+            unit = QWidget()                      # mockup .r2 .club: badge 16x16 + gap 5 + name (one flex item, the name elides)
+            ul = QHBoxLayout(unit)
+            ul.setContentsMargins(0, 0, 0, 0)
+            ul.setSpacing(5)
+            self._club_badge = QLabel()
+            self._club_badge.setFixedSize(CLUB_BADGE_PX, CLUB_BADGE_PX)
+            ul.addWidget(self._club_badge)
+            ul.addWidget(_ElideLabel(club, 'pwSub', natural=True), 1)
+            unit.setFixedHeight(16)
+            r2.addWidget(unit)
+            self._refresh_club_badge()
+            _faces_service().ready.connect(self._refresh_club_badge)   # index still loading when the window opened
         r2.addWidget(_lab('·', 'pwSep', None, 16))
         age = _DottedLabel(f'{person_age(p)} years')
         age.setObjectName('pwSub')

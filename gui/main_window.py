@@ -1808,6 +1808,9 @@ class MainWindow(QMainWindow):
         self._club_first_team = []  # first-team squad of the Club page (self._squad follows the tab)
         self._worker = None
         self._current_club = None
+        self._hdr_key = None        # view key of the current page header (re-applied when club badges become available)
+        self._header_club = None    # club whose badge the page header circle shows (None = the page icon)
+        _faces_service().ready.connect(self._refresh_badges)
         self._shortlist = []        # players only
         self._staff_shortlist = []  # staff only
         self._status_base = ''
@@ -2213,7 +2216,14 @@ class MainWindow(QMainWindow):
             self._PAGE_ICONS[name] = px
         return px
 
-    def _set_header(self, title: str, subtitle: str = '', right_widget=None, icon=None):
+    _HEADER_LOGO_PX = 40   # club badge box inside the 56 px header circle (mockups/club-page-design-a.html .a-badge-ph .logo)
+
+    def _club_badge_px(self, club, size):
+        """Club badge pixmap for `size` logical px (None: no club / no logo pack / no logo / still loading / setting off)."""
+        return _faces_service().club_pixmap((club or {}).get('uid'), size, self.devicePixelRatioF()) if club else None
+
+    def _set_header(self, title: str, subtitle: str = '', right_widget=None, icon=None, club=None):
+        self._header_club = club
         self._header_title_lbl.setText(title)
         self._header_subtitle_lbl.setText(subtitle)
         self._header_subtitle_lbl.setVisible(bool(subtitle))
@@ -2230,6 +2240,10 @@ class MainWindow(QMainWindow):
             if ipx is not None and not ipx.isNull():   # page icon instead of the initial (falls back to the letter)
                 self._header_badge_lbl.setText('')
                 self._header_badge_lbl.setPixmap(ipx)
+            lpx = self._club_badge_px(club, self._HEADER_LOGO_PX)   # the club's own badge replaces the page icon when found
+            if lpx is not None:
+                self._header_badge_lbl.setText('')
+                self._header_badge_lbl.setPixmap(lpx)
 
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
@@ -2249,6 +2263,22 @@ class MainWindow(QMainWindow):
             self._header_right_slot.show()
         else:
             self._header_right_slot.hide()
+
+    def _refresh_si_badge(self):
+        """Save Info rail: the manager's club badge before the club name (hidden without a logo)."""
+        px = self._club_badge_px(self._si_badge_club, 22)
+        if px is not None:
+            self._si_badge.setPixmap(px)
+        self._si_badge.setVisible(px is not None)
+
+    def _refresh_badges(self):
+        """FaceService.ready (index / club key table loaded, or Settings changed): re-apply the club badges."""
+        try:
+            if self._hdr_key in ('club', 'squad', 'club_staff') and self._current_club:
+                self._update_header_for_view(self._hdr_key)
+            self._refresh_si_badge()
+        except RuntimeError:
+            pass   # window closing
 
     def _make_squad_stats_label(self):
         """Squads header stats strip from the html _populate_squad_table left in _squad_info (None = no squad yet)."""
@@ -2288,6 +2318,7 @@ class MainWindow(QMainWindow):
 
     def _update_header_for_view(self, key: str):
         # each Player Report has its own header image (falls back to the shared reports image)
+        self._hdr_key = key
         self._hero.set_page(self._current_report_key if key == 'reports' and self._current_report_key in self._hero._PAGE_IMAGE else key)
         self._settings_btn.setChecked(key == 'settings')
         club = self._current_club
@@ -2301,10 +2332,10 @@ class MainWindow(QMainWindow):
             club_sub = ' · '.join(x for x in (country, pos) if x)
             self._set_header(club_name or 'Club', club_sub,
                              self._make_header_rep_widget(rep_stars((club or {}).get('rep')), (club or {}).get('rep')),
-                             icon='club')
+                             icon='club', club=club)
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
-            self._set_header('Squads', f"{club_name} · {n} players", self._make_squad_stats_label(), icon='squads')
+            self._set_header('Squads', f"{club_name} · {n} players", self._make_squad_stats_label(), icon='squads', club=club)
         elif key == 'staff':
             self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'), icon='staff')
         elif key == 'reports':
@@ -2325,7 +2356,7 @@ class MainWindow(QMainWindow):
         elif key == 'club_staff':
             n = self._club_staff_table.rowCount() if hasattr(self, '_club_staff_table') else 0
             sub = f"{club_name} · {n} staff" if club_name else f"{n} staff"
-            self._set_header('Club Staff', sub, icon='club_staff')
+            self._set_header('Club Staff', sub, icon='club_staff', club=club)
         elif key == 'save_info':
             info = (self._save_data or {}).get('save_info') or {}
             self._set_header('Save Info', info.get('game_name')
@@ -2762,7 +2793,17 @@ class MainWindow(QMainWindow):
         id_text.addSpacing(2)
         self._si_club = _ElideLabel()                   # .id-club: 15px / 500, 24px tall
         self._si_club.setFixedHeight(24)
-        id_text.addWidget(self._si_club)
+        club_row = QHBoxLayout()                        # .id-club: badge 22x22 + gap 8 + name (badge hidden without a logo)
+        club_row.setContentsMargins(0, 0, 0, 0)
+        club_row.setSpacing(8)
+        self._si_badge = QLabel()
+        self._si_badge.setFixedSize(22, 22)
+        self._si_badge.setStyleSheet("background:transparent;")
+        self._si_badge.hide()
+        self._si_badge_club = None
+        club_row.addWidget(self._si_badge)
+        club_row.addWidget(self._si_club, 1)
+        id_text.addLayout(club_row)
         id_v.addLayout(id_text)
         rail_v.addWidget(self._si_id_block)
 
@@ -2956,9 +2997,14 @@ class MainWindow(QMainWindow):
             self._si_name.set_full_text(mgr)
             club = info.get('manager_club_name') or info.get('manager_club_short')
             self._si_club.set_full_text(club or 'No club')
+            self._si_badge_club = next((c for c in sd.get('clubs') or ()
+                                        if c.get('id') == info.get('manager_club_id')), None) if club else None
             self._si_club.setStyleSheet(
                 f"color:{'#e8edf2' if club else '#7a8fa6'}; font-size:15px; font-weight:500;"
                 " background:transparent;")
+        else:
+            self._si_badge_club = None
+        self._refresh_si_badge()
 
         # -- rows, hairlines, bands --
         hair = "QFrame#siKv { border-bottom:1px solid rgba(255,255,255,0.04); }"
@@ -5123,7 +5169,8 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._pending = []
         self._save_data['save_path'] = self._save_path
-        _faces_service().start(self._save_path)  # background facepack index (fm_editor/faces.py)
+        _faces_service().set_clubs(result.get('clubs'), result.get('club_uids_extra') or (), self._save_path)  # club uid -> logo id table
+        _faces_service().start(self._save_path)  # background facepack / logo index (fm_editor/faces.py)
         self._save_data['disk_sig'] = result.get('disk_sig')  # taken by the ParseWorker of THIS parse
         self._sg_idx = None  # search index is rebuilt lazily
         # fresh lists: reset filters/search subset without re-running them
@@ -5464,7 +5511,8 @@ class MainWindow(QMainWindow):
                       + inj_part)
         self._squad_info.setText(stats_html)
         club_name = self._current_club['name'] if self._current_club else ''
-        self._set_header('Squads', f"{club_name} · {len(squad)} players", self._make_squad_stats_label(), icon='squads')
+        self._set_header('Squads', f"{club_name} · {len(squad)} players", self._make_squad_stats_label(), icon='squads',
+                         club=self._current_club)
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
