@@ -108,6 +108,31 @@ def find_clubs(b, names_start):
     return clubs
 
 
+def find_hidden_club_uids(b, names_start):
+    """Sorted uids of the clubs whose record has the second layout (`ff ff ff ff` at +13, the nation id at +17/+21/+25;
+    find_clubs only reads the first layout: nation at +13, `ff ff ff ff` at +17). The save holds ~8.4k of them (Atherstone
+    United, Gaziantepspor, ...; the install DB ~26.5k). They are not listed anywhere in the app, but the logo id of a club is
+    the uid of the NEXT club in the full list (fm_editor/clublogo.py), so they must be known."""
+    out = set()
+    search = 13
+    while True:
+        ff = b.find(b'\xff\xff\xff\xff', search, names_start)
+        if ff < 0:
+            break
+        search = ff + 1
+        at = ff - 13
+        if at < 0 or at + 29 > names_start or b[at + 12]:
+            continue
+        nation = _u32(b, at + 17)
+        if nation > 255 or _u32(b, at + 21) != nation or _u32(b, at + 25) != nation:
+            continue
+        uid = _u32(b, at + 4)
+        if uid == 0 or uid == 0xFFFFFFFF or uid != _u32(b, at + 8) or _u32(b, at) > 100000:
+            continue
+        out.add(uid)
+    return sorted(out)
+
+
 # -- Club finances -------------------------------------------------------------
 
 _NULL_DATES = bytes.fromhex('01006c0701006c0701006c07')  # three null dates (1900) after the money fields

@@ -17,7 +17,7 @@ def _cache_path(save_path):
     return os.path.join(_CACHE_DIR, f"{key}.json")
 
 
-_CACHE_VERSION = 31  # bump when schema changes to auto-invalidate old caches
+_CACHE_VERSION = 32  # bump when schema changes to auto-invalidate old caches
 
 
 def file_signature(save_path):
@@ -64,7 +64,7 @@ def clear_cache(save_path):
 
 
 def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, club_staff=None,
-               save_info=None, sig=None):
+               save_info=None, sig=None, club_uids_extra=None):
     """sig: file_signature() taken before the parse; a save changed since is not cached."""
     sig = sig or file_signature(save_path)
     if sig != file_signature(save_path):
@@ -120,6 +120,8 @@ def save_cache(save_path, clubs, squads, sub_squads, people, employment=None, cl
         data['employment'] = employment
     if club_staff:
         data['club_staff'] = club_staff
+    if club_uids_extra:
+        data['club_uids_extra'] = club_uids_extra  # uids of second-layout clubs (club logo ids, fm_editor/clublogo.py)
     if save_info:
         data['save_info'] = save_info  # plain JSON types (str/int/list) - no key normalising needed
     try:

@@ -79,6 +79,7 @@ class ParseWorker(QThread):
                     'sub_squads': cached['sub_squads'], 'people': cached['people'],
                     'employment': cached.get('employment', {}), 'club_staff': cached.get('club_staff', {}),
                     'save_info': cached.get('save_info', {}),
+                    'club_uids_extra': cached.get('club_uids_extra', []),
                     'human_clubs': self._human_clubs(b, members, cached.get('save_info', {}),
                                                      cached['people'], cached['clubs']),
                     'b': b, 'header': header, 'members': members,
@@ -94,6 +95,8 @@ class ParseWorker(QThread):
             self._emit("Finding clubs...", 55)
             clubs = find_clubs(b, names_start)
             add_club_finance(b, clubs, names_start)
+            from fm_editor.gamedb import find_hidden_club_uids
+            club_uids_extra = find_hidden_club_uids(b, names_start)
             try:
                 self._club_extras(b, members, clubs, get_member)
             except Exception:
@@ -194,13 +197,13 @@ class ParseWorker(QThread):
 
             self._emit("Caching results...", 98)
             save_cache(self.save_path, clubs, squads, sub_squads, people, employment, club_staff,
-                       save_info, sig=sig)
+                       save_info, sig=sig, club_uids_extra=club_uids_extra)
 
             self.pct.emit(100)
             result = {
                 'clubs': clubs, 'squads': squads, 'sub_squads': sub_squads, 'people': people,
                 'employment': employment, 'club_staff': club_staff, 'save_info': save_info,
-                'human_clubs': human_clubs,
+                'club_uids_extra': club_uids_extra, 'human_clubs': human_clubs,
                 'b': b, 'header': header, 'members': members,
                 'index_marker': index_marker, 'archive_name': archive_name,
                 'subdir_count': subdir_count, 'subdirs': subdirs,
