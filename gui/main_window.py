@@ -459,7 +459,7 @@ def _club_kv_value(text='', color='#e8edf2'):
 _SI_DAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
 # Brand shown in the sidebar header (mockups/sidebar-header-options.html, option A).
 # The app is due a rename: change these two lines (plus the hard-coded titles listed in main.py / MainWindow).
-_BRAND_MARK_PX = 34
+_BRAND_MARK_PX = 48   # sidebar logo (the FMBR24 floppy: the wordmark text on it needs this size to read)
 _APP_WORDMARK = 'FMBR24'
 
 _SI_MONTHS = ('January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -2340,7 +2340,7 @@ class MainWindow(QMainWindow):
         mark.setObjectName('sbMark')
         mark.setFixedSize(_BRAND_MARK_PX, _BRAND_MARK_PX)
         mark.setStyleSheet("QLabel#sbMark { background:transparent; }")
-        _mark_px = QPixmap(os.path.join(os.path.dirname(__file__), 'assets', 'brand_mark.png'))
+        _mark_px = QPixmap(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'icon-source.png'))
         if not _mark_px.isNull():
             mark.setPixmap(_mark_px.scaled(
                 _BRAND_MARK_PX * 2, _BRAND_MARK_PX * 2, Qt.AspectRatioMode.KeepAspectRatio,
