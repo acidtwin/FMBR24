@@ -12,6 +12,8 @@ Supersedes player-window-options.html (kept as history: options A/B/C) and posit
 
 HOW TO USE
   Click the left tab strip to switch tabs. Deep links: #profile #contract #positions #general #role #training #history
+  Contract & Transfer: 'Value by age' chart (section 4.2b). Flags: vy / vp / va / vg = chart for a REAL player of the save (young high-PA / prime / ageing / ageing goalkeeper) instead of the
+    header sample; nov = no market value in the save (chart empty state). Review bar: 'value chart' segment.
   State flags after '+':   pot (Profile: "Full Potential")   future (Positions: "Future")   gk (goalkeeper sample)
     low (low-rated 19yo sample)   scout (opened from Scouting: HGP/HGC pills display-only, tip 'Open from Squads to patch')   short (already on shortlist)
     inj (injured)   hgp / hgc (homegrown SET in the save = lit pill)   qhgp / qhgc (change QUEUED = yellow pill)   (neither = not set)
@@ -135,6 +137,47 @@ ROLE RATING TAB (section 4.7; designed from FM Genie Scout's Role Rating screen 
     Tests: tests/test_role_tab.py (plain script): every POS_ROLES name exists in FM_ROLES; role_rating == clamp(round(role_score)) for all roles; sorting/best row; GK vs outfield live dots;
     default selection = best posr; click selects; pot toggle changes values; Equal Weight vs a preset differ; offscreen grab + LOOK; no star widget on the tab.
 
+VALUE BY AGE CHART (section 4.2b; Contract & Transfer tab; modelled on FM Genie Scout's 'Year-by-Year Statistics' graph but in OUR language: tokens, panel, TIER_HEX)
+  What it shows: a line chart of the player's ESTIMATED transfer value for each age of his remaining career (x = age Now .. Now+11, capped at 37; y = money, linear axis from 0 with round ticks).
+    Lines: 'Expected' (yellow #EAD95C, 2px, the player's typical development: median CA path) with a shaded 'Typical range' band (same yellow at alpha .09; ~half of real outcomes fall inside),
+    and 'At full potential' (green #52C287, 2px dashed 5/4; CA reaches PA by 27 and then ages like a peak player; shown only for age <= 28 and CA < 97% of PA, else the legend item is absent).
+    'Now' = solid dot on the first point + label 'Now  £93M' (the REAL stored market value: both lines are anchored on it). Vertical dashed marker (orange #E0973C) 'Contract ends <Mon YYYY>' at the
+    expiry age (Now + years left; hidden when beyond the last age). ESTIMATE pill (header, right of the title) + footnote on every render. Hover an age column: guide line + bubble (Age / Expected / Typical range /
+    At full potential; the Now column shows 'Market value'). Empty state (flag nov): market value 0 or 'Not for Sale' (300,000,000) in the save -> centred message, no axes.
+  Layout: page = [Contract panel | Transfer panel] top row (gap 12, 118 px tall, each flex 1 = 451 px; Transfer vanishes with all-PENDING + 'Hide PENDING' as before) + chart panel below (flex 1 = 462 px tall at 1122x760): the whole tab fits
+    914 x 592 with NO vertical scrollbar. Chart panel: header 36 (title 'VALUE BY AGE' 11/700 caps, ESTIMATE pill, legend right), SVG 912 x 372, footnote 11/15 px secondary, 2 lines, pad 8 12 10.
+  THE MODEL IS AN ESTIMATE, NOT FM's FORMULA. Findings of the feasibility study (scripts were kept in the review scratchpad, not in the repo):
+    1. LEVEL is not predictable from the save: on 56k players value ~ CA/PA/age/contract gives R2 0.80 on log value but median |error| 78% (v > 1M: 78%); adding club reputation + nation + position
+       only reaches ~52-56%. Players with identical CA/PA/age/contract differ 0.07M .. 31M: the missing driver is the hidden player reputation, which the parser does not read (no stored field found).
+       => the curve is ANCHORED on the stored current value; only its SHAPE (the change over time) is modelled.
+    2. SHAPE comes from LONGITUDINAL data: 6 save pairs of 5 simulated games (same player ids, 0.6 .. 9 years apart, 132k player pairs). A within-player (first-difference, IRLS median) fit of
+       log(value) = h(CA, age) + contract bucket + goalkeeper(age) removes the reputation level. Contract effect (renewal assumed after Now): <6 months left -1.04 (value x0.35), 6-12 months -0.41, 1-2 years -0.03.
+       CA path: kernel-smoothed mean CA/PA after k years given age and CA/PA (separate goalkeeper table; goalkeepers age ~2 years later), MAE 5.5-11 CA points at 2.5-9 years.
+    3. VALIDATION (leave-one-game-out, error of log(value_B/value_A); 'flat' = value unchanged): horizon 0.6y MAE 0.54 vs 0.65 flat; 2.5y 1.03 vs 1.11; 3.5y 1.08 vs 1.22; 4.4y 1.08 vs 1.29; 5y 1.10 vs 1.18;
+       9y 1.53 vs 1.66; age 30+ 0.87 vs 1.54 (the decline is what it gets right). Typical individual error is a factor 2-3 (median |error| 100-130% at 3-9 years): treat the line as a TREND, not a price.
+       The band half-width (log) 0.5 / 0.7 / 0.8 / 0.82 / 1.2 at 1 / 2 / 3 / 5 / 9 years covers 47-51% of real outcomes (calibrated as a 25-75% range). Direction (up/down) right 63-75%.
+    4. Where it breaks: very young high-PA players (reputation jumps), a contract with < 12 months left (modelled as a one-off dip that the lines assume he escapes by renewing: the first step after Now
+       can jump x2-3), ages 36-37 (few samples; values near zero), unusual world (huge or tiny league reputation: not modelled), injuries, club moves.
+  Sample numbers below (const VC) = the model run (section 1c comment): 'out' / 'gk' / 'low' use the FICTIONAL sample header inputs; vy / vp / va / vg use REAL players of the user's Jan-2028 save
+    (Joane Gadou 20y CA 137 PA 169 £103M; Micky van de Ven 26y CA 166 PA 174 £96.5M; Bernardo Silva 33y CA 159 PA 165 £17.1M; Guglielmo Vicario GK 31y CA 141 £15.8M).
+  QPainter translation (class ValueChart(QWidget); plot rect = widget rect.adjusted(L,T,-R,-B), L 66 / T 36 / R 60 / B 34 at 912 x 372; keep the margins constant when it resizes):
+    y axis: ticks from niceAxis(max over both lines x 1.04): step = 1/2/5 x 10^n with ~4 intervals, 0..top; gridline QPen(#343740, 1) across the plot, baseline (0) QColor(#454A58); labels QFont 11 px #8B96A8,
+      right aligned ending x = L-10, centred on the tick; money = '£93M' (>=10M) / '£2.8M' (>=1M) / '£850K'.  x axis: one tick label per age (11 px #8B96A8, centred, baseline y = T+plotH+20), points evenly spaced
+      x_i = L + i*plotW/(n-1); y = T+plotH - min(v,top)/top*plotH.
+    ribbon: QPolygonF (hi forward, lo backward) fill QColor(234,217,92,23), no pen, drawn first.  Contract marker: QPen(#E0973C, 1) dash pattern [4,3] (Qt pattern is in pen widths), from y = T-10 to T+plotH, label 11 px
+      #E0973C 'Contract ends Jun 2031' at x+6 y = T-14 (right aligned to the marker when closer than 200 px to the right edge).
+    Expected: QPen(QColor(234,217,92), 2, Solid, RoundCap, RoundJoin), antialiasing; dots r3 fill same, Now dot r5 + 2 px ring #14151A.  Full potential: QPen(QColor(82,194,135), 2) setDashPattern([2.5, 2]).
+    End labels (last point, 11 px bold in the line colour, LEFT aligned at x_n+9, baseline y+4; if the two are < 14 px apart push the lower one down to 14 px).  'Now' label 11 px bold white at (x_0 + 10): baseline y_0+22 when the lines rise after Now, else y_0-12.
+    hover: mouseMoveEvent -> nearest i; guide line QColor(255,255,255,56) 1 px over the plot; QToolTip.showText(globalPos, text) with the 3-4 lines above (setMouseTracking(True)); leave -> hide.
+    Panel header ESTIMATE pill = the chip.soon look (h20 r10 10/700, letter-spacing 0.88 via QFont, border #454A58, text secondary); its tooltip + the footnote carry the wording.
+    Legend (header right): 16 x 2 px swatches (dashed for full potential: two 7 px dashes), 10 x 10 r2 swatch at alpha .24 for the band, 11 px secondary, gap 14.
+  PORTING (proposal): fm_editor/valuecurve.py (no Qt, numpy): ValueCurve.load() reads data/value_model.json (shipped like data/ca_weights.json: h table 26 ages x 35 CA bins, contract + goalkeeper offsets,
+    CA-path tables 7 horizons x 25 ages x 29 CA/PA bins x 2 groups, band table; ~150 KB, produced offline from save pairs by scripts/build_value_model.py);  curve(age, ca, pa, is_gk, value, years_left) ->
+    [(age, expected, lo, hi, full)] + flags; the same function runs the table lookup with np.interp, nothing to build per save, nothing in the parse cache (cheap: 12 lookups).  gui/pw_valuechart.py: ValueChart widget
+    in `_page_contract` below the two panels.  Tests: tests/test_valuecurve.py (plain script, synthetic + real-save part like test_value_est): anchor (first point == value), monotone ages, band lo <= expected <= hi,
+    goalkeeper path declines later than outfield, flat-ish for age 36+, empty for value 0 / 300M, full potential absent for age >= 29, contract dip only before the first step; offscreen grab + LOOK.
+    Star ratings rule: n/a (money, not a rating).  Wording to use in the UI: 'Estimated from how values changed over time in simulated FM24 careers; not FM's own formula.'
+
 OPEN QUESTIONS
   1. Natural ring: drawn on EVERY rating of 20 (as in the old mock); the listed/primary position is bold in the list. Alternative:
      ring only the listed position's dot. Which?
@@ -143,6 +186,8 @@ OPEN QUESTIONS
   4. Positions "Future": DESIGN ONLY (the real button is DISABLED with a tooltip; '+future' still renders the design). A real implementation needs a position-rating recompute from the projected attributes
      (fm_editor/potential.project_attrs -> the same position-weights that produce the 15 current ratings).
   5. Tab strip style follows the current implementation (selection_bg + accent left edge), not the accent-fill of the earlier mock.
+  7. Value by age: the requested footnote 'Estimated from the values of all players in this save' is NOT what the model does (a single save cannot give the change over time, and the level is dominated by the hidden
+     reputation); the UI says 'simulated FM24 careers'. OK? Assume the contract is renewed (lines) with the expiry marker, or draw the dip / a free-agent drop at expiry? Show the band (~50% range) or hide it?
   6. Role Rating: duty names spelled out (Defend / Support / Attack / Cover, as Genie) or the FM letters (D / S / A)? Dim unfamiliar positions (flag fam) by default? Position rating folded
      into the dot colour instead of a dim? POS_ROLES to verify in game (see the ROLE RATING TAB block). 1-decimal ratings need role_rating's float variant (the report keeps integers).
 =====================================================================================================================
@@ -169,6 +214,24 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 button[disabled]{cursor:default}
 svg{display:block}
 svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
+
+
+/* ---- Contract & Transfer: top row + Value by age chart (section 4.2b) ---- */
+.c-page{flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column;gap:12px}
+.c-top{display:flex;gap:12px;align-items:stretch}.c-top>.pn{flex:1}
+.vcn{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.vcn .lg{display:flex;align-items:center;gap:14px;font-size:11px;font-weight:400;color:var(--tx2);text-transform:none;letter-spacing:0}
+.vcn .lg span{display:inline-flex;align-items:center;gap:6px}
+.vcn .lg i{display:inline-block;width:16px;height:2px}
+.vcn .lg i.d{background:repeating-linear-gradient(90deg,#52C287 0 7px,transparent 7px 9px)}
+.vcn .lg i.b{width:10px;height:10px;border-radius:2px;background:rgba(234,217,92,.24)}
+.vcn .est{display:inline-flex;align-items:center;height:20px;padding:0 10px;margin-left:10px;border-radius:10px;border:1px solid var(--border2);font-size:10px;font-weight:700;letter-spacing:.88px;color:var(--tx2);cursor:help}
+.vcn .fn{padding:8px 12px 10px;font-size:11px;line-height:15px;color:var(--tx2)}.vcn .fn em{color:var(--tx3);font-style:normal}
+.vcn .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--tx2);text-align:center;padding:0 40px}
+.vcn .empty b{color:#fff;font-size:13px}
+.vcn svg text{font-size:11px;fill:var(--tx2)}
+.vcn .vh{fill:transparent}.vcn .vg{display:none;stroke:rgba(255,255,255,.22);stroke-width:1}
+.vtip{position:absolute;display:none;white-space:pre;text-align:left;line-height:15px;background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:4px 8px;font-size:11px;color:#fff;z-index:20;pointer-events:none}
 
 /* ---- review bar (NOT part of the window) ---- */
 .rv{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 auto 12px;max-width:1124px}
@@ -433,6 +496,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <div class="rv">
   <h1>Player window</h1>
   <span class="lab">sample</span><div class="rseg" id="smpSeg"></div>
+  <span class="lab">value chart</span><div class="rseg" id="vsSeg"></div>
   <span class="lab">header</span><div class="rseg" id="hdrSeg"></div>
   <span class="lab">theme</span><div class="rseg" id="texSeg"></div>
   <span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span class="lab" style="margin-right:0">weights</span><div class="rseg" id="wtSeg"></div></span>
@@ -536,6 +600,20 @@ const HIST=[
  {s:'2023/24',k:'',c:'Tottenham',a:27,g:3,f:null},
  {s:'2024/25',k:'youth loan',c:'Tottenham U21',a:null,g:null,f:null}];
 const SAMPLES={out:OUT,gk:GKP,low:LOW};
+/* 1c. VALUE BY AGE sample data = REAL MODEL OUTPUT, not hand-drawn. How generated: scratchpad scripts (value-chart branch review) fit the within-player value model + CA-path tables on 6 pairs of the user's own
+   FM24 saves (see the VALUE BY AGE CHART block), then curve(age, ca, pa, gk, value, years_left) was run per case. pts = [age, expected value, band low, band high, at-full-potential value] in GBP,
+   one per year from Now (first row = Now = the stored market value; both lines pass through it).  full = a separate full-potential line exists; yl = years of contract left (marks 'Contract ends').
+   out / gk / low = inputs of the FICTIONAL header samples (CB 26y CA 149 PA 160 £93M; GK 29y CA 138 PA 142 £34M; 19y CA 62 PA 88 £0.9M, 5 months left -> note the first-step jump);
+   young / prime / old / oldgk = REAL players of the Jan-2028 save (flags vy / vp / va / vg). */
+const VC={
+ out:{until:"Jun 2031",label:"Header sample (CB, CA 149 / PA 160)",full:true,yl:3.4,pts:[[26,93000000,93000000,93000000,93000000],[27,95275024,57787223,157081959,113358007],[28,105962307,52619324,213381883,141532349],[29,109651766,49269714,244034493,166287130],[30,107357010,47758632,241328679,126628788],[31,74254874,32704197,168595679,96974959],[32,41169571,16489098,102791166,61420020],[33,20644233,7519021,56680827,35017783],[34,8051995,2666908,24310781,17624574],[35,2789534,840192,9261579,7368697],[36,1362276,390299,4754810,3079182],[37,766720,208956,2813324,1342401]]},
+ gk:{until:"Jun 2029",label:"Header sample (GK)",full:false,yl:1.4,pts:[[29,34000000,34000000,34000000,34000000],[30,34685166,21037617,57186171,34685166],[31,32865933,16320739,66183862,32865933],[32,26795862,12040157,59635287,26795862],[33,22139407,9848894,49767349,22139407],[34,11868353,5227198,26947093,11868353],[35,3714072,1487548,9273203,3714072],[36,1184359,431366,3251778,1184359],[37,577526,191283,1743682,577526]]},
+ low:{until:"Jun 2028",label:"Header sample (19yo)",full:true,yl:0.4,pts:[[19,900000,900000,900000,900000],[20,2754270,1670549,4541024,2784004],[21,2800015,1390447,5638539,2994865],[22,2202623,989702,4902027,2493757],[23,1739040,773626,3909201,2151151],[24,1927466,848917,4376311,2356236],[25,2011813,805764,5023044,2427253],[26,2193034,798744,6021196,2749797],[27,2319013,768082,7001621,3364016],[28,2452792,738767,8143556,3146498],[29,2488456,712955,8685564,3419163],[30,2275817,620232,8350646,3398138]]},
+ young:{until:"Jun 2031",label:"Joane Gadou (save)",full:true,yl:3.4,pts:[[20,103192600,103192600,103192600,103192600],[21,120944424,73356501,199403645,135138296],[22,135871681,67471880,273611965,169984296],[23,138065148,62036670,307269637,189439065],[24,126752430,56386841,284927801,202720109],[25,127623637,56209490,289769447,223853378],[26,134871514,54018284,336743858,247691306],[27,142030982,51730379,389960407,273219096],[28,145226337,48100543,438470910,287183810],[29,152769223,46013206,507211681,292680016],[30,130672659,37438344,456092394,265907224],[31,86695636,23627317,318112009,215541932]]},
+ prime:{until:"Jun 2031",label:"Micky van de Ven (save)",full:true,yl:3.4,pts:[[26,96525000,96525000,96525000,96525000],[27,99306890,60232674,163729382,104980739],[28,108632952,53945527,218759900,118769657],[29,114546892,51469236,254928796,130683884],[30,109477913,48702133,246096275,124287891],[31,75266290,33149657,170892100,95335714],[32,46645596,18682337,116463570,63910192],[33,25078946,9134228,68856778,39009964],[34,11335756,3754526,34225191,21263088],[35,4669297,1406365,15502613,9143988],[36,2225735,637684,7768579,4138200],[37,1165393,317607,4276174,1950560]]},
+ old:{until:"Jun 2029",label:"Bernardo Silva (save)",full:false,yl:1.4,pts:[[33,17098650,17098650,17098650,17098650],[34,7151977,4337893,11791616,7151977],[35,2581112,1281742,5197721,2581112],[36,1088531,489108,2422569,1088531],[37,466157,207374,1047878,466157]]},
+ oldgk:{until:"Jun 2031",label:"Guglielmo Vicario (save)",full:false,yl:3.4,pts:[[31,15762842,15762842,15762842,15762842],[32,11407477,6918984,18807750,11407477],[33,8565009,4253257,17247809,8565009],[34,5196970,2335149,11566069,5196970],[35,1950724,867795,4385049,1950724],[36,737558,324844,1674626,737558],[37,306893,122916,766243,306893]]}};
+
 const SAMPLE_NAMES={out:'Outfield (CB)',gk:'Goalkeeper',low:'Low-rated'};
 /* Full Potential values = what fm_editor/potential.project_attrs returns for these samples (display_value, 1-20); an attribute missing from POTV does not grow.
    (Generated from the app; regenerate if the projection changes. Hidden / footedness / lower-is-better never grow.) */
@@ -589,7 +667,7 @@ const ROLE_RATINGS={
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false};
+const S={nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -875,11 +953,48 @@ function tabProfile(){return profC()}
 const soonPage=(title,text)=>`<div class="soonpg"><span class="t">${title}</span><span class="chip soon">COMING SOON</span><span class="d">${text}</span></div>`;
 function tabContract(){
   /* Rows with no stored value show PENDING here (the app hides them when Settings > Show PENDING markers is off;
-     Start only when the save has it; the Transfer panel disappears when none of its rows are visible). No Bonuses panel. */
+     Start only when the save has it; the Transfer panel disappears when none of its rows are visible). No Bonuses panel.
+     Layout: Contract | Transfer side by side on top (118 px), the Value by age chart (4.2b) fills the rest: the tab fits 914 x 592 with no scrollbar.
+     Market value is always read from the save (value_est), as the app does; only wage / asking price / status stay PENDING until 'Real data'. */
   const d=D(),row=(l,v)=>v?kv(l,v):S.nopend?'':kv(l,pend);
-  const tr=[row('Market value',S.data?d.value:''),row('Asking price',''),row('Transfer / loan status','')].join('');
-  return `<div class="c-col"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',S.data?d.wage:'')}</div></div>
-    ${tr?`<div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${tr}</div></div>`:''}</div>`;
+  const tr=[row('Market value',S.nov?'':d.value),row('Asking price',''),row('Transfer / loan status','')].join('');
+  return `<div class="c-page"><div class="c-top"><div class="pn">${ph('Contract')}<div style="padding-bottom:10px">${kv('Until',d.until)}${d.start?kv('Start',d.start):''}${row('Wage',S.data?d.wage:'')}</div></div>
+    ${tr?`<div class="pn">${ph('Transfer')}<div style="padding-bottom:10px">${tr}</div></div>`:''}</div>${valueChart()}</div>`;
+}
+
+/* ---------- 4.2b VALUE BY AGE chart (see the VALUE BY AGE CHART block at the top for model, accuracy and the QPainter notes) ---------- */
+const VSK={vy:'young',vp:'prime',va:'old',vg:'oldgk'},VSF={young:'vy',prime:'vp',old:'va',oldgk:'vg'};
+const VC_EST="Estimated from how values changed over time in simulated FM24 careers; not FM's own formula.";
+const fmtM=v=>v>=1e7?'£'+Math.round(v/1e6)+'M':v>=1e6?'£'+(Math.round(v/1e5)/10)+'M':v>=1e3?'£'+Math.round(v/1e3)+'K':'£'+Math.round(v);
+function niceAxis(max){const raw=max/4,mag=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/mag,step=(m<=1?1:m<=2?2:m<=5?5:10)*mag;return{step,top:Math.ceil(max/step-1e-9)*step}}
+const tickM=(v,step)=>v===0?'£0':step>=1e6?'£'+Math.round(v/1e6)+'M':step>=1e5?'£'+(Math.round(v/1e5)/10)+'M':'£'+Math.round(v/1e3)+'K';
+function vcSVG(c){
+  const W=912,H=372,L=66,R=60,T=36,B=34,pw=W-L-R,phh=H-T-B,P=c.pts,n=P.length,E='#EAD95C',F='#52C287',O='#E0973C';
+  const {step,top}=niceAxis(Math.max(...P.map(p=>Math.max(p[1],c.full?p[4]:0)))*1.04);
+  const X=i=>L+(n>1?i*pw/(n-1):pw/2),Y=v=>T+phh-Math.min(v,top)/top*phh,f=x=>x.toFixed(1);
+  let g='';
+  for(let v=0;v<=top+1;v+=step)g+=`<line x1="${L}" x2="${L+pw}" y1="${f(Y(v)+.5)}" y2="${f(Y(v)+.5)}" stroke="${v?'#343740':'#454A58'}"/><text x="${L-10}" y="${f(Y(v)+4)}" text-anchor="end">${tickM(v,step)}</text>`;
+  P.forEach((p,i)=>{g+=`<text x="${f(X(i))}" y="${T+phh+20}" text-anchor="middle"${i?'':' style="fill:#fff;font-weight:700"'}>${p[0]}</text>`});
+  g+=`<polygon points="${P.map((p,i)=>f(X(i))+','+f(Y(p[3]))).join(' ')} ${P.map((p,i)=>[f(X(i)),f(Y(p[2]))]).reverse().map(a=>a.join(',')).join(' ')}" fill="rgba(234,217,92,.09)"/>`;
+  if(c.yl<=n-1){const x=X(c.yl),left=x>L+pw-200;g+=`<line x1="${f(x)}" x2="${f(x)}" y1="${T-10}" y2="${T+phh}" stroke="${O}" stroke-dasharray="4 3"/><text x="${f(x+(left?-6:6))}" y="${T-14}" text-anchor="${left?'end':'start'}" style="fill:${O}">Contract ends ${c.until}${c.yl<1?' (value is lower while it runs out)':''}</text>`}
+  if(c.full)g+=`<polyline points="${P.map((p,i)=>f(X(i))+','+f(Y(p[4]))).join(' ')}" fill="none" stroke="${F}" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>`;
+  g+=`<polyline points="${P.map((p,i)=>f(X(i))+','+f(Y(p[1]))).join(' ')}" fill="none" stroke="${E}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  P.forEach((p,i)=>{g+=`<circle cx="${f(X(i))}" cy="${f(Y(p[1]))}" r="${i?3:5}" fill="${E}"${i?'':' stroke="#14151A" stroke-width="2"'}/>`});
+  const dn=n>1&&Math.max(P[1][1],c.full?P[1][4]:0)>P[0][1];   // lines rise after Now -> label below the dot, else above
+  g+=`<text x="${f(X(0)+10)}" y="${f(Y(P[0][1])+(dn?22:-12))}" style="fill:#fff;font-weight:700">Now  ${fmtM(P[0][1])}</text>`;
+  const e=P[n-1];if(n>1){let ye=Y(e[1])+4,yf=Y(e[4])+4;if(c.full&&Math.abs(ye-yf)<14){if(ye>yf)ye=yf+14;else yf=ye+14}
+    g+=`<text x="${f(X(n-1)+9)}" y="${f(ye)}" style="fill:${E};font-weight:700">${fmtM(e[1])}</text>`;
+    if(c.full)g+=`<text x="${f(X(n-1)+9)}" y="${f(yf)}" style="fill:${F};font-weight:700">${fmtM(e[4])}</text>`}
+  const cw=n>1?pw/(n-1):pw;
+  P.forEach((p,i)=>{const k=i,t=i===0?`Age ${p[0]} (now)\nMarket value  ${fmtM(p[1])}`:`Age ${p[0]} (in ${k} year${k>1?'s':''})\nExpected  ${fmtM(p[1])}\nTypical range  ${fmtM(p[2])} - ${fmtM(p[3])}`+(c.full?`\nAt full potential  ${fmtM(p[4])}`:'');
+    g+=`<g><line class="vg" data-i="${i}" x1="${f(X(i))}" x2="${f(X(i))}" y1="${T}" y2="${T+phh}"/><rect class="vh" data-i="${i}" data-x="${f(X(i))}" data-y="${f(Y(p[1]))}" data-t="${t}" x="${f(X(i)-cw/2)}" y="${T}" width="${f(cw)}" height="${phh}"><title>${t}</title></rect></g>`});
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function valueChart(){
+  const c=S.nov?null:VC[S.vs||S.smp],est=`<span class="est" title="${VC_EST}">ESTIMATE</span>`;
+  if(!c)return `<div class="pn vcn">${ph('Value by age'+est)}<div class="empty"><b>No value curve</b><span>The save has no market value for this player (it is 0 or Not for Sale), so there is nothing to anchor an estimate on.</span></div></div>`;
+  const lg=`<span class="lg"><span><i style="background:#EAD95C"></i>Expected</span>${c.full?'<span><i class="d"></i>At full potential</span>':''}<span><i class="b"></i>Typical range</span></span>`;
+  return `<div class="pn vcn">${ph('Value by age'+est,lg)}${vcSVG(c)}<div class="fn">${S.vs?`<em>Review sample: ${c.label}. The header above is the fictional sample.</em><br>`:''}${VC_EST} Based on 132,000 observed player value changes in 11 saves of 5 games, anchored on his current value. The band holds about half of real outcomes. Assumes he renews his contract.${c.full?'':' No full-potential line: past 28 or at potential.'}</div></div>`;
 }
 
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
@@ -1021,8 +1136,8 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['fam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['fam','Dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['nov','fam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['nov','No market value'],['fam','Dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
@@ -1031,6 +1146,8 @@ function render(){
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
   Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;S.rp=null;render()};sm.appendChild(b)});
+  const vsg=document.getElementById('vsSeg');vsg.innerHTML='';
+  [[null,'Header'],['young','Young'],['prime','Prime'],['old','Ageing'],['oldgk','Ageing GK']].forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.vs===k)b.className='on';b.onclick=()=>{S.vs=k;S.tab='contract';render()};vsg.appendChild(b)});
   const tx=document.getElementById('texSeg');tx.innerHTML='';
   Object.entries(THEMES).forEach(([k,t])=>{const b=document.createElement('button');b.textContent=t.name;if(S.tex===k)b.className='on';b.onclick=()=>{S.tex=k;render()};tx.appendChild(b)});
   const hs=document.getElementById('hdrSeg');hs.innerHTML='';
@@ -1042,7 +1159,7 @@ function render(){
   [['hgp','hgpSeg'],['hgc','hgcSeg']].forEach(([k,id])=>seg(id,[['none','Not set'],['set','Set'],['queued','Queued']],S[k]?'set':S['q'+k]?'queued':'none',v=>{S[k]=v==='set';S['q'+k]=v==='queued'}));
   seg('wtSeg',[['fms','FMScout'],['eq','Equal'],['pos','Possession'],['dir','Direct']],wt(),v=>{S.weq=v==='eq';S.wpos=v==='pos';S.wdir=v==='dir'});
   seg('qxSeg',[[0,'0'],[1,'1'],[3,'3']],S.qx,v=>{S.qx=v});
-  const fl=[S.smp!=='out'?S.smp:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null,S.tab==='role'&&S.rp?'rp'+S.rp:null].filter(Boolean);
+  const fl=[S.smp!=='out'?S.smp:null,S.vs?VSF[S.vs]:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null,S.tab==='role'&&S.rp?'rp'+S.rp:null].filter(Boolean);
   const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   // Role Rating: dot tooltip bubble (review aid; real app QToolTip). +tips pins the selected dot's tip.
@@ -1052,6 +1169,15 @@ function render(){
       tip.textContent=g.dataset.t;tip.style.display='block';tip.style.left=Math.max(95,Math.min(pr.width-95,x))+'px';tip.style.top=(y+(up?-26:26))+'px';tip.style.transform=up?'translate(-50%,-100%)':'translateX(-50%)'};
     rpn.querySelectorAll('.rdg').forEach(g=>{g.onmouseenter=()=>place(g);g.onmouseleave=()=>{tip.style.display='none'}});
     if(S.tips){const g=rpn.querySelector('.rdg.sel');if(g)place(g)}}
+  // Value by age: hover bubble (review aid; real app QToolTip). +tips pins the third column's tip.
+  const vcn=document.querySelector('.vcn');
+  if(vcn&&vcn.querySelector('.vh')){const tip=document.createElement('div');tip.className='vtip';vcn.appendChild(tip);
+    const show=r=>{const sv=vcn.querySelector('svg').getBoundingClientRect(),pr=vcn.getBoundingClientRect(),x=sv.left-pr.left+ +r.dataset.x;
+      vcn.querySelectorAll('.vg').forEach(g=>g.style.display='none');vcn.querySelector('.vg[data-i="'+r.dataset.i+'"]').style.display='block';
+      tip.textContent=r.dataset.t;tip.style.display='block';const w=tip.offsetWidth;tip.style.left=Math.max(6,Math.min(pr.width-w-6,x-w/2))+'px';tip.style.top=(sv.top-pr.top+ +r.dataset.y-tip.offsetHeight-8)+'px'};
+    const hide=()=>{tip.style.display='none';vcn.querySelectorAll('.vg').forEach(g=>g.style.display='none')};
+    vcn.querySelectorAll('.vh').forEach(r=>{r.onmouseenter=()=>show(r);r.onmouseleave=hide});
+    if(S.tips){const r=vcn.querySelectorAll('.vh')[Math.min(3,vcn.querySelectorAll('.vh').length-1)];if(r)show(r)}}
   // cosmetic hover link: list row -> pitch dot
   document.querySelectorAll('.pr[data-p]').forEach(r=>{
     r.onmouseenter=()=>{r.classList.add('hl');const g=document.querySelector(`.dg[data-p="${r.dataset.p}"]`);if(!g)return;const tx=g.querySelector('text');
@@ -1070,8 +1196,8 @@ document.addEventListener('click',e=>{
 function fromHash(){
   const h=location.hash.replace('#','').split('+');
   if(TABS.some(t=>t.key===h[0]))S.tab=h[0];
-  FLAGS.forEach(f=>S[f]=false);S.smp='out';S.qx=0;S.rp=null;
-  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f;const m=/^qx(\d+)$/.exec(f);if(m)S.qx=+m[1];const r=/^rp([A-Z]+)$/.exec(f);if(r&&POS.includes(r[1]))S.rp=r[1]});
+  FLAGS.forEach(f=>S[f]=false);S.smp='out';S.vs=null;S.qx=0;S.rp=null;
+  h.slice(1).forEach(f=>{if(FLAGS.includes(f))S[f]=true;if(f==='gk'||f==='low')S.smp=f;if(VSK[f])S.vs=VSK[f];const m=/^qx(\d+)$/.exec(f);if(m)S.qx=+m[1];const r=/^rp([A-Z]+)$/.exec(f);if(r&&POS.includes(r[1]))S.rp=r[1]});
   render();
 }
 window.addEventListener('hashchange',()=>{const cur=location.hash;fromHash()});
