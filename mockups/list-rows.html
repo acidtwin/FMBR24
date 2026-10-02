@@ -14,7 +14,8 @@ CELL SPEC (translated mechanically in gui/main_window.py: _FaceNameDelegate, _Cl
     tile background #292B32 (= the player window avatar box --elev); picture = the 260x310 cutout, scaled to FILL the tile
       (KeepAspectRatioByExpanding, anchored top-centre = object-fit:cover; object-position:50% 0), the same crop as the avatar
     no picture (not in any pack / index still loading): the avatar silhouette, 14px glyph (viewBox 24, stroke #525B68 1.6), centred in the tile
-    text starts at cell left + 10 + 20 + 8 = 38.  Column width 178 (was 150): the text space stays 130, so no layout jump
+    text starts at cell left + 10 + 20 + 8 = 38 (the app's own item text sits 3 px right of the 10 px inset, so the app's unfaced text starts at 13 and the column grows by 25, not 28: the text space stays the same, no layout jump)
+    Name column 175 (was 150)
     faces OFF or no facepack on this machine: no tile, text at 10, Name 150 as before
     the queued 3px yellow bar stays at x 0..3 of the cell (the tile starts at 10, no overlap); selected row #2A1B4A under the tile
   DEV cell = CA / PA stars (fm_editor/abilitystars.py dev_stars: value / 4, half stars, ties up, clamp .5..5), same 5 stars 10px / gap 2,
@@ -80,7 +81,7 @@ const pic=(c)=>`<svg class="pic" viewBox="0 0 260 310" preserveAspectRatio="xMid
 const face=(c)=>NOF?'':`<div class="face">${c?pic(c):sil}</div>`;
 const badge=(c,name)=>c?`<svg class="b" viewBox="0 0 22 22"><path d="M3 2h16v10c0 5-5 8-8 9-3-1-8-4-8-9z" fill="${c}"/><circle cx="11" cy="9" r="3" fill="#fff" opacity=".85"/></svg>`:`<div class="ct">${name}</div>`;
 const flag=(c,emoji)=>c?`<span class="f"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="10" fill="${c}"/><path d="M11 1v20M1 11h20" stroke="#fff" stroke-width="2" opacity=".8"/></svg></span>`:`<span class="em">${emoji}</span>`;
-const WN=NOF?150:178, WC=NOB?160:40, WS=NUMS?45:76;
+const WN=NOF?150:175, WC=NOB?160:40, WS=NUMS?45:76;
 // name, inj, pos, ca, pa, dev, age, nation(c,emoji,name), hgp, club(c,name), ctr, faceColour
 const rows=[['Kylian Mbappe','','ST',187,188,17,25,['#1d6fb8','F','France'],'HGP',['#d4a017','Real Madrid'],'2029','#c68642'],
  ['Jude Bellingham','','AMC',172,190,18,21,['#c8102e','E','England'],'',['#d4a017','Real Madrid'],'2029','#e0ac69'],

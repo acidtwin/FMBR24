@@ -1030,9 +1030,13 @@ class _HGBadgeDelegate(_RowMarkDelegate):
 
 
 # -- Pictures in the player / staff lists (mockups/list-rows.html): face before the name, club badge, nation flag --------------
-_FACE_W, _FACE_H, _FACE_GAP, _FACE_X = 20, 24, 8, 10     # tile 20x24, 8 to the text, x = the cell's own text inset
+_FACE_W, _FACE_H, _FACE_X = 20, 24, 10                   # tile 20x24 at x = the cell's own text inset
+_FACE_ICON_W = 19    # space reserved before the text: the item style adds 3 px text margins around it, so the text starts at
+                     # x = 10 (padding) + 3 + 19 + 6 = 38 = tile end (30) + 8, the mockup's gap
+_FACE_COL_EXTRA = 25  # Name column growth for the tile (text start 13 -> 38): the text space stays the same
 _BADGE_PX, _BADGE_COL_W, _NAME_COL_W = 22, 40, 150       # club badge 22x22 in a 40 px column; Name column base width (faces add 28)
 _FLAG_PX = 22
+_COMP_LOGO_PX = 16                                       # competition logo before the Club page's League position text
 _TILE_BG = QColor('#292B32')                             # = the player window avatar box
 _SILHOUETTE_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#525B68" '
                    'stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>')
@@ -1085,8 +1089,8 @@ class _FaceNameDelegate(_RowMarkDelegate):
         super().initStyleOption(option, index)
         if faces_active():
             option.features |= QStyleOptionViewItem.ViewItemFeature.HasDecoration
-            option.icon = _spacer_icon(_FACE_W + _FACE_GAP)
-            option.decorationSize = QSize(_FACE_W + _FACE_GAP, 1)
+            option.icon = _spacer_icon(_FACE_ICON_W)
+            option.decorationSize = QSize(_FACE_ICON_W, 1)
 
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
@@ -1193,7 +1197,7 @@ def _club_w(text_w=160):
 
 def _name_w(base=_NAME_COL_W):
     """Name column width: the base text width plus the face tile when faces show (text space unchanged)."""
-    return base + (_FACE_W + _FACE_GAP if faces_active() else 0)
+    return base + (_FACE_COL_EXTRA if faces_active() else 0)
 
 
 def _hg_apply(item, kind, set_, queued):
@@ -2575,9 +2579,25 @@ class MainWindow(QMainWindow):
     _MEDIA_TABLES = (('_table', 0, None), ('_reports_table', 0, 9), ('_players_table', 0, 9), ('_shortlist_table', 0, 1),
                      ('_staff_table', 0, 1), ('_staff_shortlist_table', 0, 1), ('_club_staff_table', 0, None))
 
+    def _pin_club_col(self, name):
+        """After a resizeColumnToContents pass: the badge column stays 40 px (the header hint would widen it)."""
+        t = getattr(self, name, None)
+        cc = next((c for n, _nc, c in self._MEDIA_TABLES if n == name), None)
+        if t is not None and cc is not None and badges_active():
+            t.setColumnWidth(cc, _BADGE_COL_W)
+
+    def _note_media(self, name):
+        """A list's Name / Club widths were just set for the CURRENT picture layout (_name_w / _club_w): remember that, so
+        _refresh_media_cols only applies a change."""
+        self.__dict__.setdefault('_media_cols', {})[name] = {'face': faces_active(), 'badge': badges_active(), 'prev': None}
+        t = getattr(self, name, None)
+        cc = next((c for n, _nc, c in self._MEDIA_TABLES if n == name), None)
+        if t is not None and cc is not None:
+            self._set_club_header(t, cc, badges_active())
+
     def _refresh_media_cols(self):
-        """FaceService.ready (index loaded / Settings changed): Name column +28 px for the face tile, Club column 40 px when it shows
-        badges (and back), then repaint. The per-table state lives in self._media_cols (the widths already in the table)."""
+        """FaceService.ready (index loaded / Settings changed): Name column + _FACE_COL_EXTRA px for the face tile, Club column 40 px when it shows
+        badges (and back to its text width), then repaint. The per-table layout state lives in self._media_cols."""
         try:
             st = self.__dict__.setdefault('_media_cols', {})
             face, badge = faces_active(), badges_active()
@@ -2585,17 +2605,18 @@ class MainWindow(QMainWindow):
                 t = getattr(self, name, None)
                 if t is None:
                     continue
-                s = st.setdefault(name, {'face': False, 'badge': None})
+                s = st.setdefault(name, {'face': False, 'badge': False, 'prev': None})
                 if face != s['face']:
-                    t.setColumnWidth(ncol, max(40, t.columnWidth(ncol) + (_FACE_W + _FACE_GAP) * (1 if face else -1)))
+                    t.setColumnWidth(ncol, max(40, t.columnWidth(ncol) + _FACE_COL_EXTRA * (1 if face else -1)))
                     s['face'] = face
                 if ccol is not None:
-                    if badge and s['badge'] is None:
-                        s['badge'] = t.columnWidth(ccol)
+                    if badge and not s['badge']:
+                        s['prev'] = t.columnWidth(ccol)
                         t.setColumnWidth(ccol, _BADGE_COL_W)
-                    elif not badge and s['badge'] is not None:
-                        t.setColumnWidth(ccol, s['badge'])
-                        s['badge'] = None
+                    elif not badge and s['badge']:
+                        t.setColumnWidth(ccol, s['prev'] or 160)
+                        s['prev'] = None
+                    s['badge'] = badge
                     self._set_club_header(t, ccol, badge)
                 t.viewport().update()
         except RuntimeError:
@@ -2616,12 +2637,25 @@ class MainWindow(QMainWindow):
             if badge:
                 it.setToolTip('Club')
 
+    def _refresh_league_logo(self):
+        """Competition logo before the Club page's League position text; hidden without a logo for the competition (key = the
+        comp's UniqueID kept on club['league'])."""
+        try:
+            lg = (self._current_club or {}).get('league') or {}
+            px = _faces_service().comp_pixmap(lg.get('comp_uid'), _COMP_LOGO_PX, self.devicePixelRatioF()) if lg else None
+            if px is not None:
+                self._club_league_logo.setPixmap(px)
+            self._club_league_logo.setVisible(px is not None and not self._club_info_vals['League position'].isHidden())
+        except (RuntimeError, AttributeError):
+            pass   # window closing / page not built yet
+
     def _refresh_badges(self):
         """FaceService.ready (index / club key table loaded, or Settings changed): re-apply the club badges."""
         try:
             if self._hdr_key in ('club', 'squad', 'club_staff') and self._current_club:
                 self._update_header_for_view(self._hdr_key)
             self._refresh_si_badge()
+            self._refresh_league_logo()
         except RuntimeError:
             pass   # window closing
 
@@ -3013,7 +3047,14 @@ class MainWindow(QMainWindow):
         self._club_info_vals = {}
         for label in ('Status', 'Reputation', 'Stadium', 'League position'):
             self._club_info_vals[label] = _club_kv_value('')
-            col2_l.addWidget(_club_kv_row(label, self._club_info_vals[label]))
+            row = _club_kv_row(label, self._club_info_vals[label])
+            if label == 'League position':   # competition logo before the text (mockups/club-page-design-a.html, Settings > Show nation flags)
+                self._club_league_logo = QLabel()
+                self._club_league_logo.setFixedSize(_COMP_LOGO_PX, _COMP_LOGO_PX)
+                self._club_league_logo.setStyleSheet('background:transparent;')
+                self._club_league_logo.hide()
+                row.layout().insertWidget(2, self._club_league_logo)
+            col2_l.addWidget(row)
         self._club_status_val = self._club_info_vals['Status']
         col2_l.addWidget(_club_sec_hdr('Finances', sub=True))
         self._club_fin_vals = {}
@@ -3471,6 +3512,7 @@ class MainWindow(QMainWindow):
                             f"{_ordinal(lg['pos'])} of {lg['of']} · {lg['PTS']} pts from {lg['P']}")
         else:
             _club_hide_row(iv['League position'])
+        self._refresh_league_logo()
         fin = club.get('fin') or {}
         for label, key, pw in (('Transfer budget', 'transfer_budget', False),
                                ('Wage budget', 'wage_budget', True),
@@ -3720,6 +3762,7 @@ class MainWindow(QMainWindow):
         self._staff_model, self._staff_table = self._make_scouting_view(
             self._make_staff_model(), _STAFF_COL_TOOLTIPS,
             {0: _name_w(200), 1: _club_w(), 2: 50, 3: 40}, 35, sort=(-1, Qt.SortOrder.AscendingOrder))
+        self._note_media('_staff_table')
         _set_media_delegates(self._staff_table, 0, 1, 2)
         self._staff_table.doubleClicked.connect(self._on_staff_double_click)
         vbox.addWidget(self._staff_table, 1)
@@ -3865,6 +3908,8 @@ class MainWindow(QMainWindow):
         tbl.setSortingEnabled(True)
         for i in range(tbl.columnCount()):
             tbl.resizeColumnToContents(i)
+        if tbl is getattr(self, '_staff_shortlist_table', None):
+            self._pin_club_col('_staff_shortlist_table')
 
     def _populate_staff_table(self):
         """Apply the Staff age filter to the WHOLE staff set (no cap) and refresh counts."""
@@ -4051,6 +4096,7 @@ class MainWindow(QMainWindow):
         for i, cw in widths.items():
             self._club_staff_table.setColumnWidth(i, cw)
         _set_media_delegates(self._club_staff_table, 0, None, 1)
+        self._note_media('_club_staff_table')
         shdr.setSectionsMovable(True)
         shdr.setFirstSectionMovable(False)
         shdr.setStretchLastSection(False)
@@ -4254,6 +4300,7 @@ class MainWindow(QMainWindow):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         for i, cw in {0: _name_w(), 1: _club_w(), 2: 55, 3: 55, 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
+        self._note_media('_shortlist_table')
         self._shortlist_table.setItemDelegate(_RowMarkDelegate(self._shortlist_table))
         _set_star_delegates(self._shortlist_table, 4, 5)   # (no Dev column in the Player Shortlist)
         _set_media_delegates(self._shortlist_table, 0, 1, 7)
@@ -4370,6 +4417,7 @@ class MainWindow(QMainWindow):
         self._shortlist_table.setSortingEnabled(True)
         for c in range(self._shortlist_table.columnCount()):
             self._shortlist_table.resizeColumnToContents(c)
+        self._pin_club_col('_shortlist_table')
         n = len(people)
         self._shortlist_stack.setCurrentIndex(1 if n > 0 else 0)
 
@@ -4462,6 +4510,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(hdr)
 
         self._staff_shortlist_table = self._make_staff_table()
+        self._note_media('_staff_shortlist_table')
         self._staff_shortlist_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._staff_shortlist_table.customContextMenuRequested.connect(
             lambda pos: self._shortlist_context_menu(
@@ -4679,6 +4728,7 @@ class MainWindow(QMainWindow):
             self._reports_table.setColumnWidth(i, cw)
         for i in range(11, len(cols)):
             self._reports_table.setColumnWidth(i, 35)
+        self._note_media('_reports_table')
         rhdr.setSectionsMovable(True)
         rhdr.setFirstSectionMovable(False)
         rhdr.setStretchLastSection(True)
@@ -4837,6 +4887,7 @@ class MainWindow(QMainWindow):
         # Same as Players; safe here because reports are capped at 200 rows.
         for i in range(self._reports_table.columnCount()):
             self._reports_table.resizeColumnToContents(i)
+        self._pin_club_col('_reports_table')
         info = f'{len(players):,} players'
         if self._current_report_key == 'best_role':
             preset = self._weights_lbl.text().strip('[]')
@@ -5036,6 +5087,7 @@ class MainWindow(QMainWindow):
         self._players_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._players_table))
         _set_star_delegates(self._players_table, 3, 4, 5)
         _set_media_delegates(self._players_table, 0, 9, 7)
+        self._note_media('_players_table')
         self._players_table.horizontalHeader().setStretchLastSection(True)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -5322,6 +5374,7 @@ class MainWindow(QMainWindow):
         # Attr columns: 35px each
         for i in range(11, len(cols)):
             self._table.setColumnWidth(i, 35)
+        self._note_media('_table')
         for i, col in enumerate(cols):
             if col in _TT:
                 hdr_item = self._table.horizontalHeaderItem(i)
@@ -5547,6 +5600,8 @@ class MainWindow(QMainWindow):
                 tv.resizeColumnToContents(c)
                 tv.setColumnWidth(c, max(tv.columnWidth(c), floor.get(c, 0)))
                 yield 93 + 7 * c // tv.model().columnCount() // 2
+        self._note_media('_players_table')    # widths now fit the layout that is active
+        self._note_media('_staff_table')
         yield 100
 
     def _reset_session_state(self, result):
