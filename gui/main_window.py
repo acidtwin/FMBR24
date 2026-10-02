@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QInputDialog, QGridLayout, QBoxLayout, QTableView, QStyle, QStyleOptionViewItem, QApplication,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QRectF, QEvent, QElapsedTimer
-from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QAction, QLinearGradient, QBrush, QPen, QImageReader, QImage
 
 from gui.icon import logo_pixmap
 from gui.theme import COLORS
@@ -1849,11 +1849,68 @@ class MainWindow(QMainWindow):
         line.setStyleSheet(f"background:{COLORS['border']};")
         return line
 
-    def _make_nav_btn(self, svg_tpl: str, label: str, callback) -> QPushButton:
+    _NAV_ICON_PX = 20          # sidebar page icon box: the glyph is trimmed to its visible bounds and fitted inside
+    _NAV_ICON_OPACITY = {'normal': 0.85, 'hover': 1.0, 'checked': 1.0, 'disabled': 0.32}
+    _NAV_ICONS = {}
+
+    def _nav_page_icon(self, name):
+        """QIcon from resources/icons/pages/<name>.png (the same icons as the page headers) for the sidebar:
+        trimmed to the glyph, fitted to _NAV_ICON_PX, with normal / hover / checked / disabled opacities. None if missing."""
+        ic = self._NAV_ICONS.get(name)
+        if ic is not None:
+            return ic or None
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'icons', 'pages', name + '.png')
+        src = QImage(path)
+        if src.isNull():
+            self._NAV_ICONS[name] = False
+            return None
+        # trim fully transparent margins (alpha bounding box), keep the glyph centred
+        w, h = src.width(), src.height()
+        x0, y0, x1, y1 = w, h, -1, -1
+        for y in range(0, h, 2):
+            for x in range(0, w, 2):
+                if (src.pixel(x, y) >> 24) & 0xFF > 8:
+                    x0, x1, y0, y1 = min(x0, x), max(x1, x), min(y0, y), max(y1, y)
+        if x1 < 0:
+            self._NAV_ICONS[name] = False
+            return None
+        glyph = src.copy(max(0, x0 - 2), max(0, y0 - 2), min(w, x1 + 4) - max(0, x0 - 2), min(h, y1 + 4) - max(0, y0 - 2))
+        dpr = self.devicePixelRatioF()
+        box = round(self._NAV_ICON_PX * dpr)
+        scaled = QPixmap.fromImage(glyph).scaled(box, box, Qt.AspectRatioMode.KeepAspectRatio,
+                                                 Qt.TransformationMode.SmoothTransformation)
+
+        def variant(opacity):
+            out = QPixmap(box, box)
+            out.fill(Qt.GlobalColor.transparent)
+            q = QPainter(out)
+            q.setOpacity(opacity)
+            q.drawPixmap((box - scaled.width()) // 2, (box - scaled.height()) // 2, scaled)
+            q.end()
+            out.setDevicePixelRatio(dpr)
+            return out
+
+        o = self._NAV_ICON_OPACITY
+        ic = QIcon()
+        ic.addPixmap(variant(o['normal']), QIcon.Mode.Normal, QIcon.State.Off)
+        ic.addPixmap(variant(o['hover']), QIcon.Mode.Active, QIcon.State.Off)
+        ic.addPixmap(variant(o['checked']), QIcon.Mode.Normal, QIcon.State.On)
+        ic.addPixmap(variant(o['checked']), QIcon.Mode.Active, QIcon.State.On)
+        ic.addPixmap(variant(o['disabled']), QIcon.Mode.Disabled, QIcon.State.Off)
+        ic.addPixmap(variant(o['disabled']), QIcon.Mode.Disabled, QIcon.State.On)
+        self._NAV_ICONS[name] = ic
+        return ic
+
+    def _make_nav_btn(self, svg_tpl: str, label: str, callback, icon_name=None) -> QPushButton:
         btn = QPushButton(f'  {label}')
         btn.setCheckable(True)
-        btn.setIcon(_svg_icon(svg_tpl, COLORS['text_secondary'], 15))
-        btn.setIconSize(QSize(15, 15))
+        page_icon = self._nav_page_icon(icon_name) if icon_name else None
+        if page_icon is not None:
+            btn.setIcon(page_icon)
+            btn.setIconSize(QSize(self._NAV_ICON_PX, self._NAV_ICON_PX))
+        else:   # no page icon: the old generic SVG
+            btn.setIcon(_svg_icon(svg_tpl, COLORS['text_secondary'], 15))
+            btn.setIconSize(QSize(15, 15))
         btn.clicked.connect(callback)
         btn.setStyleSheet(f"""
             QPushButton {{
@@ -2202,7 +2259,7 @@ class MainWindow(QMainWindow):
         return hero
 
     _PAGE_ICONS = {}   # name -> QPixmap cache for the header badge icons (resources/icons/pages/<name>.png)
-    _PAGE_ICON_PX = 46  # logical size of the icon CELL; the glyph fills ~62 % of it (about 28 px) inside the 56 px badge circle
+    _PAGE_ICON_PX = 56  # logical size of the icon CELL (= the badge label); the glyph fills ~62 % of it (about 35 px), no circle behind it
 
     def _page_icon(self, name):
         px = self._PAGE_ICONS.get(name)
@@ -2219,7 +2276,7 @@ class MainWindow(QMainWindow):
             self._PAGE_ICONS[name] = px
         return px
 
-    _HEADER_LOGO_PX = 40   # club badge box inside the 56 px header circle (mockups/club-page-design-a.html .a-badge-ph .logo)
+    _HEADER_LOGO_PX = 50   # club badge box in the 56 px header badge label (no circle) (mockups/club-page-design-a.html .a-badge-ph .logo)
 
     def _club_badge_px(self, club, size):
         """Club badge pixmap for `size` logical px (None: no club / no logo pack / no logo / still loading / setting off)."""
@@ -2243,10 +2300,12 @@ class MainWindow(QMainWindow):
             if ipx is not None and not ipx.isNull():   # page icon instead of the initial (falls back to the letter)
                 self._header_badge_lbl.setText('')
                 self._header_badge_lbl.setPixmap(ipx)
+                self._header_badge_lbl.setStyleSheet("background: transparent; border: none;")   # no circle behind an icon
             lpx = self._club_badge_px(club, self._HEADER_LOGO_PX)   # the club's own badge replaces the page icon when found
             if lpx is not None:
                 self._header_badge_lbl.setText('')
                 self._header_badge_lbl.setPixmap(lpx)
+                self._header_badge_lbl.setStyleSheet("background: transparent; border: none;")   # no circle behind a club badge
 
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
@@ -2440,6 +2499,8 @@ class MainWindow(QMainWindow):
         # Main nav
         vbox.addWidget(self._make_section_label('MAIN'))
         self._nav_btns = {}
+        _nav_icon_names = {'save_info': 'save_info', 'club': 'club', 'squad': 'squads', 'club_staff': 'club_staff',
+                           'shortlist': 'player_shortlist', 'staff_shortlist': 'staff_shortlist'}
         for key, svg, label in [
             ('save_info',  _SVG_INFO,      'Save Info'),
             ('club',       _SVG_CLUB,      'Club'),
@@ -2449,9 +2510,9 @@ class MainWindow(QMainWindow):
             ('staff_shortlist', _SVG_SHORTLIST, 'Staff Shortlist'),
         ]:
             if key == 'squad':
-                btn = self._make_nav_btn(svg, label, self._nav_to_squad_view)
+                btn = self._make_nav_btn(svg, label, self._nav_to_squad_view, _nav_icon_names[key])
             else:
-                btn = self._make_nav_btn(svg, label, lambda checked, k=key: self._nav_to(k))
+                btn = self._make_nav_btn(svg, label, lambda checked, k=key: self._nav_to(k), _nav_icon_names[key])
             self._nav_btns[key] = btn
             vbox.addWidget(btn)
         self._nav_btns['save_info'].setEnabled(False)
@@ -2463,12 +2524,12 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_section_label('SCOUTING'))
 
         self._players_nav_btn = self._make_nav_btn(
-            _SVG_SQUAD, 'Players', lambda checked: self._open_players_view())
+            _SVG_SQUAD, 'Players', lambda checked: self._open_players_view(), 'players')
         self._players_nav_btn.setEnabled(False)
         vbox.addWidget(self._players_nav_btn)
 
         self._scouting_staff_nav_btn = self._make_nav_btn(
-            _SVG_STAFF, 'Staff', lambda checked: self._nav_to('staff'))
+            _SVG_STAFF, 'Staff', lambda checked: self._nav_to('staff'), 'staff')
         self._scouting_staff_nav_btn.setEnabled(False)
         vbox.addWidget(self._scouting_staff_nav_btn)
 
@@ -2481,14 +2542,15 @@ class MainWindow(QMainWindow):
             ('best_pos',   'Best in Position'),
             ('best_role',  'Best by Role'),
         ]:
-            btn = self._make_nav_btn(_SVG_REPORT, label, lambda checked, k=key: self._run_report(k))
+            btn = self._make_nav_btn(_SVG_REPORT, label, lambda checked, k=key: self._run_report(k),
+                                     _REPORT_ICONS.get(key))
             btn.setEnabled(False)
             self._report_btns[key] = btn
             vbox.addWidget(btn)
 
         vbox.addWidget(self._make_hline())
         vbox.addWidget(self._make_section_label('STAFF REPORTS'))
-        staff_rpt_btn = self._make_nav_btn(_SVG_REPORT, 'Coming Soon', lambda checked: None)
+        staff_rpt_btn = self._make_nav_btn(_SVG_REPORT, 'Coming Soon', lambda checked: None, 'staff_reports')
         staff_rpt_btn.setEnabled(False)
         vbox.addWidget(staff_rpt_btn)
 
