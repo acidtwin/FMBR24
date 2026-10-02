@@ -171,16 +171,29 @@ def fmt_wage(w):
     return '£' + t.replace('.0M', 'M').replace('.0K', 'K') + ' p/w'
 
 
+NOT_FOR_SALE = 300_000_000      # stored value of a 'Not for Sale' player: a flag, not a price
+
+
 def fmt_value(v):
     """Stored transfer value (GBP point value, u32 at attributes+54) -> '£241.3M'. The game shows a range around
-    it; 300,000,000 = 'Not for Sale'; 0 or > 300M = no value."""
-    if not v or v > 300_000_000:
+    it; 300,000,000 = 'Not for Sale' (no number: see transfer_status); 0 or > 300M = no value."""
+    if not v or v >= NOT_FOR_SALE:
         return None
-    if v == 300_000_000:
-        return 'Not for Sale'
     if v >= 1_000_000:
         return ('£%.1fM' % (v / 1e6)).replace('.0M', 'M')
     return ('£%.0fK' % (v / 1e3)) if v >= 1000 else '£%d' % v
+
+
+def transfer_status(person, save_data):
+    """Availability row of the Transfer panel, or None (= PENDING: listed / loan-listed / asking price are not in the save).
+    'On loan from <parent club>' when find_loans set `loan_parent` (squad club != contract club); plain 'On loan' when
+    that club id is not in the club list; else 'Not for sale' when the stored value is exactly 300,000,000.
+    A loanee who is also Not for sale shows the loan (the Market value row still shows '-')."""
+    par = person.get('loan_parent')
+    if par is not None:
+        c = next((c for c in (save_data or {}).get('clubs', []) if c.get('id') == par), None)
+        return f"On loan from {c['name']}" if c else 'On loan'
+    return 'Not for sale' if person.get('value_est') == NOT_FOR_SALE else None
 
 
 def player_extra_data(person, save_data):
@@ -189,12 +202,14 @@ def player_extra_data(person, save_data):
         wage       e.g. '£100K p/w'          value      e.g. '£88M - £97M'
         height_cm  int                        weight_kg  int
         traits     list[str] of trait labels from person['trait_mask'] (A/B names, else 'Trait #n')
+        transfer_status  'On loan from X' / 'On loan' / 'Not for sale' (None = PENDING)   not_for_sale  bool (Market value shows '-')
         history    optional override of the History tab (dict like fm_editor.history.career_for_person); None = the
                    window computes it lazily from the install DB + save (fm_editor/history.py)
     """
     mask = person.get('trait_mask')
     traits = trait_names(mask) if mask is not None else None     # None = old cache / unknown -> PENDING
-    return {'wage': fmt_wage(person.get('wage_week')), 'value': fmt_value(person.get('value_est')), 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
+    return {'wage': fmt_wage(person.get('wage_week')), 'value': fmt_value(person.get('value_est')),
+            'not_for_sale': person.get('value_est') == NOT_FOR_SALE, 'transfer_status': transfer_status(person, save_data), 'height_cm': person.get('height_cm'), 'weight_kg': person.get('weight_kg'), 'traits': traits, 'history': None}
 
 
 
@@ -1601,6 +1616,13 @@ class PlayerWindow(QDialog):
         for label, key in (('Market value', 'value'), ('Asking price', 'asking_price'),
                            ('Transfer / loan status', 'transfer_status')):
             val = d.get(key)
+            if key == 'value' and d.get('not_for_sale'):        # the 300M is a flag: muted '-', the status row says why
+                val = _lab('-', 'pwWord')
+                val.setToolTip('Not for sale: the save stores no market value for this player.')
+            elif key == 'transfer_status' and val:              # long club names elide (mockup .kv .r), full text in the tip
+                val = _ElideLabel(val, 'pwKvR', natural=True)
+                val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                val.setToolTip(val._full)
             rows.append((label, val if val else self._pend_chip(), not val))
         for i, (label, right, pend) in enumerate(rows):
             v.addWidget(self._kv(label, right, i % 2 == 1, pending=pend))

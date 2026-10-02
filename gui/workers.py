@@ -131,12 +131,16 @@ class ParseWorker(QThread):
             employment = find_employment(b, people)
 
             self._emit("Scanning contract dates...", 92)
-            from fm_editor.gamedb import find_contract_blocks
-            contracts = find_contract_blocks(b, people)  # real block (old 0x6a record = last evaluation month)
+            from fm_editor.gamedb import find_contract_blocks, find_loans
+            teams = {}  # contract-club team id per person (parent club of a loan)
+            contracts = find_contract_blocks(b, people, teams)  # real block (old 0x6a record = last evaluation month)
+            loans = find_loans(teams, squads, clubs)            # {person_id: parent club id}
             for p in people:
                 c = contracts.get(p.get('id', -1))
                 if c:
                     p.update(c)
+                if p.get('id', -1) in loans:
+                    p['loan_parent'] = loans[p['id']]
 
             self._emit("Scanning club staff arrays...", 93)
             club_staff = find_club_staff(b, clubs, people, abilities, names_start)

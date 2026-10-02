@@ -39,7 +39,7 @@ The free, open, Linux-native FM24 save browser: look first, then decide. No need
 - Player window: header with CA/PA/Dev Rate (stars or numbers, Settings), tabs Profile, Contract & Transfer (with a value-by-age trend chart: an estimate anchored on the stored value, not a price), Positions, Role Rating (role percentages per position, pitch view; the role lists are not yet verified in game), Training (recommended traits), History; six-axis radar, Current | Full Potential projection (display only), season stats, traits and personality, texture themes. General Rating is a placeholder
 - HGP (secondary-nation record) and HGC (training record) patching: pills in the player window, Make HGP / Make HGC in Squads, queued then written by Save Changes; only for human-managed clubs
 - Search routes club -> Club page, player -> Players, staff -> Staff; Back/Forward history; Settings page; a page icon in each header; busy veil during Save/Reload
-- Not stored in the save: player photos, staff reputation, club facilities/region/founded, contract bonuses/clauses, hidden player reputation. Transfer data: 'Not for Sale' (value 300,000,000) and loans are inferable, asking price/listing status/contract type are not found yet (next: controlled experiment saves)
+- Not stored in the save: player photos, staff reputation, club facilities/region/founded, contract bonuses/clauses, hidden player reputation. Transfer data: 'Not for Sale' (value 300,000,000) and 'On loan from <club>' are shown in the Transfer panel; asking price/listing status/contract type are not found yet (next: controlled experiment saves)
 - Platform: Linux desktop (Windows .exe planned at 1.0), PyQt6, dark FM24-style skin (QSS)
 
 ## Evidence on Hand
