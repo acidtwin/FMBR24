@@ -16,6 +16,7 @@ from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPixmap, QPainter, Q
 from gui.icon import logo_pixmap
 from gui.theme import COLORS
 from gui.roles import role_rating, role_names_by_group, _ROLE_INDEX
+from fm_editor.rolepos import role_positions
 from fm_editor.clubextra import rep_stars
 from gui.stars import _StarWidget
 from fm_editor.nations import nation_name as _nation_name_long, nation_flag as _nation_flag
@@ -839,6 +840,8 @@ _POS_SORT_ORDER = {
     'MR': 9, 'AMR': 10, 'ML': 11, 'AML': 12,
     'AMC': 13, 'ST': 14,
 }
+
+_MIN_POS_DEFAULT = 12   # Best by Role: min position familiarity (1-20) at any position the role is played from
 
 _REPORT_ICONS = {'prospects': 'best_prospects', 'wonderkids': 'wonderkids', 'best_pos': 'best_in_position', 'best_role': 'best_by_role'}
 _REPORT_LABELS = {
@@ -2312,6 +2315,10 @@ class MainWindow(QMainWindow):
             n = self._reports_table.rowCount() if hasattr(self, '_reports_table') else 0
             tot = getattr(self, '_report_total', n)
             cnt = '' if not n else f'{n:,} players' if tot <= n else f'top {n:,} of {tot:,} players'
+            if self._current_report_key == 'best_role' and hasattr(self, '_report_minpos'):
+                role, mp = self._report_role_combo.currentText(), self._report_minpos.value()
+                label = ' · '.join(x for x in (label, role if not role.startswith('──') else '',
+                                                f'position \u2265 {mp}' if mp > 1 else '') if x)
             parts = [p for p in (label, cnt) if p]
             self._set_header('Player Reports', ' · '.join(parts), icon=_REPORT_ICONS.get(self._current_report_key, 'player_reports'))
         elif key == 'players':
@@ -4141,6 +4148,19 @@ class MainWindow(QMainWindow):
         self._report_role_combo.setCurrentIndex(1)  # first real role, skip group header
         self._report_role_combo.currentTextChanged.connect(self._on_report_role_changed)
         role_row.addWidget(self._report_role_combo)
+        minpos_tt = 'Ratings use attributes only; this hides players who cannot play the position'
+        minpos_lbl = QLabel('Min position:')
+        minpos_lbl.setStyleSheet(f"color:{COLORS['text_secondary']}; font-size:11px;")
+        minpos_lbl.setToolTip(minpos_tt)
+        role_row.addWidget(minpos_lbl)
+        # 12+ = mid Competent (10-14) and up; Natural 20 / Accomplished 15-19 always pass. 1 = no position check.
+        self._report_minpos = QSpinBox()
+        self._report_minpos.setRange(1, 20)
+        self._report_minpos.setValue(_MIN_POS_DEFAULT)
+        self._report_minpos.setFixedSize(52, 26)
+        self._report_minpos.setToolTip(minpos_tt)
+        self._report_minpos.valueChanged.connect(self._on_report_age_changed)
+        role_row.addWidget(self._report_minpos)
         self._weights_lbl = QLabel()
         self._report_role_bar.setVisible(False)
         filter_row2.addWidget(self._report_role_bar)
@@ -4273,10 +4293,16 @@ class MainWindow(QMainWindow):
             role_weights = _weights_mod.get_role_weights(self._active_preset, rname)
             mn_age = self._report_age_min.value()
             mx_age = self._report_age_max.value()
+            min_pos = self._report_minpos.value()
+            pos_idx = [POSITIONS.index(x) for x in role_positions(rname)]
             rated = []
             for p in people:
                 if not _age_in_range(p, mn_age, mx_age):
                     continue
+                if min_pos > 1 and pos_idx:  # attribute-only ratings rate a centre-back as a forward: require the position familiarity
+                    pl = p.get('positions')
+                    if not pl or max(pl[i] for i in pos_idx) < min_pos:
+                        continue
                 r = role_rating(p, rname, role_weights)
                 if r is not None:
                     rated.append((p, r))
@@ -4388,6 +4414,8 @@ class MainWindow(QMainWindow):
             if preset:
                 info += f'  ·  {preset}'
         self._status_info_lbl.setText(info)
+        if self._main_stack.currentIndex() == self._VIEW_INDEX['reports']:
+            self._update_header_for_view('reports')  # subtitle carries role / position filter / counts
 
     def _on_report_pos_changed(self, pos):
         if self._current_report_key == 'best_pos' and self._save_data:
@@ -4429,6 +4457,9 @@ class MainWindow(QMainWindow):
         self._report_age_min.blockSignals(True)
         self._report_age_max.blockSignals(True)
         self._report_dev_filter.blockSignals(True)
+        self._report_minpos.blockSignals(True)
+        self._report_minpos.setValue(_MIN_POS_DEFAULT)
+        self._report_minpos.blockSignals(False)
         self._report_name_filter.clear()
         self._report_ca_filter.setValue(0)
         self._report_pa_filter.setValue(0)
