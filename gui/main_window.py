@@ -2230,15 +2230,31 @@ class MainWindow(QMainWindow):
         # Clear old right slot contents
         while self._header_right_slot_layout.count():
             item = self._header_right_slot_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            cw = item.widget()
+            if cw is not None:
+                # deleteLater alone leaves it a visible child of the slot (painted over the next page's widget)
+                # until the event loop runs: detach + hide now
+                cw.hide()
+                cw.setParent(None)
+                cw.deleteLater()
 
         if right_widget is not None:
             self._header_right_slot_layout.addStretch(1)
             self._header_right_slot_layout.addWidget(right_widget, 0, Qt.AlignmentFlag.AlignBottom)
+            right_widget.show()   # a re-parented widget stays hidden until the next event-loop pass otherwise
             self._header_right_slot.show()
         else:
             self._header_right_slot.hide()
+
+    def _make_squad_stats_label(self):
+        """Squads header stats strip from the html _populate_squad_table left in _squad_info (None = no squad yet)."""
+        html = self._squad_info.text()
+        if not html:
+            return None
+        lbl = QLabel(html)
+        lbl.setTextFormat(Qt.TextFormat.RichText)
+        lbl.setStyleSheet("background: transparent; font-size: 12px;")
+        return lbl
 
     def _make_header_rep_widget(self, stars: int, rep=None) -> QWidget:
         # stars: 0-5 in half steps from clubextra.rep_stars (fitted to 3 in-game points); `rep` = raw 1-10000
@@ -2284,7 +2300,7 @@ class MainWindow(QMainWindow):
                              icon='club')
         elif key == 'squad':
             n = len(getattr(self, '_squad', []))
-            self._set_header('Squads', f"{club_name} · {n} players", icon='squads')
+            self._set_header('Squads', f"{club_name} · {n} players", self._make_squad_stats_label(), icon='squads')
         elif key == 'staff':
             self._set_header('Staff', self._scouting_count_text(self._staff_model, 'staff'), icon='staff')
         elif key == 'reports':
@@ -5442,11 +5458,8 @@ class MainWindow(QMainWindow):
                       + _stat(n_hgc, 'HGC', COLORS['hgp_green'])
                       + inj_part)
         self._squad_info.setText(stats_html)
-        _stats_lbl = QLabel(stats_html)
-        _stats_lbl.setTextFormat(Qt.TextFormat.RichText)
-        _stats_lbl.setStyleSheet("background: transparent; font-size: 12px;")
         club_name = self._current_club['name'] if self._current_club else ''
-        self._set_header('Squads', f"{club_name} · {len(squad)} players", _stats_lbl, icon='squads')
+        self._set_header('Squads', f"{club_name} · {len(squad)} players", self._make_squad_stats_label(), icon='squads')
         self._status_info_lbl.setText(f'{len(squad)} players')
 
     def _show_player_results(self, players):
