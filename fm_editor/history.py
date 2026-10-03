@@ -367,13 +367,14 @@ def club_for(raw, uids):
 #    29 Eredivisie, Scotland 45 William Hill SPFL, Poland 129558, Wales 130672, N. Ireland 130023, Denmark 6, Japan
 #    102428, Saudi Arabia 7920263). 109201 = England tier 5 (24 clubs, the only 24-club league below League Two besides
 #    North/South, which lnc names) = Vanarama National League.
+# 30 (Keuken Kampioen Divisie) and 109201 (Vanarama National League) were DEDUCED, not evidenced: removed (shown as '-').
 COMP_NAMES = {11: 'Premier Division', 12: 'Sky Bet Championship', 13: 'Sky Bet League One', 14: 'Sky Bet League Two',
-              109201: 'Vanarama National League', 5123054: 'Vanarama National League North',
+              5123054: 'Vanarama National League North',
               5123055: 'Vanarama National League South',
               32: 'Serie A', 67: 'First Division', 2000048844: 'Spanish Federation 1A',
               2000048846: 'Spanish Federation 1B',
               22: 'Bundesliga', 16: 'Ligue 1 Uber Eats', 1: 'Jupiler Pro League', 29: 'Eredivisie',
-              30: 'Keuken Kampioen Divisie', 45: 'William Hill SPFL', 129558: 'PKO BP Ekstraklasa',
+              45: 'William Hill SPFL', 129558: 'PKO BP Ekstraklasa',
               130672: 'JD Cymru Premier', 130023: 'NIFL Premiership', 6: '3F Superliga', 7: 'NordicBet Liga',
               102428: 'J1 League', 7920263: 'Saudi Pro League', 8403697: 'Optibet Virsliga'}
 
