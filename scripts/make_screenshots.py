@@ -117,6 +117,14 @@ def report(c):
     return w
 
 
+def report_role(c):
+    """Best by Role: the Rating column as a ring gauge."""
+    w = c['w']
+    w._run_report('best_role')
+    pump()
+    return w
+
+
 def settings(c):
     c['w']._nav_to('settings')
     return c['w']
@@ -159,9 +167,12 @@ SHOTS = {
     'player-contract': pw('contract'),
     'player-positions': pw('positions'),
     'player-role-rating': pw('role'),
+    'player-training': pw('training'),
+    'player-history': pw('history'),
     'compare': compare,
     'scouting-players': players,
     'player-report': report,
+    'report-best-by-role': report_role,
     'settings': settings,
 }
 

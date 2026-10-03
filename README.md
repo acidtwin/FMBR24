@@ -88,7 +88,11 @@ Click a picture for the full size. They are generated from a real save with `scr
   </tr>
   <tr>
     <td><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare players"></a><br><sub>Compare players (Detailed radar)</sub></td>
-    <td></td>
+    <td><a href="docs/screenshots/player-history.png"><img src="docs/screenshots/player-history.png" alt="Player window: History"></a><br><sub>Player window: Career history</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/player-training.png"><img src="docs/screenshots/player-training.png" alt="Player window: Training and recommended traits"></a><br><sub>Player window: Training (recommended traits)</sub></td>
+    <td><a href="docs/screenshots/report-best-by-role.png"><img src="docs/screenshots/report-best-by-role.png" alt="Player report: Best by Role"></a><br><sub>Player report: Best by Role (rating ring)</sub></td>
   </tr>
 </table>
 
