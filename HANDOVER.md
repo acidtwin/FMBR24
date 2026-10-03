@@ -1,6 +1,8 @@
 # FM Backroom 24 - Handover (current state)
 
-Refreshed on `main` @ `f8e531e`. Facts checked against code unless marked **(unverified)**. Scope: `PRODUCT.md`. Rules and Qt gotchas: `CLAUDE.md`. Binary format: memory `fm24-binary-format.md` (not copied here). Old diary (partly stale, untouched): `docs/HANDOVER-archive.md`.
+Refreshed 2026-10-03 on `main` @ `f664a2f`. Facts checked against code unless marked **(unverified)**. Binary format: memory `fm24-binary-format.md` (not copied here).
+
+**Docs map:** `CLAUDE.md` rules + Qt gotchas (lean, read first) | this file = state, architecture, TODOs | `PRODUCT.md` scope and what exists | `README.md` public face (+ `docs/screenshots/`) | `docs/DESIGN-BACKLOG.md` mockups to come back to (Compare players, goal-net header, solid sidebar icons, idea list) | `docs/HANDOVER-archive.md` old diary, partly stale, untouched.
 
 ## 1. What this is, run, test
 
@@ -14,20 +16,20 @@ FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<nam
 
 - Always set `FMBR24_CONFIG_DIR` so `~/.config/fm24_editor/settings.json` is untouched. Cache `~/.cache/fm24_editor` and config dir keep the old app name on purpose.
 - 45 `tests/test_*.py` plus `tests/snapshot.py` (helper) and `tests/golden_parse.json`. Real-save tests print `SKIPPED (frozen snapshot save not found ...)` and exit 0 when the frozen copy is absent: `test_parse_golden` (~40 s reported), `test_squads` (~30 s), `test_saveinfo`, `test_injuries`, `test_human_clubs` (real part), `test_club_extra`, `test_player_stats`, `test_club_info`, `test_contract_block`, `test_height_weight`, `test_value_est`, `test_history` (also needs the FM install DB), `test_best_by_role` (real part; parses the snapshot fresh, no cache). `test_traits`/`test_potential` skip their real-player part without a scratchpad pickle. The rest are synthetic.
-- **Frozen test snapshot** (`tests/snapshot.py`): the real-save tests NEVER read the live save (the user keeps playing it, so pinned in-game values drift). They read `~/.local/share/fmbr24/test-saves/snapshot-2028-01-02.fm` (241,772,180 bytes, sha256 fc886c44405250477f3ae4ce61f21adba69bb4f2cbc592cfab1df184c1614248, in-game 2 Jan 2028) = a copy of `2026-27 START - Acid Twin Spurs (scouting budget change) (v02).fm` from the FM24 games folder; plus `snapshot-2028-01-12.fm` (243,821,619 bytes, sha256 81e08aed46af5b95d20f570b3c2400c77d8870b5283252810f94d69ac5a52d0d, in-game 12 Jan 2028) = a copy of `... (scouting budget change).fm`, used only by `test_injuries` and `test_value_est` (their in-game values were read on 12 Jan). Helpers: `snapshot_save(day)`, `skip_if_missing(day)`, `assert_snapshot(save, day)` (sanity assert on the in-game date; the exact in-game checks always run). Env overrides `FMBR24_SNAPSHOT_SAVE` (2 Jan) / `FMBR24_SNAPSHOT_SAVE_20280112`; `FMBR24_GOLDEN_SAVE` still overrides the golden save. Recreate a missing copy by copying those files from the games folder to those paths; never use the live save in tests, never modify the copies. `scripts/make_screenshots.py` takes the live save by argument on purpose. The scouting budget pinned in `test_club_extra` is the post-edit stored value (2,340,000), `test_saveinfo` pins the snapshot's Game Name `... (scouting budget change)`, 126 saves.
+- **Frozen test snapshot** (`tests/snapshot.py`): the real-save tests NEVER read the live save (the user keeps playing it, so pinned in-game values drift). They read `~/.local/share/fmbr24/test-saves/snapshot-2028-01-02.fm` (241,772,180 bytes, sha256 fc886c44405250477f3ae4ce61f21adba69bb4f2cbc592cfab1df184c1614248, in-game 2 Jan 2028) = a copy of `2026-27 START - Acid Twin Spurs (scouting budget change) (v02).fm` from the FM24 games folder; plus `snapshot-2028-01-12.fm` (243,821,619 bytes, sha256 81e08aed46af5b95d20f570b3c2400c77d8870b5283252810f94d69ac5a52d0d, in-game 12 Jan 2028) = a copy of `... (scouting budget change).fm`, used only by `test_injuries` and `test_value_est` (their in-game values were read on 12 Jan). Helpers: `snapshot_save(day)`, `skip_if_missing(day)`, `assert_snapshot(save, day)` (sanity assert on the in-game date; the exact in-game checks always run). Env overrides `FMBR24_SNAPSHOT_SAVE` (2 Jan) / `FMBR24_SNAPSHOT_SAVE_20280112`; `FMBR24_GOLDEN_SAVE` still overrides the golden save. Recreate a missing copy by copying those files from the games folder (`~/.local/share/Steam/steamapps/compatdata/2252570/pfx/drive_c/users/steamuser/Documents/Sports Interactive/Football Manager 2024/games/`) to those paths; never use the live save in tests, never modify the copies. `scripts/make_screenshots.py` takes the live save by argument on purpose. The scouting budget pinned in `test_club_extra` is the post-edit stored value (2,340,000), `test_saveinfo` pins the snapshot's Game Name `... (scouting budget change)`, 126 saves.
 - **Golden** (`test_parse_golden`): hashes offset-INDEPENDENT fields only, so a re-save (HGC/HGP insert shifts offsets) does not break it. Baselined once against the frozen 2 Jan snapshot; re-baseline (delete the json, rerun) only after a deliberate parser change. `FMBR24_GOLDEN_SAVE=<path>` for another copy.
 - Headless UI check and mockup rules: `CLAUDE.md`.
 - README screenshots: `scripts/make_screenshots.py <save>` (or `FMBR24_SAVE`) regenerates every PNG in `docs/screenshots/` offscreen from a real save (fresh parse, manager name masked, one queued HGP shown in memory, nothing saved); add a shot = one function in its `SHOTS` dict.
 
 ## 2. Repo state
 
-- Remote `git@github.com:acidtwin/FMBR24.git` (private); `main` is the only integration branch, currently 21 commits ahead of `origin/main` (not pushed; push only when asked). Parent `Claude Code Projects` is a separate monorepo: never push it. Explicit `git add` paths.
-- **Stale worktree `.claude/worktrees/agent-a2f1416595792e647`** (branch `worktree-agent-a2f1416595792e647`): UNREVIEWED, UNCOMMITTED staff-parsing work (`fm_editor/cache.py`, `fm_editor/gamedb.py`, `gui/main_window.py` modified; new `scripts/probe_staff_extended.py`). User undecided: ask before deleting, check `git -C <worktree> status` first. Also `origin/feat/player-staff-shortlists` (superseded PR #1).
+- Remote `git@github.com:acidtwin/FMBR24.git`, **PUBLIC**. `main` is the only branch (local) and the integration branch, 37 commits ahead of `origin/main` (not pushed; push only when asked). No other local branches or worktrees (`.claude/worktrees/` is an empty dir); `origin/feat/player-staff-shortlists` (superseded PR #1) still exists on the remote. The old stale staff-parsing worktree was archived OUTSIDE the repo to `~/fmbr24-archive` (`staff-extended-wip.patch`, `probe_staff_extended.py`; unreviewed, not part of the project). Parent `Claude Code Projects` is a separate monorepo: never push it. Explicit `git add` paths.
+- **GitHub account is FLAGGED (open issue, user-side):** GitHub's abuse system flagged the user's account (profile 404 to the public, repo images do not load, installing the Claude GitHub app returns 404). A support ticket is open with Nadia at GitHub support. Until cleared: README images will NOT render for visitors, GitHub features (app, Pages, social preview) cannot be relied on. Push still works over the SSH key; after every restart the user runs `ssh-add ~/.ssh/id_ed25519` (never store passphrases). Do not push until the user says the account is cleared (or asks).
 - **Mockup server:** the live mockups (`mockups/*.html`) are served on :8792 with `cd <MAIN checkout>/mockups && python3 -m http.server 8792`. Start it from the main checkout: a server started from a deleted worktree returns 404.
 
 ## 3. Architecture
 
-`gui/` (Qt) on top of `fm_editor/` (no Qt). Sizes: `gui/main_window.py` ~6100 lines, `gui/player_window.py` ~1670, `fm_editor/gamedb.py` ~760.
+`gui/` (Qt) on top of `fm_editor/` (no Qt). Sizes: `gui/main_window.py` ~6700 lines, `gui/player_window.py` ~1740, `fm_editor/gamedb.py` ~840.
 
 | File | Role |
 |---|---|
@@ -39,15 +41,15 @@ FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<nam
 | `fm_editor/traits.py`, `traitrec.py`, `potential.py` | `TRAIT_TABLE` (the one source of trait names), trait recommender, Full Potential projection (display only) |
 | `fm_editor/rolepos.py`, `weights.py` + `weights/*.json` | role rating percent + `POS_ROLES`; role weight presets |
 | `fm_editor/valuecurve.py` + `data/value_model.json` | value-by-age model (section 5) |
-| `fm_editor/abilitystars.py`, `agecalc.py`, `nations.py` | star mapping + `half_stars`; the one age helper (`person_age`, `age_exact`, `set_ref`); nations |
+| `fm_editor/abilitystars.py`, `words.py`, `agecalc.py`, `nations.py` | star mapping + `half_stars`; the app's own rating words (section 7); the one age helper (`person_age`, `age_exact`, `set_ref`); nations |
 | `fm_editor/patch.py`, `savefile.py` | HGP/HGC patching (`apply_queue`), safe writer (`save_in_place`); section 4 |
 | `fm_editor/cache.py` | parse cache, `_CACHE_VERSION = 34` (31 added the identity `uid` to cached people; 33 added `loan_parent` and `club[league][comp_uid]` on separate branches, 34 = both merged), `file_signature` (mtime_ns + size taken before the parse) |
 | `fm_editor/settings.py` | settings JSON; `DEFAULTS` is the key list; `PLAYER_THEMES`, `LEGAL_LINE` |
-| `fm_editor/faces.py`, `fm_editor/nationuid.py`, `gui/faces.py` | ONE picture-pack index for person / club / nation / comp / kit (no Qt), the nation ordinal -> UniqueID table, and the Qt side (`FaceService`: pixmap LRU, `active(kind)`); see 'Faces', 'Club badges', 'List media' below |
+| `fm_editor/faces.py`, `clublogo.py`, `nationuid.py`, `gui/faces.py` | ONE picture-pack index for person / club / nation / comp / kit (no Qt), the nation ordinal -> UniqueID table, and the Qt side (`FaceService`: pixmap LRU, `active(kind)`) + the club logo-id rule; see 'Faces', 'Club badges', 'List media' below |
 | `gui/workers.py` | `ParseWorker` (cache when `use_cache`), `SaveWorker` |
 | `gui/main_window.py`, `theme.py`, `people_model.py` | all main UI/logic; COLORS + app QSS; virtualised `PeopleModel` (all players/staff, no cap) |
 | `gui/player_window.py`, `pw_widgets.py`, `pw_themes.py`, `pw_roles.py`, `pw_valuechart.py` | player window; radar + foot widgets; texture themes; Role Rating widgets; value chart |
-| `gui/settings_page.py`, `about_dialog.py`, `search_suggest.py`, `stars.py`, `roles.py`, `icon.py` | Settings, About, search autocomplete, shared `_StarWidget`, role definitions (`FM_ROLES`), app icon (`make_app_icon`); images in `gui/assets/` |
+| `gui/settings_page.py`, `about_dialog.py`, `search_suggest.py`, `stars.py`, `roles.py`, `icon.py` | Settings, About, search autocomplete (`_SearchSuggest`), shared `_StarWidget`, role definitions (`FM_ROLES`), app icon (`make_app_icon`, `logo_pixmap`); images in `gui/assets/` |
 
 - **Views** (`MainWindow._VIEW_INDEX`, `_main_stack`, Back/Forward via `_nav_history`): `club` 0, `squad` 1, `staff` 2, `shortlist` 3, `reports` 4 (top 200), `players` 5, `club_staff` 6, `welcome` 7, `save_info` 8 (default landing), `staff_shortlist` 9, `settings` 10 (top-right gear).
 - **Sidebar:** MAIN (Save Info, Club, Squads, Club Staff, Player Shortlist, Staff Shortlist), SCOUTING (Players, Staff), PLAYER REPORTS (Best Prospects, Wonderkids, Best in Position, Best by Role; `_report_btns`), STAFF REPORTS (disabled 'Coming Soon' stub). Search box: club -> Club, player -> Players, staff -> Staff.
@@ -75,7 +77,7 @@ HGP = secondary-nation record `b10=0x08,b11=0x46`; HGC = training record `b10=0x
 ## 5. Player window (`gui/player_window.py`, master mockup `mockups/player-window.html`)
 
 `PlayerWindow(QDialog)` 1122x760 (min 1062x640), opened by double-click from any list via `MainWindow._run_player_window`, always on Profile. Action strip (`#actionStrip`): `Add to Shortlist` + `Close` (Close last); no Make buttons (the pills do that).
-- **Header** (`QFrame#pwHeader`): identity + HGP/HGC pills; boxes CA, PA, DEVELOPMENT RATE, CHANGES QUEUED. Stars or number + bar per `ability_display` (raw number in tooltip). Mapping `fm_editor/abilitystars.py`: CA/PA = value/40, Dev Rate = value/4, nearest half star, ties UP (`half_stars`, also `rep_stars`), clamp 0.5..5.
+- **Header** (`QFrame#pwHeader`): identity (the player's name is `_CopyNameLabel`: click copies it, tooltip 'Click to copy name') + HGP/HGC pills; boxes CA, PA, DEVELOPMENT RATE, CHANGES QUEUED. Stars or number + bar per `ability_display` (raw number in tooltip). Mapping `fm_editor/abilitystars.py`: CA/PA = value/40, Dev Rate = value/4, nearest half star, ties UP (`half_stars`, also `rep_stars`), clamp 0.5..5.
 - **Tabs** (`TABS`): Profile, Contract & Transfer, Positions, General Rating (placeholder), Role Rating, Training (Recommended traits + 'Coming soon' block), History. New tab = write `_page_<key>`, name it in `TABS` (`None` = 'Coming soon' from `SOON`).
 - **Profile:** cards Position | This season (or Career) | Fitness; attribute grid (follows `Current | Full Potential`) with the radar over Footedness; Personality (7 bars) + traits (`TRAIT_TABLE`, threshold `trait_threshold`). **Radar:** `RADAR_OUT` / `RADAR_GK` in `gui/pw_widgets.py` (axis = mean, inverted attributes as 21-v); outfield Attacking, Creativity, Athleticism, Defending, Reliability, Mentality; GK Shot-stopping, Command, Athleticism, Distribution, Reliability, Mentality. Own groups, not the game's. Test `test_radar_axes.py`.
 - **Role Rating tab** (`gui/pw_roles.py` `RoleTab`/`RoleList`/`RolePitch`, logic `fm_editor/rolepos.py`, mockup section 4.7, test `test_role_tab.py`): LEFT = roles playable at the selected position (family header + one row per duty, best first); RIGHT = the Positions pitch with a dot per position = its best role (click to select; hover tooltip). Ratings are PERCENTS like FM Genie Scout: `role_score` = weighted mean of the role's key attributes on the 0-100 raw scale, 2 decimals; tier colour = `tier(score_to_rating(pct))`, the Best by Role tier; `gui.roles.role_rating` = clamp(round(role_score/5)) (wrapper, output unchanged). Weights = active Settings preset (read when the window opens); Full Potential = `potential.project_attrs` x5 following the `pot` toggle. Dots whose position rating is < 10 (unfamiliar) are dimmed by default (selected dot never); GK dot dashed for outfielders; goalkeepers only the GK dot. Default selection = best position. Not stars, so the star rule does not apply.
@@ -127,6 +129,7 @@ Byte-level facts: memory `fm24-binary-format.md` (read before touching a parser)
 - Personality: window shows 7 bars; the 8th byte `personality[7]` = 'Controversy' is parsed (Staff popup only). Whether the game hides it is unknown: compare with a player screen first.
 - History: seasons simulated inside the save (2025-28) are not shown; plain-year labels for calendar-year leagues are an assumption.
 - Role Rating `POS_ROLES` and percent scale; value chart accuracy (section 5).
+- Pictures: the club 'next uid' logo rule is empirical (no source for the real FM rule); newgen `r-<uid>` config keys have no real data to test on; nation uids come from the install DB table (verified by eye for all 206 named nations); kit lookup has no UI.
 
 **Transfer data research** (what the save does and does not hold):
 - **'Not for Sale' = stored value exactly 300,000,000** (high confidence; 2,025 players in the 2 Jan 2028 snapshot, 2,401 in the live save). SHOWN: Transfer panel status 'Not for sale', Market value a muted '-' (no £300M), value chart empty state (`transfer_status` / `player_extra_data`, mockup flag `nfs`).
@@ -137,17 +140,19 @@ Byte-level facts: memory `fm24-binary-format.md` (read before touching a parser)
 
 ## 8. Open TODOs (priority order)
 
-1. **Transfer data:** run the experiment saves above and decode listing / asking price / contract type / squad status.
-2. Verify `POS_ROLES` and the percent scale against the game / Genie Scout; add the missing roles to `FM_ROLES`.
-3. ~~Show 'Not for sale' / 'On loan' in the Transfer panel~~ done (feat/transfer-status). Open: check the loan / feeder filters against in-game screens (Squad status column) once available.
-4. Club-header reputation stars: add a numbers mode (star rule) and write `SettingsPage` tests.
-5. Reports / Players HGC column (both show HGP only).
-6. Staff window redesign (parked; `StaffDetailDialog` is the old layout, no mockup).
+1. **Push** the 37 local commits once the user says the GitHub account is cleared (section 2); then check the README images render for a logged-out visitor.
+2. **Header goal net:** user must pick a variant (A diamond / B square-knot / C perspective / D honeycomb; B is the recommendation), then build it (`docs/DESIGN-BACKLOG.md` item 2).
+3. **Compare players:** radar-comparison mockup approved as the direction; build `gui/compare_window.py` (item 1 there). Not started in code.
+4. **Sidebar solid icon set:** waiting for the user's generated sheet; needs a v2 cutter (item 3 there). Header icons stay the line icons.
+5. **Transfer data:** run the experiment saves (section 7) and decode listing / asking price / contract type / squad status; check the loan / feeder filters against in-game Squad status.
+6. Verify `POS_ROLES` and the percent scale against the game / Genie Scout; add the missing roles to `FM_ROLES`.
 7. General Rating tab (needs in-game screens); fill the Training tab beyond Recommended traits.
-8. Personality 'Controversy' check (section 7).
-9. Per-group league tables for Brazil / Spain (only a full round robin counts today).
-10. Unlock-on-failure: `_on_parse_done` (before `_step_preload`) and the post-replace `parse_archive` in `_on_save_done` can leave the busy lock on if they throw.
-11. Unsupported QSS properties (`letter-spacing`, `text-transform`, e.g. `_CLUB_PENDING_QSS` in `gui/main_window.py`, `theme.py`): replace with `QFont`/`.upper()`.
-12. GitHub polish at 1.0 (description, topics, social preview), then Flatpak (`io.github.acidtwin.FMBR24`) and Windows .exe (Steam/save path handling); bundle Barlow Condensed.
-13. Decide the stale worktree (section 2; ask the user).
-14. Small: wire the spare page icons (e.g. a Staff Reports page, Search results); more Staff / Club Staff filters; FM23 support in `archive.py`; weight Full Potential growth shares by CA weight.
+8. Staff window redesign (parked; `StaffDetailDialog` is the old layout, no mockup).
+9. Club-header reputation stars: add a numbers mode (star rule) and write `SettingsPage` tests.
+10. Reports / Players HGC column (both show HGP only).
+11. Personality 'Controversy' check (section 7). Per-group league tables for Brazil / Spain (only a full round robin counts today).
+12. Unlock-on-failure: `_on_parse_done` (before `_step_preload`) and the post-replace `parse_archive` in `_on_save_done` can leave the busy lock on if they throw.
+13. Unsupported QSS properties (`letter-spacing`, `text-transform`, e.g. `_CLUB_PENDING_QSS` in `gui/main_window.py`, `theme.py`): replace with `QFont`/`.upper()`.
+14. Media leftovers (section 5 'List media'): kit UI, async face decoding, UI for pack order, `Small` icons, Retro/Alternative sets, Save Info league logos.
+15. At 1.0: GitHub polish (description, topics, social preview), README credit for the Linux project (name is a TODO comment in `README.md` 'Inspired by'), Flatpak (`io.github.acidtwin.FMBR24`) and Windows .exe (Steam/save path handling); bundle Barlow Condensed.
+16. Small: wire the spare page icons (staff_reports, search_results, transfers, contracts); more Staff / Club Staff filters; FM23 support in `archive.py`; weight Full Potential growth shares by CA weight; other ideas in `docs/DESIGN-BACKLOG.md` item 4.

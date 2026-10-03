@@ -24,7 +24,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 
 **Scouting and reports**
 - Players and Staff tables covering every person in the database (about 78,000 players and 50,000 staff in a typical save), with quick filters (name, position, CA, PA, age, development rate)
-- Player Reports: Best Prospects, Wonderkids, Best in Position, Best by Role (role weight presets, editable and importable in Settings)
+- Player Reports: Best Prospects, Wonderkids, Best in Position, Best by Role (role weight presets, editable and importable in Settings; a minimum position-familiarity filter)
 - Player and Staff Shortlists
 
 **Squad and club**
@@ -88,6 +88,7 @@ FMBR24 is **alpha** and supports **FM24 saves only**. It is built and tested on 
 
 - Transfer data (asking price, transfer-listed and loan-listed status; loan end dates) is still being reverse-engineered, so those fields show as PENDING
 - A General Rating tab is planned for the player window
+- A Compare players window (two players side by side on one radar) is designed and planned
 - The staff window is due a redesign
 - At 1.0: a Flatpak package and a Windows `.exe`
 
@@ -133,7 +134,7 @@ FMBR24 reads your save and, only when you press Save Changes, writes the homegro
 - Every save is written to a temp file and checked before it replaces anything
 - It keeps two rolling backups next to your save (`.bk1`, the file before the last save, and `.bk2`, the one before that). Nothing is overwritten without them
 - It refuses to save if the file changed on disk since you loaded it
-- Saves edited this way have been loaded in FM24 and show the new homegrown tags correctly in the cases tested. It is still alpha: keep those backups
+- A homegrown (HGP) edit of a player has been loaded in FM24 and showed the new tag correctly; loading a save after an HGC edit has not been verified in the game yet. It is alpha: keep those backups
 
 Keep your own backups too. This is alpha software and FM saves are big, binary and undocumented.
 
