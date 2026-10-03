@@ -7,23 +7,21 @@
 <!--
 =====================================================================================================================
 COMPARE PLAYERS - MOCKUP (new gui/compare_window.py, 'Compare with...' = FM Genie Scout's 'Compare With').
-DESIGN DECISION: overlaid radars (the former variant A) won.  The three other designs (mirrored head-to-head, decision view, fingerprint-and-duels) are removed from this file.  The one idea kept from the last one is
-its FINGERPRINT (percentile pizza against position peers), which now lives INSIDE this window as a second view of the main area: a segmented switch 'Overlay | Fingerprint' at the top left of the main area.
+DESIGN DECISION: overlaid radars of both players plus the full attribute table.  One layout, no alternative views.
 Same technical conventions as player-window.html: tokens on :root (copied), Noto Sans fallback, panels pn / ph 36, tier colours, flat dark theme (the real window can reuse the player-window theme registry for the header
 and action strip; not drawn here).  MOCKUP ONLY: nothing in gui/ or fm_editor/ changed.  Sample players are FICTIONAL.
 =====================================================================================================================
 
 HOW TO VIEW (the review bar above the window is NOT part of the window; all of it is also settable in the URL)
-  ?view=fp              open straight on the Fingerprint view (default = Overlay).  The same switch is in the window ('Overlay | Fingerprint') and in the review bar ('Fingerprint view').
   ?pair=out|gk|young|veteran   sample pair: out = two midfielders (Ferrer 25y / Lindahl 28y) | gk = two goalkeepers | young = 19y high-PA winger vs 27y prime winger | veteran = 34y midfielder vs the 25y one
   ?nums                 CA / PA as numbers + bar (Settings > Ability display = Numbers); default = stars (raw number in the title tooltip)
-  ?pot                  Full Potential values (the Current | Full Potential segmented control the player window has; here in the header of the right-hand panel, it drives both views)
+  ?pot                  Full Potential values (the Current | Full Potential segmented control the player window has; here in the header of the left panel, it drives the radar, the bars and the table)
   ?pick                 the picker dialog open over the window (text in the box: ?q=lind, default 'lind'); it works: type, Up/Down, Enter, Esc, click
   ?swap                 B on the left
   ?bare=1  (or #bare=1) hides the review bar and OS title bar: window starts at 0,0 and is 1122 x 760 (headless screenshot mode).   ?min  = the 1062 x 640 minimum size
   ?noface               silhouette instead of the (synthetic) face pictures
-  e.g.  compare-players.html?view=fp&pair=gk&nums      compare-players.html?view=fp&pair=young&pot&bare=1      compare-players.html?pick
-  Buttons in the window are real buttons (Tab, Enter/Space); every bar, wedge and tile has a title tooltip. Review aids only: toast messages for Shortlist / Close / Save image.
+  e.g.  compare-players.html?pair=gk&nums      compare-players.html?pair=young&pot&bare=1      compare-players.html?pick
+  Buttons in the window are real buttons (Tab, Enter/Space); every bar and tile has a title tooltip. Review aids only: toast messages for Shortlist / Close.
 
 LAUNCH FLOWS
   1. Player window action strip (left group): new 'Compare with...' button (Close stays the last button of the strip). It opens the picker with player A fixed.
@@ -36,36 +34,29 @@ LAUNCH FLOWS
 THE WINDOW  (1122 x 760: 12 pad | header 80 | 12 | main 592 | 12 | strip 52, as the player window; minimum 1062 x 640; panels scroll vertically INSIDE with a 6 px bar, nothing scrolls horizontally)
   Header: two player panels (A left, B right mirrored) with a 3 px identity colour on top: face 54x64, name 20/700 + position badge, flag + club badge 16x16 + club + age, CA and PA boxes 100x56
     (stars 13 px, gap 2, or number + bar) | VS 40 wide.
-  Action strip h52: [Swap sides] [Change player B...] [Save comparison image...] ... stretch ... [Add both to Shortlist] [Close]  - CLOSE IS THE LAST BUTTON.
-    'Save comparison image...' = QWidget.grab() of the header and the main area of the CURRENT view (overlay or fingerprint) to one PNG (the shareable card; no new data).
-  Main area, view 'Overlay' (default):
-    left 33 % panel (header = the view switch): ONE six-axis radar with both players, legend, then 'Difference by group' (6 mini diverging bars).
-    right column: 'Attributes' panel (header: attributes-won tally + Current | Full Potential) = the Profile groups in three columns (Technical + Footedness | Mental | Physical + Hidden; keepers: Goalkeeping + Footedness |
+  Action strip h52: [Swap sides] [Change player B...] ... stretch ... [Add both to Shortlist] [Close]  - CLOSE IS THE LAST BUTTON.
+  Main area:
+    left 33 % panel 'Compare' (header: Current | Full Potential): ONE six-axis radar with both players, legend, then 'Difference by group' (6 mini diverging bars).
+    right column: 'Attributes' panel (header: attributes-won tally) = the Profile groups in three columns (Technical + Footedness | Mental | Physical + Hidden; keepers: Goalkeeping + Footedness |
     Mental | Physical + Hidden), each row name | A tile | '3 >' difference | B tile (tier colour tiles as the Profile; the arrow points at the winner, in the winner's colour; '=' level; lower-is-better attributes
     compared on 21-v), group means in each column header; below it the 'Key facts' strip (age, contract end, value, wage per week, height / weight, traits count, each with a plain difference line).
-  Main area, view 'Fingerprint':
-    left 520 px panel (500 at the minimum size; header = the same view switch, so it does not move): the percentile pizza (see below), then a footnote with the pool size and the honesty text.
-    right column: 'Situation duels' panel (header: tally + Current | Full Potential): 12 compact cards (keepers 10), one per pizza slice: slice name, '+4.5' in the winner's colour ('level' under 0.5), a tug-of-war
-    bar built from the two slice means, the attributes behind the slice (hidden at the minimum height); the same 'Key facts' strip stays below it.
-  Both views keep the header, the view switch (same place), the Current | Full Potential control (right panel header, same place) and the action strip.
 
-IDENTITY COLOURS (new, needed so two players can be told apart without colliding with ratings): A sky blue #52B0FF, B orchid #D77CFF. No tier colour (red, orange, grey, white, yellow, green) is blue or
+IDENTITY COLOURS (needed so two players can be told apart without colliding with ratings): A sky blue #52B0FF, B orchid #D77CFF. No tier colour (red, orange, grey, white, yellow, green) is blue or
   violet, so a player colour never reads as a rating. Both are >= 5.8:1 on #1A2226 (AA for text). Never colour alone: A = solid outline + circle marker, B = dashed outline + diamond marker; A is
-  always left / first, B right / second; every legend names the players. In the table the winner is shown by the arrow and the winner's colour; in the pizza A is the left half of a slice, B the right half.
+  always left / first, B right / second; every legend names the players. In the table the winner is shown by the arrow and the winner's colour.
   Star ratings rule: stars appear only in the header boxes: ?nums switches both to number + bar (CA / PA x/200 bar), raw number in the title in stars mode; mapping = fm_editor/abilitystars.py (value/40,
-  half_stars).  Attributes, group means and percentiles are numbers by nature (the percentile is not converted to stars).  No new Settings key (reuses ability_display).
+  half_stars).  Attributes and group means are numbers by nature (not converted to stars).  No new Settings key (reuses ability_display).
 
-DECISIONS TAKEN FOR THE FORMER OPEN QUESTIONS (the user did not answer; these are the defaults, change them in one place each)
+DECISIONS (defaults, change them in one place each)
   1. Identity colours stay blue (A) / orchid (B): variables --a and --b on :root.
   2. 'Attributes won' counts ALL attributes equally (no role weighting).  Footedness is not counted (it is not better or worse).  Tooltip says so.
-  3. A goalkeeper's outfield Technical group is HIDDEN in the table (it is not listed as 'not counted').  Its values still feed the radar axis 'Distribution' and the keeper slices (Passing, First Touch, Technique),
-     and the tooltips of those name them; so the group is hidden in the table only, not removed from the maths.
+  3. A goalkeeper's outfield Technical group is HIDDEN in the table (it is not listed as 'not counted').  Its values still feed the radar axis 'Distribution' (Passing, First Touch);
+     so the group is hidden in the table only, not removed from the maths.
   4. Lists: exactly 2 selected rows open Compare directly; 1 selected row opens the picker.
+  5. Current | Full Potential sits in the header of the left panel (first thing in reading order; it governs radar, difference bars and table).
 
 SAMPLE DATA = the app's own logic run on fictional attributes (generator was a throwaway script, not in the repo): fm_editor.potential.project_attrs for Full Potential (display_value).
-  Radar axes, group means, differences and slice values are computed in JS from the attributes with the same rules as gui/pw_widgets.py (RADAR_OUT / RADAR_GK, inverted attributes as 21-v).
-  SAMPLE FIGURES (made up, NOT computed from any save): the peer statistics PEER (mean / sd of each slice per position group and the pool sizes).  They are drawn only to show the design; the percentile here comes
-  from a normal curve on them, the app will use REAL RANKS in the sorted peer list (see 'WHAT THE BUILD MUST COMPUTE').  The footnote of the pizza carries a dashed 'SAMPLE' tag for this reason.
+  Radar axes, group means and differences are computed in JS from the attributes with the same rules as gui/pw_widgets.py (RADAR_OUT / RADAR_GK, inverted attributes as 21-v).
 
 =====================================================================================================================
 QPAINTER PORTING NOTES
@@ -76,59 +67,24 @@ OVERLAID RADAR  (reuse RadarWidget geometry)
   A: brush QColor(82,176,255,56) (alpha .22), pen #52B0FF 1.75 round join; B: brush QColor(215,124,255,46) (alpha .18), pen #D77CFF 1.75 dash [3.4,1.7] (the pattern is in pen widths);
   marker A circle r4, B diamond (square half-side 3.6 rotated 45) both with a 1.5 #14151A ring.
   Labels: group name 9/700 caps #8B96A8, values 12/700 'A / B' in the identity colours (two drawText runs), anchors as the player-window radar (top: baseline y_v-24, bottom y_v+14, sides +-7).
-  Table rows 22 high: name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20.  Difference bars: 8 px track #343740 split at the centre (gap 2), length = |d|/4 of the half.
-  Key facts: 6 columns, label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
-
-FINGERPRINT PIZZA  (one custom QWidget, painted at the widget's pixel size; the HTML builds an SVG at the measured size of its host, which is the same thing)
-  Slices: N = 12 (keepers 10), span = 360 / N, slice i covers angles -90 + i*span .. -90 + (i+1)*span (SVG angles = degrees clockwise from 3 o'clock; Qt: use -angle).  First slice starts at 12 o'clock.
-  Each slice is a SITUATION made of 2-4 attributes (outfield: Finishing, Passing range, Carrying the ball, Keeping the ball, Set pieces, Winning the ball, Reading the game, Aerial duels, Pace, Engine, Availability,
-    Big matches; keepers: Shot-stopping, Command of area, Sweeping, Short distribution, Long distribution, Positioning, Aerial presence, Agility, Big matches, Availability; lists are constants SL_OUT / SL_GK).
-    Slice value = mean of good(attribute) (lower-is-better ones as 21-v), current or Full Potential per the control.
-  Halves: A takes [a0 + 1.4, mid - 0.7], B takes [mid + 0.7, a1 - 1.4] (degrees), so both pizzas are readable at once (two overlapping pizzas hide each other).
-  Radii: R = min(W/2 - 118, H/2 - 46) (labels need ~110 px at the sides and 2 text lines above / below), inner r0 = round(.27 R) (about 40 at R 150), r(p) = r0 + (R - r0) * max(p, 3) / 100.  At 1122 x 760 the pizza
-    widget is 516 x ~330..490 and R is about 140; at the minimum size 496 x ~370 and R about 130.
-  Wedge = QPainterPath: arcMoveTo(outerRect, -a0) ; arcTo(outerRect, -a0, -(a1-a0)) ; arcTo(innerRect, -a1, +(a1-a0)) ; closeSubpath.  Fills #52B0FF (A) / #D77CFF (B), pen .8 #14151A.
-  Background: rings at p = 25 / 50 / 75 / 100, 50 dashed [4,4] white a .34 (= peer median) others a .10; every other slice phase tinted QColor(255,255,255,9) (phases of play: in possession, out of possession,
-    physical, mind; the tint is applied to slices whose phase index is even); spokes a .10 from r0 to R.
-  Centre disc r0-2 fill #14151A pen white a .18; 'MATCH' 8/700 #8B96A8 tracking .6 above the number 20/700 white.
-  Labels at R + 11 on the slice mid angle, anchored by cos(angle) (> .1 left aligned, < -.1 right aligned, else centred; slices with |sin| > .7 put the two lines above / below the anchor): line 1 slice name
-    10/700 caps #8B96A8, line 2 '84 / 61' 12/700 in the identity colours with a #8B96A8 400 slash.
-  Situation cards: grid of 2 columns, gap 6, card h 55 (42 at the minimum height without the attribute line), 2 px top edge in the winner's colour (border2 when level), line 1 slice name 11/700 caps + diff 11/700
-    in the winner's colour, line 2 value 12/700 | bar 8 px split by value share (loser alpha .45, gap 2) | value, line 3 attributes 10 #8B96A8 elided.
-  Footnote: 11 / 16 #8B96A8, first line white (pool).
+ATTRIBUTE TABLE
+  Three columns of 22 px rows (name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20), column header 22 px: group name 11/700 caps tracking .08em + the two group means in the identity colours.
+  Diff text: '3 >' / '< 3' in the winner's colour, '=' #525B68 when level.  Panel body scrolls vertically (6 px bar), columns are plain layouts, no horizontal scroll.
+DIFFERENCE BARS
+  6 rows of 20 px: label 78 | track 8 px #343740 split at the centre (gap 2) | value 30 right aligned 11.  The winner's half is filled in its identity colour, length = |d| / 4 of the half (clamped); '=' under 0.05.
+KEY FACTS
+  6 columns, label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
 
 =====================================================================================================================
-DATA EACH PART NEEDS FROM THE APP
+DATA THE WINDOW NEEDS FROM THE APP  (only what the player window already has, no new parsing)
 =====================================================================================================================
-  Header, table, radar, key facts: both players' 54 attributes (current and project_attrs for Full Potential), position, nation, club, age, CA / PA, contract end, value, wage, height, weight, trait count (all exist in
-    player_extra_data / the parsed person).  Face and club badge as in the player window.
-  Fingerprint: the same attributes plus, per position group, the PEER DISTRIBUTION of every slice (below), the pool size and the pool's display name.
+  Both players' 54 attributes (current and project_attrs for Full Potential), position, nation, club, age, CA / PA, contract end, value, wage, height, weight, trait count (all exist in player_extra_data / the
+  parsed person).  Face and club badge as in the player window.
+  New code is small: attributes won = count of attributes (Footedness excluded, a keeper's outfield Technical group excluded) where good(A) > good(B) / < / equal, good = 21-v for lower-is-better attributes.
 
-WHAT THE LATER BUILD MUST COMPUTE (new code; the mockup only draws it)
-  1. Position groups: one constant mapping a player's best position to a group (suggested: GK | DC + SW | DL + DR + WBL + WBR | DM + MC | ML + MR + AML + AMR | AMC | ST; the mockup samples only three:
-     central midfielders, wide players and strikers, goalkeepers).  Pool = every player of the loaded save in the group with CA >= 100.
-  2. Peer distributions: for each group, for each slice, the SORTED list of slice means (good(attribute) mean) over the pool, computed once per load (about 77k people, 12 means each) and cached with the parse
-     (bump _CACHE_VERSION in fm_editor/cache.py if it is stored there).  The peer median for the dashed ring is the 50th percentile of that list.
-  3. Percentile = rank of the player's slice value in the sorted list by bisect (bisect_left / bisect_right averaged for ties, x 100 / n), NOT the normal curve used by the mockup.  Players of the pair are ranked
-     against the pool as it is (they may be part of it).  In Full Potential mode the projected value is ranked against the peers' CURRENT values: say so in the footnote (drawn when ?pot is on).
-  4. Similarity (the centre MATCH number): vector a_i = slice value of A minus the peer mean of that slice, b_i likewise for B; cosine = a.b / (|a| |b|); MATCH = round((cosine + 1) / 2 * 100).  It compares the SHAPE of the two
-     profiles after the peer average is removed and ignores level: 50 = unrelated, 100 = identical shape.  It is our own number and the tooltip says so.  If |a| or |b| is 0, show a dash.
-  5. Situation duel: difference of the two slice means, 'level' under 0.5, text assembled from the numbers; nothing else.
-  6. Attributes won: count of attributes (Footedness excluded, a keeper's outfield Technical group excluded) where good(A) > good(B) / good(A) < good(B) / equal.
-  7. Honesty: hide the Fingerprint view (or its switch segment, disabled with a tooltip) when the pool of the group has fewer than about 100 players.  A pool of a few hundred (goalkeepers: the mockup says 742) is coarse:
-     print the pool size under the pizza (drawn) and add 'small pool, coarse percentiles' for pools under 1,000 (drawn for keepers).
-
-HONESTY NOTES (all drawn in the window)
-  - The slices are OUR grouping of attributes (like the radar groups), not the game's, and they are attribute readings, NOT match statistics (the save has no event data; no xG, no per-90).
-  - Percentiles are against players of the same position group with CA 100 or more in the loaded save, the pool size is printed.
+HONESTY NOTES
+  - Radar groups are OUR grouping of attributes (as the player window radar), not the game's.
   - Value, wage and contract in the key facts are what the save stores (market value, wage); asking price, clauses and squad status are not in the save and are not shown.
-  - Sample peer statistics are made up and tagged SAMPLE in the mockup.
-
-RESEARCH BEHIND THE FINGERPRINT (F = page fetched and read, S = only the search-result summary was available)
-  FM Genie Scout 'Compare With' (two players side by side) https://www.fmscout.com/a-genie-scout-guide.html (S) | FM26 'How to compare two players' https://sortitoutsi.net/content/75612/fm26-how-to-compare-two-players (S)
-  Renderfoot 'Football Player Comparison' (overlaid radars, downloadable PNG card) https://www.renderfoot.com/player-comparison (F) | mplsoccer / ggshakeR percentile pizzas (slice = percentile among position peers)
-  https://abhiamishra.github.io/ggshakeR/articles/Guide_to_PizzaPlots.html (S) | FBref scouting reports (StatsBomb percentiles against similar positions, pool stated) (S)
-  'How to Compare Football Players the Data Way' (cosine similarity of centred vectors) https://dreamdataball.substack.com/p/how-to-compare-football-players-the (F) | Hudl / StatsBomb player archetypes as skill sets (F)
 =====================================================================================================================
 
 -->
@@ -227,7 +183,7 @@ html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{hei
 /* action strip: Close is the LAST button */
 .strip{height:52px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:8px;padding:9px 12px 0;flex:none}
 .strip .sp{flex:1}
-/* ---- OVERLAY VIEW ---- */
+/* ---- MAIN AREA ---- */
 .a-left{flex:0 0 33%;min-width:300px}.rd{max-width:100%;height:auto}
 .a-leg{display:flex;align-items:center;gap:14px;padding:0 12px 4px;font-size:11px;color:var(--tx2);flex-wrap:wrap}
 .a-leg span{display:inline-flex;align-items:center;gap:6px;color:#fff;font-weight:var(--semi)}
@@ -269,30 +225,7 @@ html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{hei
 .dlg .ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);margin-top:6px}
 .dlg .hint{padding:2px 16px 4px;color:var(--tx2);font-size:11px}
 .toast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:12px;z-index:60}
-/* ---- FINGERPRINT VIEW ---- */
-.fp-left{flex:0 0 548px}html.min .fp-left{flex-basis:520px}
-.fp-host{flex:1;min-height:0;position:relative;overflow:hidden}
-.fp-host svg{position:absolute;left:0;top:0}
-.pfoot{padding:6px 14px 9px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;line-height:16px;flex:none}
-.pfoot .p2{display:inline}html.min .pfoot .p2{display:none}
-.pfoot .dot{margin:0 3px 0 1px}
-.pfoot .warn{color:var(--c2)}
-.smp{display:inline-flex;align-items:center;height:14px;padding:0 6px;border:1px dashed var(--border2);border-radius:7px;font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--tx2);vertical-align:1px;margin-left:2px}
 .won{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.won b{font-weight:700;margin-right:4px}.won .dot{margin-left:2px}
-.d-duel{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(55px,1fr);gap:6px;padding:0 12px 10px;min-height:100%}
-html.min .d-duel{grid-auto-rows:minmax(42px,1fr)}
-.dc{display:flex;flex-direction:column;justify-content:center;gap:2px;background:var(--bg);border:1px solid var(--border);border-top-width:2px;border-radius:3px;padding:4px 10px 5px;min-width:0}
-.dc.wa{border-top-color:var(--a)}.dc.wb{border-top-color:var(--b)}.dc.tie{border-top-color:var(--border2)}
-.dc .t{display:flex;justify-content:space-between;gap:6px;height:15px;line-height:15px;white-space:nowrap}
-.dc .t b{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#fff;overflow:hidden;text-overflow:ellipsis}
-.dc .t em{font-style:normal;font-size:11px;font-weight:700;white-space:nowrap}
-.dc .at{font-size:10px;line-height:12px;height:12px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-html.min .dc .at{display:none}
-.dc .tw{display:flex;align-items:center;gap:6px;height:14px}
-.dc .tw b{width:30px;font-size:12px;font-variant-numeric:tabular-nums}
-.dc .tw b:last-child{text-align:right}
-.dc .tg2{flex:1;display:flex;height:8px;gap:2px;min-width:0}
-.dc .tg2 i{display:block;height:8px}
 </style>
 </head>
 <body>
@@ -302,7 +235,7 @@ html.min .dc .at{display:none}
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
-<div class="cap"><p>All players are fictional (names, clubs, nations, shields and faces are synthetic placeholders; the app draws the facepack PNG and logo-pack PNG). Attributes and Full Potential values were produced by the app's own logic (potential.project_attrs) on those fictional attributes. The peer statistics behind the Fingerprint percentiles (and the pool sizes) are MADE-UP SAMPLE figures: the app computes real ranks from the loaded save.</p></div>
+<div class="cap"><p>All players are fictional (names, clubs, nations, shields and faces are synthetic placeholders; the app draws the facepack PNG and logo-pack PNG). Attributes and Full Potential values were produced by the app's own logic (potential.project_attrs) on those fictional attributes.</p></div>
 <script>
 /* =====================================================================================================================
    1. SAMPLE DATA (fictional). GENERATED by the app's own logic, see the notes at the top of this file. Do not hand edit.
@@ -343,7 +276,7 @@ const qs=new URLSearchParams(location.search),hq=new URLSearchParams(location.ha
 const has=k=>qs.has(k)||hq.has(k),getq=k=>qs.get(k)||hq.get(k);
 const PAIRS={out:['mferrer','jlindahl'],gk:['astrand','mhlavaty'],young:['tsalvador','cwhitby'],veteran:['ikessler','mferrer']};
 const PAIR_NAMES={out:'Two midfielders',gk:'Two goalkeepers',young:'Young high-PA vs prime',veteran:'Veteran vs prime'};
-const S={fp:getq('view')==='fp',pair:getq('pair')||'out',nums:has('nums'),pot:has('pot'),pick:has('pick'),min:has('min'),noface:has('noface'),swap:has('swap'),q:getq('q')||'lind',pickSel:0,sameType:true};
+const S={pair:getq('pair')||'out',nums:has('nums'),pot:has('pot'),pick:has('pick'),min:has('min'),noface:has('noface'),swap:has('swap'),q:getq('q')||'lind',pickSel:0,sameType:true};
 if(!PAIRS[S.pair])S.pair='out';
 if(has('bare'))document.documentElement.classList.add('bare');
 if(S.min)document.documentElement.classList.add('min');
@@ -383,10 +316,7 @@ const abil=(label,code,v,col)=>S.nums?`<div class="cab" title="${code} ${v}"><sm
   :`<div class="cab" title="${code} ${v}"><small>${label}</small><div class="stars">${star(v)}</div></div>`;
 const segc=(act,items,cur,label)=>`<span class="sg" role="group" aria-label="${label}">${items.map(([k,l])=>`<button data-act="${act}" data-v="${k}" aria-pressed="${k===cur}" class="${k===cur?'on':''}">${l}</button>`).join('')}</span>`;
 const potSeg=()=>segc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur','Attribute values');
-const viewSeg=()=>segc('view',[['ov','Overlay'],['fp','Fingerprint']],S.fp?'fp':'ov','View');
 const ph=(t,r='')=>`<div class="ph"><span>${t}</span>${r?`<span class="r">${r}</span>`:''}</div>`;
-/* left header of both views: the view switch replaces the panel title, so it never moves when the view changes */
-const viewHead=()=>`<div class="ph" style="justify-content:flex-start">${viewSeg()}</div>`;
 const mk=(c,sq)=>`<i class="dot${sq?' sq':''}" style="background:var(--${c})"></i>`;   // identity marker: A circle, B diamond
 
 /* ---- persistent header + action strip ---- */
@@ -398,12 +328,12 @@ function pblock(p,cls){
 }
 const header=()=>`<div class="hdr">${pblock(A(),'pa')}<div class="vs" aria-hidden="true">VS</div>${pblock(B(),'pb')}</div>`;
 function actionStrip(){
-  return `<div class="strip"><button class="btn b2" data-act="swap" title="Swap sides: A becomes B and B becomes A">Swap sides</button><button class="btn b2" data-act="pick" title="Choose another player to compare with ${sn(A())}">Change player B…</button><button class="btn b2" data-act="img" title="Save the current view (${S.fp?'fingerprint and situation duels':'overlaid radar and attribute table'}) with both players as one PNG image">Save comparison image…</button>
+  return `<div class="strip"><button class="btn b2" data-act="swap" title="Swap sides: A becomes B and B becomes A">Swap sides</button><button class="btn b2" data-act="pick" title="Choose another player to compare with ${sn(A())}">Change player B…</button>
     <span class="sp"></span><button class="btn b2" data-act="short" title="Add both players to the Player Shortlist">Add both to Shortlist</button><button class="btn b2" data-act="close">Close</button></div>`;
 }
 
 /* =====================================================================================================================
-   4. MAIN AREA, VIEW 'OVERLAY' (overlaid radars + attribute table)
+   4. MAIN AREA (overlaid radars + attribute table)
    ===================================================================================================================== */
 function radarAB(ax,bx){
   const W=358,H=336,cx=179,cy=170,R=106,f1=x=>x.toFixed(1),pt=(i,k)=>{const t=(-90+i*60)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=(arr,k)=>arr.map((v,i)=>pt(i,k(v)).map(f1).join(',')).join(' ');
@@ -424,12 +354,12 @@ function attrCol(p,q,key){
     const df=d===0?`<span class="df" title="Level">=</span>`:d>0?`<span class="df ca" title="${sn(p)} higher by ${ad}">‹ ${ad}</span>`:`<span class="df cb" title="${sn(q)} higher by ${ad}">${ad} ›</span>`;
     return `<div class="ar" title="${a[0]}: ${sn(p)} ${gv(a)}, ${sn(q)} ${gv(b)}${a[3]?' (lower is better)':''}"><span class="an">${a[0]}</span>${tileV(a)}${df}${tileV(b)}</div>`}).join('');
 }
-/* tally in the header of the right-hand panel (both views): markers + counts, 'level' last */
+/* tally in the header of the Attributes panel: markers + counts, 'level' last */
 const wonNote=(x,y,l,tip)=>`<span class="pnote won" title="${tip}">${mk('a')}<b class="ca">${x}</b>${mk('b',1)}<b class="cb">${y}</b><span>· ${l} level</span></span>`;
 function attrPanelAB(){
   const p=A(),q=B(),t=tally(p,q);
   const cols=isGK(p)?[['gk','foot'],['ment'],['phys','hid']]:[['tech','foot'],['ment'],['phys','hid']];
-  return `<div class="pn" style="flex:1;min-height:0">${ph('Attributes',wonNote(t.wa,t.wb,t.lv,`Attributes won: ${p.name} ${t.wa}, ${q.name} ${t.wb}, ${t.lv} level. Every attribute counts equally; Footedness is not counted${isGK(p)?'; the outfield Technical group of keepers is not listed or counted':''}.`)+potSeg())}
+  return `<div class="pn" style="flex:1;min-height:0">${ph('Attributes',wonNote(t.wa,t.wb,t.lv,`Attributes won: ${p.name} ${t.wa}, ${q.name} ${t.wb}, ${t.lv} level. Every attribute counts equally; Footedness is not counted${isGK(p)?'; the outfield Technical group of keepers is not listed or counted':''}.`))}
     <div class="a-cols scr">${cols.map(c=>`<div>${c.map((k,i)=>(i?'<div style="height:6px"></div>':'')+attrCol(p,q,k)).join('')}</div>`).join('')}</div></div>`;
 }
 function factsAB(){
@@ -451,62 +381,10 @@ function edges(ax,bx){
 }
 function overlayView(){
   const ax=axes(A()),bx=axes(B());
-  return `<div class="main"><div class="col a-left"><div class="pn" style="flex:1">${viewHead()}<div class="scr"><div style="padding:0 0 4px">${radarAB(ax,bx)}</div>
+  return `<div class="main"><div class="col a-left"><div class="pn" style="flex:1">${ph('Compare',potSeg())}<div class="scr"><div style="padding:0 0 4px">${radarAB(ax,bx)}</div>
     <div class="a-leg"><span>${mk('a')}${A().name}</span><span>${mk('b',1)}${B().name}</span><span style="color:var(--tx2);font-weight:400;font-size:10px">solid / dashed outline · ring 10 and 20</span></div>${edges(ax,bx)}</div></div></div>
     <div class="col" style="flex:1">${attrPanelAB()}${factsAB()}</div></div>`;
 }
-
-/* =====================================================================================================================
-   5. MAIN AREA, VIEW 'FINGERPRINT' (percentile pizza against position peers + situation duels + profile similarity)
-   ===================================================================================================================== */
-/* situation slices: attribute lists (current / potential per the control; lower-is-better attributes inverted). phase = tint of the pizza background (even phases are shaded). */
-const SL_OUT=[['Finishing',['Finishing','Off the Ball','Long Shots'],0],['Passing range',['Passing','Vision','Crossing'],0],['Carrying the ball',['Dribbling','Agility','Flair'],0],['Keeping the ball',['Composure','First Touch','Technique','Balance'],0],['Set pieces',['Free Kick','Corners','Penalties','Long Throws'],0],
- ['Winning the ball',['Tackling','Marking','Anticipation','Aggression'],1],['Reading the game',['Positioning','Concentration','Decisions','Teamwork'],1],['Aerial duels',['Heading','Jumping Reach','Strength','Bravery'],1],
- ['Pace',['Pace','Acceleration'],2],['Engine',['Stamina','Work Rate','Natural Fitness','Determination'],2],['Availability',['Injury Prone','Natural Fitness'],2],['Big matches',['Important Matches','Consistency','Leadership'],3]];
-const SL_GK=[['Shot-stopping',['Reflexes','Handling','One on Ones'],0],['Command of area',['Command of Area','Aerial Reach','Communication'],0],['Sweeping',['Rushing Out','Anticipation','Acceleration'],0],['Short distribution',['Passing','First Touch','Technique'],1],['Long distribution',['Kicking','Throwing'],1],
- ['Positioning',['Positioning','Concentration','Decisions'],2],['Aerial presence',['Aerial Reach','Jumping Reach','Bravery'],2],['Agility',['Agility','Balance','Acceleration'],2],['Big matches',['Important Matches','Consistency','Composure'],3],['Availability',['Injury Prone','Natural Fitness'],3]];
-/* PEER STATS = [mean, sd] of each slice (1-20 scale) over the peer pool.  MADE-UP SAMPLE values; the app computes REAL RANKS from the loaded save:
-   pool = players whose best position is in the same group and CA >= 100, per slice the sorted list of slice means of good(attribute); percentile = rank in that list (bisect), not a normal curve. */
-const peerKey=p=>p.pos==='GK'?'gk':['AMR','AML','ML','MR','ST'].includes(p.pos)?'wing':'mid';
-const PEER={mid:{n:2846,name:'central midfielders',s:[[10.6,2.4],[12.9,2.3],[11.4,2.6],[12.8,2.2],[9.4,2.9],[12.0,2.4],[12.4,2.0],[10.3,2.6],[12.0,2.8],[14.0,2.0],[13.5,2.4],[12.5,2.0]]},
- wing:{n:3302,name:'wide players and strikers',s:[[12.5,2.5],[11.8,2.4],[14.0,2.4],[12.6,2.2],[9.5,2.9],[8.8,2.8],[10.8,2.2],[8.4,2.6],[14.8,2.4],[13.0,2.1],[13.2,2.4],[12.0,2.0]]},
- gk:{n:742,name:'goalkeepers',s:[[12.8,2.6],[12.3,2.5],[11.0,2.8],[9.6,2.8],[11.5,2.9],[12.8,2.2],[13.0,2.4],[11.5,2.5],[12.4,2.3],[13.2,2.4]]}};
-const erf=x=>{const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x))};
-const cdf=z=>.5*(1+erf(z/Math.SQRT2));   // MOCKUP ONLY (the app ranks in the sorted pool)
-const ordn=n=>{const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0])};
-function dData(){const p=A(),q=B(),SL=isGK(p)?SL_GK:SL_OUT,pe=PEER[peerKey(p)];
-  const rows=SL.map(([n,names,ph_],i)=>{const va=mean(p,names),vb=mean(q,names),[m,sd]=pe.s[i];return{n,names,ph:ph_,va,vb,pa:Math.round(cdf((va-m)/sd)*100),pb:Math.round(cdf((vb-m)/sd)*100),m,sd}});
-  const ca=rows.map(r=>r.va-r.m),cb=rows.map(r=>r.vb-r.m),dot=(x,y)=>x.reduce((s,v,i)=>s+v*y[i],0),cos=dot(ca,cb)/Math.sqrt(dot(ca,ca)*dot(cb,cb));
-  return{rows,pe,sim:Math.round((cos+1)/2*100)};}
-/* the pizza is drawn at the pixel size of its host (as a QWidget paints at its own size): fitPizza() measures the host after layout */
-function pizzaSVG(d,W,H){
-  const p=A(),q=B(),N=d.rows.length,span=360/N,cx=W/2,cy=H/2,R=Math.max(90,Math.min(W/2-118,H/2-46)),r0=Math.round(R*.27),
-    P=(r,a)=>{const t=a*Math.PI/180;return[cx+r*Math.cos(t),cy+r*Math.sin(t)]},f=x=>x.toFixed(1),rr=pc=>r0+(R-r0)*Math.max(pc,3)/100;
-  const wedge=(a0,a1,ri,ro)=>{const A0=P(ro,a0),A1=P(ro,a1),B1=P(ri,a1),B0=P(ri,a0);return `M${f(A0[0])} ${f(A0[1])}A${f(ro)} ${f(ro)} 0 0 1 ${f(A1[0])} ${f(A1[1])}L${f(B1[0])} ${f(B1[1])}A${f(ri)} ${f(ri)} 0 0 0 ${f(B0[0])} ${f(B0[1])}Z`};
-  let s='';d.rows.forEach((r,i)=>{if(r.ph%2===0)s+=`<path d="${wedge(-90+i*span,-90+(i+1)*span,r0,R)}" fill="rgba(255,255,255,.035)"/>`});
-  [25,50,75,100].forEach(k=>s+=`<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(rr(k))}" fill="none" stroke="${k===50?'rgba(255,255,255,.34)':'rgba(255,255,255,.10)'}"${k===50?' stroke-dasharray="4 4"':''}/>`);
-  d.rows.forEach((r,i)=>{const a0=-90+i*span,m=a0+span/2,e=P(R,a0),b=P(r0,a0);s+=`<line x1="${f(b[0])}" y1="${f(b[1])}" x2="${f(e[0])}" y2="${f(e[1])}" stroke="rgba(255,255,255,.10)"/>`;
-    const ta=`${sn(p)}: ${ordn(r.pa)} percentile of ${d.pe.name} in your save (this slice ${dec(r.va)}, peer mean ${dec(r.m)}). ${r.names.join(', ')}`,tb=`${sn(q)}: ${ordn(r.pb)} percentile of ${d.pe.name} in your save (this slice ${dec(r.vb)}, peer mean ${dec(r.m)}). ${r.names.join(', ')}`;
-    s+=`<path d="${wedge(a0+1.4,m-.7,r0,rr(r.pa))}" fill="#52B0FF" stroke="#14151A" stroke-width=".8"><title>${ta}</title></path><path d="${wedge(m+.7,a0+span-1.4,r0,rr(r.pb))}" fill="#D77CFF" stroke="#14151A" stroke-width=".8"><title>${tb}</title></path>`});
-  d.rows.forEach((r,i)=>{const m=-90+(i+.5)*span,[lx,ly]=P(R+11,m),c=Math.cos(m*Math.PI/180),sI=Math.sin(m*Math.PI/180),anc=c>.1?'start':c<-.1?'end':'middle',top=sI<-.7,bot=sI>.7,
-      y1=top?ly-17:bot?ly+10:ly-2,y2=top?ly-4:bot?ly+24:ly+12;
-    s+=`<g><title>${r.n}: ${r.names.join(', ')}</title><text x="${f(lx)}" y="${f(y1)}" text-anchor="${anc}" font-size="10" font-weight="700" fill="#8B96A8">${r.n.toUpperCase()}</text><text x="${f(lx)}" y="${f(y2)}" text-anchor="${anc}" font-size="12" font-weight="700"><tspan fill="#52B0FF">${r.pa}</tspan><tspan fill="#8B96A8" font-weight="400"> / </tspan><tspan fill="#D77CFF">${r.pb}</tspan></text></g>`});
-  s+=`<circle cx="${f(cx)}" cy="${f(cy)}" r="${r0-2}" fill="#14151A" stroke="rgba(255,255,255,.18)"/><g><title>MATCH = profile similarity (our own number): how alike the two shapes are once the peer average is removed (cosine of the ${N} slice differences, mapped to 0-100). 50 = unrelated, 100 = identical shape. It ignores overall level.</title><text x="${f(cx)}" y="${f(cy+4)}" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">${d.sim}</text><text x="${f(cx)}" y="${f(cy-12)}" text-anchor="middle" font-size="8" font-weight="700" fill="#8B96A8" letter-spacing=".6">MATCH</text></g>`;
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Percentile fingerprint of ${p.name} and ${q.name} against ${d.pe.name}, one slice per situation; match ${d.sim} out of 100">${s}</svg>`;
-}
-function fitPizza(){const h=document.getElementById('fpHost');if(h)h.innerHTML=pizzaSVG(dData(),h.clientWidth,h.clientHeight)}
-function duelCards(d){const p=A(),q=B();
-  return d.rows.map(r=>{const df=r.va-r.vb,w=Math.abs(df)<.5?'tie':df>0?'wa':'wb',t=r.va+r.vb;
-    return `<div class="dc ${w}" title="${r.n}: ${sn(p)} ${dec(r.va)}, ${sn(q)} ${dec(r.vb)} (means of ${r.names.join(', ')})"><div class="t"><b>${r.n}</b><em class="${w==='wa'?'ca':w==='wb'?'cb':''}" style="${w==='tie'?'color:var(--tx2)':''}">${w==='tie'?'level':(w==='wa'?sn(p):sn(q))+' +'+Math.abs(df).toFixed(1)}</em></div>
-      <div class="tw"><b class="ca">${dec(r.va)}</b><span class="tg2"><i style="width:${r.va/t*100}%;background:var(--a);opacity:${w==='wb'?.45:1}"></i><i style="width:${r.vb/t*100}%;background:var(--b);opacity:${w==='wa'?.45:1}"></i></span><b class="cb">${dec(r.vb)}</b></div><div class="at">${r.names.join(' · ')}</div></div>`}).join('');}
-function fingerprintView(){
-  const d=dData(),p=A(),q=B(),ca=d.rows.filter(r=>r.va-r.vb>=.5).length,cb=d.rows.filter(r=>r.vb-r.va>=.5).length,lv=d.rows.length-ca-cb,n=d.pe.n.toLocaleString('en-GB');
-  return `<div class="main"><div class="col fp-left"><div class="pn" style="flex:1">${viewHead()}<div class="fp-host" id="fpHost"></div>
-      <div class="pfoot"><div><span style="color:#fff">Percentile among ${n} ${d.pe.name}</span> in your save with CA 100 or more <span class="smp" title="Review aid, not part of the window: these peer figures are made up. The app computes real ranks from the loaded save.">SAMPLE</span>${d.pe.n<1000?' <span class="warn" title="Fewer than 1,000 players in this pool: percentiles move in big steps.">Small pool, coarse percentiles.</span>':''}</div>
-      <div>Attribute readings, not match statistics. <span class="p2">Slice length = percentile, dashed ring = peer median. </span>${S.pot?'Full Potential values are ranked against the peers\' current values. ':''}Left half ${mk('a')}<b class="ca">${sn(p)}</b>, right half ${mk('b',1)}<b class="cb">${sn(q)}</b>.</div></div></div></div>
-    <div class="col" style="flex:1"><div class="pn" style="flex:1;min-height:0">${ph('Situation duels',wonNote(ca,cb,lv,`Situations won (slice mean ahead by 0.5 or more): ${p.name} ${ca}, ${q.name} ${cb}, ${lv} level.`)+potSeg())}<div class="scr"><div class="d-duel">${duelCards(d)}</div></div></div>${factsAB()}</div></div>`;
-}
-const mainView=()=>S.fp?fingerprintView():overlayView();
 
 /* =====================================================================================================================
    6. PICKER ('Compare with...' / 'Change player B...'): search box + suggestions. State ?pick (and ?q=text). Real app: QDialog 540 wide, QLineEdit + QListView
@@ -549,25 +427,23 @@ function toast(m){const w=document.querySelector('.win');if(!w)return;let t=w.qu
 function seg(id,items,cur,pick){const e=document.getElementById(id);e.innerHTML='';items.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.setAttribute('aria-pressed',cur===k);if(cur===k)b.className='on';b.onclick=()=>{pick(k);render()};e.appendChild(b)})}
 function render(){
   _sid=0;
-  document.getElementById('frame').innerHTML=`<div class="os"><span>Compare players: ${A().name} and ${B().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}${mainView()}</div>${actionStrip()}${S.pick?pickerHTML():''}</div>`;
+  document.getElementById('frame').innerHTML=`<div class="os"><span>Compare players: ${A().name} and ${B().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}${overlayView()}</div>${actionStrip()}${S.pick?pickerHTML():''}</div>`;
   seg('pSeg',Object.entries(PAIR_NAMES),S.pair,k=>{S.pair=k;S.ids=null;S.swap=false});
   const tg=document.getElementById('tgs');tg.innerHTML='';
-  [['fp','Fingerprint view'],['nums','Ability as numbers'],['pot','Full Potential'],['pick','Picker open'],['swap','Swapped'],['noface','No face pictures'],['min','Min size 1062 x 640']].forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.setAttribute('aria-pressed',!!S[k]);b.onclick=()=>{S[k]=!S[k];if(k==='min')document.documentElement.classList.toggle('min',S.min);render()};tg.appendChild(b)});
-  const q=new URLSearchParams();if(S.fp)q.set('view','fp');if(S.pair!=='out'&&S.pair!=='custom')q.set('pair',S.pair);['nums','pot','pick','swap','noface','min'].forEach(k=>{if(S[k])q.set(k,'')});if(S.pick&&S.q)q.set('q',S.q);if(document.documentElement.classList.contains('bare'))q.set('bare','1');
+  [['nums','Ability as numbers'],['pot','Full Potential'],['pick','Picker open'],['swap','Swapped'],['noface','No face pictures'],['min','Min size 1062 x 640']].forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.setAttribute('aria-pressed',!!S[k]);b.onclick=()=>{S[k]=!S[k];if(k==='min')document.documentElement.classList.toggle('min',S.min);render()};tg.appendChild(b)});
+  const q=new URLSearchParams();if(S.pair!=='out'&&S.pair!=='custom')q.set('pair',S.pair);['nums','pot','pick','swap','noface','min'].forEach(k=>{if(S[k])q.set(k,'')});if(S.pick&&S.q)q.set('q',S.q);if(document.documentElement.classList.contains('bare'))q.set('bare','1');
   history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString().replace(/=(&|$)/g,'$1'):''));
-  document.title='Compare players'+(S.fp?' - Fingerprint':' - Overlay');
-  fitPizza();
+  document.title='Compare players';
   if(S.pick)wirePicker();
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act],[data-pid]');if(!t||t.disabled)return;
   if(t.dataset.pid){S.pickSel=+t.dataset.i;commit();return}
   const a=t.dataset.act,v=t.dataset.v;
-  if(a==='pot')S.pot=v==='pot';else if(a==='view')S.fp=v==='fp';
+  if(a==='pot')S.pot=v==='pot';
   else if(a==='swap'){S.swap=!S.swap}else if(a==='pick'){S.pick=true;S.pickSel=0}else if(a==='cancel'){S.pick=false}else if(a==='go'){commit();return}
   else if(a==='sametype'){S.sameType=!S.sameType;S.pickSel=0}
   else if(a==='short'){S.short=!S.short;toast(S.short?'Both players added to the Player Shortlist (mockup).':'Removed from the Player Shortlist (mockup).')}
-  else if(a==='img'){toast('Would save comparison-'+sn(A())+'-'+sn(B())+'.png (mockup: no file is written).');return}
   else if(a==='close'){toast('Close: the window closes (mockup).');return}else return;
   render();
 });
