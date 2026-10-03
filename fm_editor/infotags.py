@@ -27,7 +27,7 @@ def tags_for(person, *, queued_hgp=False, queued_hgc=False, hgp=False, hgc=False
         t.append(('HGC', 'HGC', 'Homegrown player (club)'))
     if loan_parent is not None:
         t.append(('LOAN', 'LOAN', f'On loan from {loan_club}' if loan_club else 'On loan'))
-    elif value_est is not None and value_est >= NOT_FOR_SALE:
+    elif value_est == NOT_FOR_SALE:   # exactly the marker: values ABOVE 300M mean 'no value', not 'not for sale' (HANDOVER)
         t.append(('NFS', 'NFS', 'Not for sale'))
     if age is not None and age <= U21_MAX_AGE:
         t.append(('U21', 'U21', 'Under 21'))
