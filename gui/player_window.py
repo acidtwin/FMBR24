@@ -1,6 +1,6 @@
 """Player window (master visual: mockups/player-window.html). Persistent header (QFrame#pwHeader: identity + HGP/HGC pills,
 CA / PA / Dev Rate boxes, 'Changes queued' widget - identical on every tab) above a left tab strip (QFrame#pwTabStrip) +
-QStackedWidget, and a persistent action strip (QFrame#actionStrip: Add to Shortlist / Close - Close is ALWAYS last).
+QStackedWidget, and a persistent action strip (QFrame#actionStrip: Compare to... / Add to Shortlist / Close - Close is ALWAYS last).
 Header, tab strip and action strip are separate widgets so a theme can paint each of them.
 
 HGP / HGC pills are the controls (no Make buttons, no dialogs): for a patchable player (human club, club known) a not-set
@@ -18,6 +18,7 @@ Data the save does not give us yet is read from `data` (see `player_extra_data`)
 (respecting Settings > Show PENDING markers). Projected ("at potential") values are display only.
 """
 import calendar
+import html
 import math
 
 
@@ -305,6 +306,7 @@ QDialog#playerWindow QPushButton#pwShortOn, QDialog#playerWindow QPushButton#pwS
 QDialog#playerWindow QPushButton#pwGhost {{ background:{c['surface']}; color:#FFFFFF; border:1px solid {c['border_bright']};
     border-radius:3px; font-size:12px; font-weight:bold; padding:0 16px; }}
 QDialog#playerWindow QPushButton#pwGhost:hover {{ background:{c['elevated']}; }}
+QDialog#playerWindow QPushButton#pwGhost[open="true"] {{ background:{c['selection_bg']}; color:{C_POT}; border:1px solid {c['accent_hover']}; }}
 QDialog#playerWindow QPushButton#pwGhost:disabled {{ background:{c['elevated']}; color:{C_TX3}; border:1px solid {c['border']}; }}
 """
 
@@ -512,7 +514,7 @@ class PlayerWindow(QDialog):
     no host = display-only pills with `patch_tip` as tooltip."""
 
     def __init__(self, person, save_data, club_entity_id, parent=None, shortlisted=False, can_patch=False,
-                 data=None, queue=None, patch_tip='Not your club'):
+                 data=None, queue=None, patch_tip='Not your club', picker=None):
         super().__init__(parent)
         self.setObjectName('playerWindow')
         self.setWindowTitle(person['name'])
@@ -528,6 +530,9 @@ class PlayerWindow(QDialog):
         self._can_patch = bool(can_patch and queue is not None)
         self._patch_tip = patch_tip
         self._shortlist_added = False
+        self._compare_with = None   # person picked in 'Compare to...': the window closes (accept) and the host opens the Compare page
+        self._picker_ctx = picker   # gui.player_picker.PickerContext; None = no Compare button (scripts / tests)
+        self._picker = None
         self._pot_on = False
         self._pot_segs = []         # (Current, Full Potential) buttons of every Current | Full Potential control
         self._proj = None
@@ -1171,6 +1176,16 @@ class PlayerWindow(QDialog):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
         h.addStretch(1)
+        if self._picker_ctx is not None:      # mockup: [Compare to...] [Add to Shortlist] [Close]
+            cmp_btn = QPushButton('Compare to…  ▴')
+            cmp_btn.setObjectName('pwGhost')
+            cmp_btn.setFixedHeight(32)
+            cmp_btn.setMinimumWidth(132)
+            cmp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            cmp_btn.setToolTip(f"Compare {self._person['name']} with another player")
+            cmp_btn.clicked.connect(lambda checked=False: self._toggle_compare_popup())
+            self._cmp_btn = cmp_btn
+            h.addWidget(cmp_btn)
         if self._shortlisted:
             sl = QPushButton('✓ On Player Shortlist')
             sl.setObjectName('pwShortOn')
@@ -1739,6 +1754,29 @@ class PlayerWindow(QDialog):
         return panel
 
     # actions ------------------------------------------------------------------------------------
+    def _toggle_compare_popup(self):
+        """'Compare to...' popup (mockup player-window.html ?cmp): search box + Recent | Squad | Shortlist, opens upwards."""
+        from gui.player_picker import PlayerPicker
+        if self._picker is None:
+            self._picker = PlayerPicker(self, self._picker_ctx, own_search=True)
+            self._picker.picked.connect(self._compare_picked)
+            self._picker.closed.connect(lambda: self._set_cmp_open(False))
+        if self._picker.isVisible():
+            self._picker.close_popup()
+            return
+        self._set_cmp_open(True)
+        self._picker.show_for(None, self._cmp_btn, f"Compare <b>{html.escape(self._person['name'])}</b> with…", (self._person.get('id'),),
+                              self._is_gk, above=True, width=420)
+
+    def _set_cmp_open(self, on):
+        self._cmp_btn.setProperty('open', bool(on))
+        self._cmp_btn.style().unpolish(self._cmp_btn)
+        self._cmp_btn.style().polish(self._cmp_btn)
+
+    def _compare_picked(self, person):
+        self._compare_with = person
+        self.accept()
+
     def _do_add_shortlist(self):
         self._shortlist_added = True
         self.accept()
