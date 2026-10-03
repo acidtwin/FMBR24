@@ -83,7 +83,7 @@ HOVER SPREAD  (identical in A and B; rows with ONE tag do not expand, hit-test: 
   Animation (DECIDED, user request): ONE spread factor s in 0..1 drives the overlay's paint. Enter: s -> 1 in 180ms OutCubic (mockup: ease-out). Leave: s -> 0 in 120ms InCubic, then hide the overlay (the cell's own stack shows again, identical at s=0).
     One QVariantAnimation reused; re-entering mid-collapse starts from the CURRENT s (interruptible, no jump). No timers left running (the animation stops at its end).
     Per tag i: left(s) = lerp(collapsed_left_i, spread_left_i, s), collapsed_left_i = 6 + fw + 9*min(i,2) - width_i (tags i >= 3 sit at i=2's slot and fade in with alpha s), spread_left_i = 6 + sum(prev widths + 4).
-    Label of a back tag: alpha s (it is clipped/unreadable collapsed). '+n' marker: alpha 1-s. Front tag: label always full. Card width = lerp(collapsed extent w0, spread width w1, s); card border + shadow alpha scale with s; fill = row colour always.
+    Label of a back tag: alpha s (it is clipped/unreadable collapsed). '+n' marker: alpha 1-s. Front tag: label always full. Card width = lerp(collapsed extent w0, spread width w1, s); NO card outline (user), shadow alpha scales with s; fill = row colour always.
     Paint order always back-to-front (last tag first, front tag LAST) with the 1px row-colour ring, so partially overlapped tags read right mid-flight.
   Tooltips: collapsed cell tooltip (Qt.ToolTipRole of the Info item) = every line, newline separated, e.g. 'Injured, 12 days' + newline + 'Homegrown player (nation)'.  Over the spread, QToolTip.showText per tag rect: that tag's own line (TAGS above).
   Accessibility: the tooltip text IS the screen-reader / keyboard text: also set it as Qt.AccessibleTextRole, and make the item DisplayRole the short labels joined by a space ('INJ HGP HGC') so Ctrl+C, type-ahead and accessibility see the same data. The overlay is mouse only; keyboard users read the tooltip / status bar of the selected row.
@@ -124,14 +124,14 @@ td.g{padding:0 0 0 10px}
 td.info{padding:0;overflow:visible}
 @property --s{syntax:'<number>';inherits:true;initial-value:0}
 /* spread factor --s 0..1 drives everything (width, tag lefts, label / border / shadow alpha); the app animates the same factor with a QVariantAnimation */
-.pop{--s:0;--e:rgba(0,0,0,0);visibility:hidden;position:absolute;left:0;top:0;z-index:30;border:1px solid rgba(52,55,64,var(--s));border-radius:4px;box-sizing:border-box;background:#14151A;width:calc((var(--w0) + (var(--w1) - var(--w0))*var(--s))*1px);
+.pop{--s:0;--e:rgba(0,0,0,0);visibility:hidden;position:absolute;left:0;top:0;z-index:30;border:1px solid transparent;border-radius:4px;box-sizing:border-box;background:#14151A;width:calc((var(--w0) + (var(--w1) - var(--w0))*var(--s))*1px);
  box-shadow:0 1px 0 rgba(0,0,0,calc(.28*var(--s))),0 2px 0 rgba(0,0,0,calc(.16*var(--s))),0 3px 0 rgba(0,0,0,calc(.08*var(--s))),0 6px 14px rgba(0,0,0,calc(.45*var(--s)));margin:-1px 0 0 -1px;height:26px;
  transition:--s 120ms ease-in,visibility 0s 120ms}
 .pop .itag{top:3px;left:calc((var(--l0) + (var(--l1) - var(--l0))*var(--s))*1px)}
 .pop .itag i{font-style:normal;opacity:var(--s)}.pop .itag.f i{opacity:1}.pop .itag.h{opacity:var(--s)}
 .pop .imk{opacity:calc(1 - var(--s));top:0}
 tr:nth-child(even) td.info .pop{background:#161721}
-tr.sel td.info .pop{background:#2A1B4A;border-color:rgba(154,124,255,calc(.55*var(--s)))}
+tr.sel td.info .pop{background:#2A1B4A;border-color:transparent}
 td.info.mult:hover,td.info.force{z-index:20}
 td.info.mult:hover .pop,td.info.force .pop{--s:1;visibility:visible;transition:--s 180ms ease-out,visibility 0s}
 td.info .istk{transition:visibility 0s 120ms}

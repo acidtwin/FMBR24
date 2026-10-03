@@ -171,9 +171,7 @@ class TagSpread(QWidget):
         for off, a in ((3, 20), (2, 41), (1, 72)):   # stacked hard rects under the card
             p.setBrush(QColor(0, 0, 0, round(a * s)))
             p.drawRoundedRect(card.translated(0, off), 4, 4)
-        edge = QColor(EDGE_SEL if sel else EDGE)
-        edge.setAlpha(round(edge.alpha() * s))
-        p.setPen(QPen(edge, 1))
+        p.setPen(Qt.PenStyle.NoPen)   # no outline on the hover card (user), the shadow alone lifts it
         p.setBrush(bg)
         p.drawRoundedRect(card, 4, 4)
         p.setPen(Qt.PenStyle.NoPen)
