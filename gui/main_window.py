@@ -34,7 +34,9 @@ from gui import pw_background as _pwbg
 from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
 from gui import header_net as _header_net
-from gui.people_model import (PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT,
+from fm_editor import infotags as _infotags
+from gui.info_column import InfoHover, paint_stack, row_bg, INFO_W
+from gui.people_model import (PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT, INFO_ROLE, INFO_BASE_ROLE,
                               MEDIA_UID_ROLE, CLUB_UID_ROLE, NATION_ROLE, nation_label)
 from gui.player_window import PlayerWindow, TIER_HEX, tier
 from gui.faces import get_service as _faces_service
@@ -167,6 +169,7 @@ _DOT_SEQ = [1, 2, 3, 4, 3, 2]  # bounces . .. ... .... ... .. (then . again), us
 # Column header tooltips shared across all player tables
 _COL_TT = {
     'INJ':    'Injured',
+    'INFO':   'Status tags: injured, homegrown (HGP / HGC, queued ones in yellow), on loan, not for sale, under 21\nHover a stack to spread it',
     'Pos':    'Primary playing position',
     'CA':     'Current Ability (1–200)\nOverall quality right now',
     'PA':     'Potential Ability (1–200)\nMaximum this player can reach',
@@ -878,6 +881,26 @@ class _RowMarkDelegate(QStyledItemDelegate):
             painter.fillRect(option.rect.x(), option.rect.y(), 3, option.rect.height(), QColor(COLORS['queued']))
 
 
+class InfoDelegate(_RowMarkDelegate):
+    """Info column (col 1) of the player lists: the fanned tag stack of INFO_ROLE (fm_editor.infotags, mockups/player-lists.html
+    variant A) painted by gui.info_column.paint_stack; the cell text (short labels) is only for copy / accessibility.
+    The hover spread is the table's InfoHover overlay. A row with no tags paints the plain cell."""
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        option.text = ''
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        tags = index.data(INFO_ROLE)
+        if tags:
+            bg = row_bg(index.row(), bool(option.state & QStyle.StateFlag.State_Selected),
+                        bool(index.siblingAtColumn(0).data(ROWQ_ROLE)))
+            paint_stack(painter, option.rect.x(), option.rect.y(), option.rect.height(), tags, bg)
+
+    def sizeHint(self, option, index):
+        return QSize(INFO_W, super().sizeHint(option, index).height())
+
+
 _AB_W_STARS, _AB_W_NUM = 76, 45   # CA / PA column width in the lists: 10 inset (= header text) + 5 stars (58) + 8 | the old number width
 
 
@@ -1335,7 +1358,18 @@ def _queue_map(queue):
     return qm
 
 
-def _mark_rows(table, qm, hg_cols):
+def _info_apply(item, base, kinds):
+    """Set one QTableWidget Info cell from its stored base (person, tags_for kwargs) and the queued kinds of that player."""
+    p, kw = base
+    tags = _infotags.tags_for(p, queued_hgp='hgp' in kinds, queued_hgc='hgc' in kinds, **kw)
+    item.setData(INFO_BASE_ROLE, base)
+    item.setData(INFO_ROLE, tags)
+    item.setText(_infotags.joined(tags))
+    item.setToolTip(_infotags.tooltip(tags))
+    item._sk = _infotags.sort_key(tags)
+
+
+def _mark_rows(table, qm, hg_cols, info_col=None):
     """QTableWidget: refresh HG cells (hg_cols: col -> kind) and mark (ROWQ_ROLE on col 0) the rows whose player
     (UserRole of col 0) has a queued edit. Tables here are small (squad / 200-row report / shortlist)."""
     rc = table.rowCount()
@@ -1353,6 +1387,10 @@ def _mark_rows(table, qm, hg_cols):
                 it = table.item(row, col)
                 if it is not None:
                     _hg_apply(it, kind, it.data(HG_BASE_ROLE), kind in kinds)
+            if info_col is not None:   # the Info cell is rebuilt from its stored base + the queue
+                it = table.item(row, info_col)
+                if it is not None and it.data(INFO_BASE_ROLE):
+                    _info_apply(it, it.data(INFO_BASE_ROLE), kinds)
             it0.setData(ROWQ_ROLE, bool(kinds))
     finally:
         table.setSortingEnabled(was)
@@ -3803,7 +3841,7 @@ class MainWindow(QMainWindow):
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
-        self._inj_delegate = _PosBadgeDelegate(self._table)
+        self._inj_delegate = InfoDelegate(self._table)   # col 1 = Info (INJ / HGP / HGC / LOAN / NFS / U21 tags)
         self._pos_delegate = _PosBadgeDelegate(self._table)
         self._table.setItemDelegateForColumn(1, self._inj_delegate)
         self._table.setItemDelegateForColumn(2, self._pos_delegate)
@@ -3813,6 +3851,7 @@ class MainWindow(QMainWindow):
         _set_star_delegates(self._table, 3, 4, 5)
         _set_media_delegates(self._table, 0, None, 7)
         self._configure_table_for_mode('squad')
+        self._info_hover = InfoHover(self._table, 1)
         vbox.addWidget(self._table)
 
 
@@ -4824,7 +4863,7 @@ class MainWindow(QMainWindow):
         self._reports_table.setShowGrid(False)
         self._reports_table.setSortingEnabled(True)
 
-        self._reports_inj_delegate = _PosBadgeDelegate(self._reports_table)
+        self._reports_inj_delegate = InfoDelegate(self._reports_table)
         self._reports_pos_delegate = _PosBadgeDelegate(self._reports_table)
         self._reports_table.setItemDelegateForColumn(1, self._reports_inj_delegate)
         self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
@@ -4837,7 +4876,7 @@ class MainWindow(QMainWindow):
         rhdr = self._reports_table.horizontalHeader()
         rhdr.setHighlightSections(False)
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE'] + _ATTR_ABBREV
+        cols = ['Name', 'INFO', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE'] + _ATTR_ABBREV
         self._reports_table.setColumnCount(len(cols))
         self._reports_table.setHorizontalHeaderLabels(cols)
         for i, col in enumerate(cols):
@@ -4845,10 +4884,12 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
+        fixed_widths = {0: _name_w(), 1: INFO_W, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
                         9: _club_w(), 10: 65}
         for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
+        self._reports_table.setColumnHidden(8, True)   # kept (queue marks); the Info tags replace it
+        self._info_hover_reports = InfoHover(self._reports_table, 1)
         for i in range(11, len(cols)):
             self._reports_table.setColumnWidth(i, 35)
         self._note_media('_reports_table')
@@ -4964,9 +5005,8 @@ class MainWindow(QMainWindow):
             raw_attrs = p.get('raw_attrs', [])
             hgp = p.get('hgp', False)
 
-            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
-            if injured and injury_days > 0:
-                inj_item.setToolTip(f"Out for {injury_days} days")
+            inj_item = _SortItem('')
+            _info_apply(inj_item, self._info_base(p, None, age), ())   # + the queue in _mark_rows below
 
             name_item = _SortItem(p.get('name', ''))
             name_item.setData(Qt.ItemDataRole.UserRole, p.get('id', -1))
@@ -5004,12 +5044,13 @@ class MainWindow(QMainWindow):
                 else:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._reports_table.setItem(row, col, item)
-        _mark_rows(self._reports_table, _queue_map(self._queue), {8: 'hgp'})
+        _mark_rows(self._reports_table, _queue_map(self._queue), {8: 'hgp'}, 1)
         self._reports_table.setSortingEnabled(True)
         self._reports_table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         # Same as Players; safe here because reports are capped at 200 rows.
         for i in range(self._reports_table.columnCount()):
             self._reports_table.resizeColumnToContents(i)
+        self._reports_table.setColumnWidth(1, INFO_W)
         self._pin_club_col('_reports_table')
         info = f'{len(players):,} players'
         if self._current_report_key == 'best_role':
@@ -5200,9 +5241,10 @@ class MainWindow(QMainWindow):
         # Players table: virtualised QTableView + PeopleModel (all players, no cap)
         self._players_model, self._players_table = self._make_scouting_view(
             self._make_players_model(), _COL_TT,
-            {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62, 9: _club_w(),
+            {0: _name_w(), 1: INFO_W, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62, 9: _club_w(),
              10: 65}, 35, sort=(2, Qt.SortOrder.AscendingOrder))
-        self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
+        self._players_table.setColumnHidden(8, True)   # HGP data column kept (sort / queue); the Info tags replace it
+        self._players_inj_delegate = InfoDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
         self._players_table.setItemDelegateForColumn(1, self._players_inj_delegate)
         self._players_table.setItemDelegateForColumn(2, self._players_pos_delegate)
@@ -5212,6 +5254,7 @@ class MainWindow(QMainWindow):
         _set_media_delegates(self._players_table, 0, 9, 7)
         self._note_media('_players_table')
         self._players_table.horizontalHeader().setStretchLastSection(True)
+        self._info_hover_players = InfoHover(self._players_table, 1)
         self._players_table.doubleClicked.connect(self._on_players_table_dblclick)
         self._players_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._players_table.customContextMenuRequested.connect(
@@ -5235,8 +5278,11 @@ class MainWindow(QMainWindow):
         def attr(p, c):  # columns 11+: raw_attrs[c-11] shown on the 1-20 scale
             ra = p.get('raw_attrs') or ()
             return max(1, min(20, round(ra[c - 11] / 5))) if c - 11 < len(ra) else None
-        m = PeopleModel(['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE']
+        m = PeopleModel(['Name', 'INFO', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'Club', 'CtrE']
                         + _ATTR_ABBREV, spec, _COL_TT, attr)
+        m.info_col = 1
+        m.info_fn = lambda p, kinds: _infotags.tags_for(
+            p, queued_hgp='hgp' in kinds, queued_hgc='hgc' in kinds, **self._info_base(p, None)[1])
         m.align_center = {7}
         f = QFont()
         f.setPointSize(14)
@@ -5484,16 +5530,18 @@ class MainWindow(QMainWindow):
         _TT = _COL_TT | {
             'Age': 'Age on the save\'s in-game date',
         }
-        cols = ['Name', 'INJ', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
+        cols = ['Name', 'INFO', 'Pos', 'CA', 'PA', 'Dev', 'Age', 'Nation', 'HGP', 'HGC',
                 'CtrE'] + _ATTR_ABBREV
         self._table.setColumnCount(len(cols))
         self._table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
-                        9: 62, 10: 65}  # 1=INJ, 8/9=HGP/HGC badges ('+ HGP' fits), 10=CtrE
+        fixed_widths = {0: _name_w(), 1: INFO_W, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
+                        9: 62, 10: 65}  # 1=Info, 8/9=HGP/HGC data columns (hidden: the Info tags replace them), 10=CtrE
         for i, cw in fixed_widths.items():
             self._table.setColumnWidth(i, cw)
+        self._table.setColumnHidden(8, True)   # kept: the queue / Make HGP|HGC logic reads these items
+        self._table.setColumnHidden(9, True)
         # Attr columns: 35px each
         for i in range(11, len(cols)):
             self._table.setColumnWidth(i, 35)
@@ -6054,9 +6102,8 @@ class MainWindow(QMainWindow):
             contract_end = p.get('contract_end', '')
             raw_attrs = p.get('raw_attrs', [])
 
-            inj_item = _SortItem('INJ' if injured else '', 1 if injured else 0)
-            if injured and injury_days > 0:
-                inj_item.setToolTip(f"Out for {injury_days} days")
+            inj_item = _SortItem('')
+            _info_apply(inj_item, self._info_base(p, bool(hgc), age), ())   # + the queue in _mark_rows below
             items = [
                 name_item,
                 inj_item,
@@ -6091,11 +6138,12 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._table.setItem(row, col, item)
 
-        _mark_rows(self._table, _queue_map(self._queue), {8: 'hgp', 9: 'hgc'})  # queued cells + row tint
+        _mark_rows(self._table, _queue_map(self._queue), {8: 'hgp', 9: 'hgc'}, 1)  # queued cells + row tint + Info tags
         self._table.setSortingEnabled(True)
         self._table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
         for c in range(self._table.columnCount()):
             self._table.resizeColumnToContents(c)
+        self._table.setColumnWidth(1, INFO_W)
         n_hgp = sum(1 for p in squad if p.get('hgp', False))
         b = self._save_data.get('b') if self._save_data else None
         from fm_editor.patch import is_hgc
@@ -6589,14 +6637,34 @@ class MainWindow(QMainWindow):
         qm = _queue_map(self._queue)
         self._players_model.set_queue(qm)
         if self._table_mode == 'squad' and self._squad and self._save_data:
-            _mark_rows(self._table, qm, {8: 'hgp', 9: 'hgc'})
+            _mark_rows(self._table, qm, {8: 'hgp', 9: 'hgc'}, 1)
             self._on_selection_changed()
-        _mark_rows(self._reports_table, qm, {8: 'hgp'})
+        _mark_rows(self._reports_table, qm, {8: 'hgp'}, 1)
         _mark_rows(self._shortlist_table, qm, {})
 
     def _clear_queue(self):
         self._queue.clear()
         self._refresh_queue_marks()
+
+    def _club_names(self):
+        """club id -> name of the loaded save (rebuilt when the club list is replaced)."""
+        cl = (self._save_data or {}).get('clubs')
+        if getattr(self, '_club_names_src', None) is not cl:
+            self._club_names_src = cl
+            self._club_names_map = {c['id']: c['name'] for c in cl or []}
+        return self._club_names_map
+
+    def _info_base(self, p, hgc, age=None):
+        """(person, tags_for kwargs minus the queue) of one player, stored on / used for its Info cell. hgc None = look it up in
+        the save (the club entity of the squad it is in)."""
+        if hgc is None:
+            from fm_editor.patch import is_hgc
+            b, ent = (self._save_data or {}).get('b'), self._entity_of(p)
+            hgc = bool(b is not None and ent is not None and 'end' in p and is_hgc(b, p, ent))
+        par = p.get('loan_parent')
+        return p, dict(hgp=bool(p.get('hgp')), hgc=hgc, age=_age(p) if age is None else age,
+                       injured_days=p.get('injury_days', 0), loan_parent=par,
+                       loan_club=self._club_names().get(par) if par is not None else None, value_est=p.get('value_est'))
 
     def _entity_of(self, person):
         """Club entity id of a player's club (club id + 1), or None."""

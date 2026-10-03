@@ -40,7 +40,7 @@ w._table_mode = 'squad'
 # delegates are installed on the badge columns, the name column carries the marker bar
 assert isinstance(w._table.itemDelegateForColumn(8), M._HGBadgeDelegate)
 assert isinstance(w._table.itemDelegateForColumn(9), M._HGBadgeDelegate)
-assert w._table.columnWidth(8) >= 62 and w._table.columnWidth(9) >= 62
+assert w._table.isColumnHidden(8) and w._table.isColumnHidden(9) and w._table.columnWidth(1) == 80   # Info replaces them; items stay
 assert isinstance(w._reports_table.itemDelegateForColumn(8), M._HGBadgeDelegate)
 assert isinstance(w._players_table.itemDelegateForColumn(8), M._HGBadgeDelegate)
 for t in (w._table, w._reports_table, w._shortlist_table, w._players_table):

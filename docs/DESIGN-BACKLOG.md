@@ -54,3 +54,7 @@ unlit #3A4050. Reads as a rising curve in greyscale. Tooltip 'Dev 14 of 20', sor
 - Packaging at 1.0: Flatpak (`io.github.acidtwin.FMBR24`) and a Windows .exe.
 - README credit for the earlier Linux FM save-editing project (its name is a TODO comment in `README.md`, 'Inspired by').
 - Sidebar nation flags and more list media (kit editor, `Small` club icons); see `HANDOVER.md` section 5 'List media', 'Not done'.
+
+## Info tags the game has that we cannot read yet
+
+The built Info column (`fm_editor/infotags.py`) shows only tags derivable from parsed data. Missing FM tags, each a future add once its data is found: Spt / Ask / Wnt / Slt (transfer-listed, asking price, wanted, shortlisted: needs the transfer-status experiment saves T0..T6, HANDOVER section 7), Unh (unhappy: morale / promise data), Amg / PR (agent / pre-contract: contract negotiation records), others. To add one: code in `PRI`, width/colours in `TW` / `ST` (gui/info_column.py), a rule in `tags_for`.

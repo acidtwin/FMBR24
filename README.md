@@ -53,6 +53,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 
 **Editing**
 - Homegrown flags (HGP / HGC) for the players of your own club: queue them from the player window or the Squads toolbar, then press Save Changes
+- Info column in the player lists: one stack of small status tags (injured, homegrown, queued, loan, not for sale, under 21) that fans out smoothly on mouse-over
 - Save writes a verified temp file, keeps two rolling backups (`.bk1`, `.bk2`), replaces the save atomically and reloads it
 
 **Quality of life**
