@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Player lists: Dev column graphic</title>
+<html lang="en"><head><meta charset="UTF-8"><title>Player lists: Dev column graphic + Info tag column</title>
 <!--
 PLAYER LISTS MOCKUP: the Dev (development rate, 1-20) column of Squads / Players / Reports / Shortlist-style tables.
 DECISION: the Dev column uses STYLE B (five pips) = Settings 'Graphic'. Styles A, C, D, E stay selectable below as alternatives / reserved (E = growth stairs is reserved for a future use, recipe in docs/DESIGN-BACKLOG.md).
@@ -49,6 +49,43 @@ ROLE RATING RING (Best by Role report, the 'Rating' column that takes the Dev co
   colour : TIER colour of v (same tier() as everywhere; 17-20 green = 83-100 %, 14-16 yellow, ...). Number beside the ring (10px, #8B96A8) keeps the exact value.
   tooltip: 'Role rating 14 of 20'.  Column width 56 (the real Rating column was 45; it now holds ring + number).  Unknown value = '?' text.
 -->
+<!--
+INFO COLUMN (proposal, this mockup's first section; ?info=a|b|off  ?cols=all|inj  ?hover=N  e.g. player-lists.html?info=a&hover=3)
+WHAT: one column 'Info' holding every small status tag we can REALLY derive per player (nothing invented), after FM's INF column. It is the home of INJ, HGP, HGC and the other statuses.
+  ?info=off : today's layout (INJ + HGP + HGC columns, no Info).   ?info=a : fanned stack (FM look).   ?info=b : priority tag + '+n' chip.
+  ?cols=all (default) : Info REPLACES the INJ, HGP and HGC columns.   ?cols=inj : Info replaces only INJ; HGP/HGC keep their columns and are NOT repeated as tags.
+  ?hover=N : forces the data row N (1-based) to show its spread state statically (review only; the real thing is the mouse). The 'Variant sheet' under the table always shows collapsed + spread side by side.
+TAGS (priority = stack order, front first) and where each comes from:
+  1 INJ   'Injured, 12 days'                    bg #8B1A1A fg #FFFFFF         p['injury'] days (same data as today's INJ column)
+  2 +HGP / +HGC  'Queued: Homegrown player (nation|club), written on Save Changes'   fill #323023 (= rgba(234,217,92,.14) over #14151A, made OPAQUE so tags behind never show through) 1px #EAD95C, fg #EAD95C   (HG_ROLE 'queued'; replaces the plain HGP/HGC tag of that kind)
+  3 HGP   'Homegrown player (nation)'           bg COLORS['hgp_badge'] #2B7A4B fg #FFFFFF
+  3 HGC   'Homegrown player (club)'             bg COLORS['hgc_badge'] #1B4D31 fg #FFFFFF
+  4 LOAN  'On loan from <club>'                 bg #2A4F86 fg #D6E6FF         p['loan_parent'] (HANDOVER section 7 filters apply)
+  5 NFS   'Not for sale'                        bg #4A4636 fg #E0C98A         value marker >= 300M (valuecurve.NOT_FOR_SALE). A loanee who is also NFS shows LOAN only (parser rule), so LOAN and NFS never coexist.
+  6 U21   'Under 21'                            bg #2C8C80 fg #E6FFFA         age <= 21 (same rule as Wonderkids)
+  Practical max = 5 tags (INJ, +HGP, +HGC, LOAN, U21). Labels are text, so colour is only the redundant channel (colour-blind safe).
+TAG GEOMETRY (QPainter, antialiasing on, drawRoundedRect): height 18, radius 3, label 10px bold centred, no border except queued (1px yellow, rect adjusted .5).
+  widths: INJ HGP HGC NFS U21 = 28; +HGP +HGC LOAN = 36.  Row height 24 => 3px above/below.  Cell left inset 6.
+VARIANT A  fanned stack  (column width 80)
+  Tags in priority order. Front tag at x = cell.left+6, fully visible. Each tag behind it has its RIGHT edge 9px further right than the previous one (right_i = right_front + 9*i), drawn back-to-front
+  (painter order: last tag first, front tag LAST) so only the right 9px of every back tag peeks out. The label of a back tag is NOT drawn (only its colour peeks; clipped letters read as noise). Each tag gets a 1px ring in the row colour (QPen(rowBg,1) around the rounded rect, drawn before its fill) so the overlap reads crisp.
+  At most 3 tags drawn; if n > 3 a '+(n-3)' marker follows the stack at +4px: 9px bold #8B96A8, vertically centred. 1 tag = the plain tag; stack width = 36 + 18 + marker <= 80.
+VARIANT B  priority tag + count chip  (column width 64)
+  Front tag as above; n >= 2 adds a chip at +4px: 18x18 (min width) rounded 9, fill #2A2D35, text '+(n-1)' 9px bold #8B96A8. 1 tag = plain, no chip. Less game-like, but nothing is half hidden.
+HOVER SPREAD  (identical in A and B; rows with ONE tag do not expand, hit-test: n >= 2 only)
+  A cell cannot paint outside its rect in a QStyledItemDelegate, so the spread is a FLOATING OVERLAY: a frameless child QWidget of table.viewport() (WA_ShowWithoutActivating, no focus),
+  created once and re-used; TagSpread.paintEvent draws it with QPainter. The delegate hides the cell's own stack while the overlay is shown on that row (the overlay is opaque).
+  Trigger: table.setMouseTracking(True) + viewport event filter on MouseMove / Leave. index = table.indexAt(pos); if index.column()==INFO and tag count >= 2 -> show, else hide.
+  Re-anchor on mouse move between rows; hide on Leave, scroll, sort, model reload, window deactivate. Make the overlay WA_TransparentForMouseEvents so the viewport keeps receiving moves/clicks (row selection works through it).
+  Geometry: x = cell.left - 1, y = cell.top - 1, height = row height + 2 (26 at 24px rows), width = 6 + sum(tag widths) + 4*(n-1) + 8; if it would pass the viewport's right edge, shift left to fit. It spreads RIGHT over the next columns.
+  Look: fill = the row colour EXACT (alt #161721, normal #14151A, selected #2A1B4A; read it from option.palette), 1px border #343740 (selected: rgba(154,124,255,.55)), radius 4,
+        shadow = 3 rounded rects under the card at +1/+2/+3 px, QColor(0,0,0, 72/41/20) + a soft 6px one at alpha 115 (QGraphicsDropShadowEffect is avoided: offscreen pixmap per show). Tags: 4px gaps, full labels, no ring.
+  Animation: none (instant, like the game). Optional later: 90ms QVariantAnimation on width.
+  Tooltips: collapsed cell tooltip (Qt.ToolTipRole of the Info item) = every line, newline separated, e.g. 'Injured, 12 days' + newline + 'Homegrown player (nation)'.  Over the spread, QToolTip.showText per tag rect: that tag's own line (TAGS above).
+  Accessibility: the tooltip text IS the screen-reader / keyboard text: also set it as Qt.AccessibleTextRole, and make the item DisplayRole the short labels joined by a space ('INJ HGP HGC') so Ctrl+C, type-ahead and accessibility see the same data. The overlay is mouse only; keyboard users read the tooltip / status bar of the selected row.
+SORT KEY (item UserRole, header click sorts the QTableWidget): count of tags DESC, then priority of the front tag (INJ first), then the next tags. key = n*10**6 + sum((9 - rank_i) * 10**(5-i)) with rank = index in PRI (INJ 0 ... U21 7). No tags = 0 (sorts last descending).
+REPLACES: INJ (35px) + HGP (50) + HGC (50) = 135px freed, Info costs 80 (A) / 64 (B): net saving 55 / 71 px. HGP/HGC queue UI (toolbar Make HGP/HGC, player window pills) is unchanged; queued rows keep the row tint (ROWQ_ROLE), the column only adds the +HGP/+HGC tag.
+-->
 <style>
 :root{--bg:#14151A;--alt:#161721;--sel:#2A1B4A;--hdr:#292B32;--bd:#343740;--tx:#fff;--tx2:#8B96A8;--dim:#525B68}
 body{margin:0;padding:16px;background:#101116;color:var(--tx);font:13px/1.2 "Noto Sans",sans-serif}
@@ -73,7 +110,35 @@ td.g{padding:0 0 0 10px}
 .note{font-size:11px;color:var(--dim);margin-top:4px;max-width:760px}
 .ramp td,.ramp th{padding:0 8px}.ramp td{height:24px;text-align:left}
 .cols{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+
+/* ---- Info column ---- */
+.itag{position:absolute;top:3px;height:18px;border-radius:3px;font:700 10px/18px "Noto Sans",sans-serif;text-align:center;box-sizing:border-box;white-space:nowrap;color:#fff}
+.itag.q{border:1px solid #EAD95C;line-height:16px}
+.istk{position:relative;height:24px}
+.imk{position:absolute;top:0;height:24px;font:700 9px/24px "Noto Sans",sans-serif;color:var(--tx2)}
+.ichip{position:absolute;top:3px;height:18px;min-width:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#2A2D35;color:var(--tx2);font:700 9px/18px "Noto Sans",sans-serif;text-align:center}
+td.info{padding:0;overflow:visible}
+.pop{display:none;position:absolute;left:0;top:0;z-index:30;border:1px solid #343740;border-radius:4px;box-sizing:border-box;background:#14151A;box-shadow:0 1px 0 rgba(0,0,0,.28),0 2px 0 rgba(0,0,0,.16),0 3px 0 rgba(0,0,0,.08),0 6px 14px rgba(0,0,0,.45);margin:-1px 0 0 -1px;height:26px}
+.pop .itag{top:4px}
+tr:nth-child(even) td.info .pop{background:#161721}
+tr.sel td.info .pop{background:#2A1B4A;border-color:rgba(154,124,255,.55)}
+td.info.mult:hover,td.info.force{z-index:20}
+td.info.mult:hover .pop,td.info.force .pop{display:block}
+td.info.mult:hover .istk,td.info.force .istk{visibility:hidden}
+table.sheet td{height:30px}
+.pop.st{display:block;position:relative;margin:0;box-shadow:none}
+.leg{display:flex;gap:10px 18px;flex-wrap:wrap;font-size:11px;color:var(--tx2);margin:8px 0 4px;align-items:center}
+.leg .t{position:relative;display:inline-block;height:18px}
+.leg .t .itag{top:0}
 </style></head><body>
+<div class="bar" id="ibar"></div>
+<h3>Info column (INJ, HGP, HGC, queued, LOAN, NFS, U21): hover a row with 2+ tags to spread it (3rd row selected; ?hover=N forces row N open)</h3>
+<table id="it"></table>
+<div class="leg" id="leg"></div>
+<h3>Variant sheet: the same players collapsed (A, B) and spread (what the mouse shows)</h3>
+<table id="vs" class="sheet"></table>
+<div class="note" id="inote"></div>
+<hr style="border:0;border-top:1px solid var(--bd);margin:26px 0 8px">
 <div class="bar" id="bar"></div>
 <h3>Players / Squads (Name, INJ, Pos, CA, PA, Dev, Age, Nation, HGP). 3rd row selected, 6th row hovered. Tooltip on any Dev cell: 'Dev 14 of 20'</h3>
 <table id="t"></table>
@@ -133,4 +198,59 @@ let rp='<tr><th style="width:40px">Dev</th><th style="width:'+W.d+'px">Cell</th>
 for(let v=1;v<=20;v++)rp+=`<tr><td>${v}</td>${dc(v)}</tr>`;
 document.getElementById('ramp').innerHTML=rp;
 document.getElementById('note').textContent='Mode: '+NAMES[MODE]+'. Sorting uses the raw 1-20 value in every mode. Numbers mode keeps the plain value (width 45).';
+
+// ============ Info column ============
+(()=>{
+const P=new URLSearchParams(location.search);
+const IM=['off','a','b'].includes(P.get('info'))?P.get('info'):'a';
+const CM=P.get('cols')=='inj'?'inj':'all';
+const HOV=parseInt(P.get('hover'))||0;
+const link=(k,v,lab,cur)=>{const u=new URLSearchParams(P);u.set(k,v);return `<a href="?${u}" class="${cur==v?'on':''}">${lab}</a>`};
+document.getElementById('ibar').innerHTML='Info column: '+[['off','Off (INJ + HGP + HGC columns, today)'],['a','A  fanned stack'],['b','B  priority tag + count']].map(x=>link('info',x[0],x[1],IM)).join('')+' &nbsp; Replaces: '+[['all','INJ + HGP + HGC'],['inj','INJ only']].map(x=>link('cols',x[0],x[1],CM)).join('')+' &nbsp; Hover forced: '+[0,3,6,13].map(n=>link('hover',n,n?'row '+n:'none',HOV)).join('');
+const TW={INJ:28,HGP:28,HGC:28,'+HGP':36,'+HGC':36,LOAN:36,NFS:28,U21:28};
+const ST={INJ:['#8B1A1A','#fff'],HGP:['#2B7A4B','#fff'],HGC:['#1B4D31','#fff'],LOAN:['#2A4F86','#D6E6FF'],NFS:['#4A4636','#E0C98A'],U21:['#2C8C80','#E6FFFA'],'+HGP':['#323023','#EAD95C'],'+HGC':['#323023','#EAD95C']};
+const PRI=['INJ','+HGP','+HGC','HGP','HGC','LOAN','NFS','U21'];
+// name,pos,ca,dev,age,flag, injDays, hgp, hgc, queuedKinds, loanFrom, nfs
+const PL=[['Kylian Mbappe','ST',187,17,25,'#2A4D9B',0,0,0,'','',1],['Jude Bellingham','AMC',172,18,21,'#C8102E',0,0,0,'','',1],['Reece James','DR',160,12,24,'#C8102E',12,1,1,'','',0],
+ ['Lamine Yamal','AMR',141,20,17,'#C60B1E',0,0,0,'','',1],['Nick Woltemade','ST',110,10,22,'#222',0,0,0,'','',0],['Archie Gray','DM',118,14,19,'#C8102E',0,1,0,'C','',0],
+ ['Journeyman','DC',86,8,34,'#2A4D9B',0,0,1,'','',0],['Late Bloomer','DM',98,15,23,'#2A4D9B',0,0,0,'','Chelsea',0],['Slow Burner','MC',90,6,20,'#C8102E',0,0,0,'','Real Madrid',0],
+ ['Stalled Prospect','AML',70,3,19,'#E8A200',0,0,0,'P','',0],['Steady Eddie','DL',104,9,29,'#2A4D9B',45,0,0,'','',0],['Wonderkid GK','GK',62,19,16,'#C60B1E',0,1,1,'','',1],
+ ['Mathys Tel','AMR',121,15,21,'#2A4D9B',6,0,1,'P','Bayern Munich',0],['Veteran','DC',118,4,36,'#C8102E',0,0,0,'','',0]];
+const tags=(r,cols)=>{const t=[];const inj=r[6],hgp=r[7],hgc=r[8],q=r[9],loan=r[10],nfs=r[11],age=r[4];
+ if(inj)t.push(['INJ','Injured, '+inj+' days']);
+ if(cols=='all'){if(q.includes('P'))t.push(['+HGP','Queued: Homegrown player (nation), written on Save Changes']);if(q.includes('C'))t.push(['+HGC','Queued: Homegrown player (club), written on Save Changes']);
+  if(hgp&&!q.includes('P'))t.push(['HGP','Homegrown player (nation)']);if(hgc&&!q.includes('C'))t.push(['HGC','Homegrown player (club)'])}
+ if(loan)t.push(['LOAN','On loan from '+loan]);else if(nfs)t.push(['NFS','Not for sale']);
+ if(age<=21)t.push(['U21','Under 21']);
+ return t.sort((a,b)=>PRI.indexOf(a[0])-PRI.indexOf(b[0]))};
+const tg=(l,left,z,extra='')=>`<span class="itag${l[0]=='+'?' q':''}" style="left:${left}px;width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]};z-index:${z};${extra}">${l}</span>`;
+const collapsed=(t,mode,rowbg)=>{if(!t.length)return '';const fw=TW[t[0][0]];let h='';const L0=6;
+ if(mode=='a'){const k=Math.min(3,t.length);for(let i=k-1;i>=0;i--){const l=t[i][0];const right=L0+fw+9*i;h+=tg(l,right-TW[l],10-i,`box-shadow:0 0 0 1px ${rowbg}`+(i?';color:transparent':''))}
+  if(t.length>3)h+=`<span class="imk" style="left:${L0+fw+9*(k-1)+4}px">+${t.length-3}</span>`}
+ else{h+=tg(t[0][0],L0,2);if(t.length>1)h+=`<span class="ichip" style="left:${L0+fw+4}px">+${t.length-1}</span>`}
+ return `<div class="istk">${h}</div>`};
+const spread=t=>{let x=6,h='';t.forEach(([l,tip])=>{h+=`<span class="itag${l[0]=='+'?' q':''}" style="left:${x}px;width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]}" title="${tip}">${l}</span>`;x+=TW[l]+4});return [h,x+4]};
+const infoTd=(t,mode,rowbg,forced)=>{const tip=t.map(x=>x[1]).join('&#10;');const sp=spread(t);
+ return `<td class="info${t.length>1?' mult':''}${forced?' force':''}" title="${tip}">${collapsed(t,mode,rowbg)}${t.length>1?`<div class="pop" style="width:${sp[1]}px">${sp[0]}</div>`:''}</td>`};
+const IW=IM=='a'?80:64;
+const hdr=[['Name',150],...(IM=='off'?[['INJ',35]]:[]),['Pos',55],['CA',76],['Dev',76],['Age',40],['Nation',60],...(IM=='off'||CM=='inj'?[['HGP',50],['HGC',50]]:[]),...(IM!='off'?[['Info',IW,'sorted']]:[])];
+const th=hdr.map(h=>`<th style="width:${h[1]}px" class="${h[2]||''}">${h[0]}</th>`).join('');
+const rowsH=PL.map((r,k)=>{const bg=k==2?'#2A1B4A':k%2?'#161721':'#14151A';
+ const hgpTag=r[7]&&!r[9].includes('P')?'<span class="hgp" style="border:0;background:#2B7A4B;color:#fff">HGP</span>':r[9].includes('P')?'<span class="hgp">+ HGP</span>':'';
+ const hgcTag=r[8]&&!r[9].includes('C')?'<span class="hgp" style="border:0;background:#1B4D31;color:#fff">HGC</span>':r[9].includes('C')?'<span class="hgp">+ HGC</span>':'';
+ let c=`<td>${r[0]}</td>`;
+ if(IM=='off')c+=`<td class="inj" title="${r[6]?'Injured, '+r[6]+' days':''}">${r[6]?'INJ':''}</td>`;
+ c+=`<td><span class="pos">${r[1]}</span></td><td class="g">${starsCA(r[2])}</td><td class="g">${G.b(r[3])}</td><td>${r[4]}</td><td><span class="flag" style="background:${r[5]}"></span></td>`;
+ if(IM=='off'||CM=='inj')c+=`<td>${hgpTag}</td><td>${hgcTag}</td>`;
+ if(IM!='off')c+=infoTd(tags(r,CM),IM,bg,HOV==k+1);
+ return `<tr class="${k==2?'sel':''}">${c}</tr>`}).join('');
+document.getElementById('it').innerHTML='<tr>'+th+'</tr>'+rowsH;
+document.getElementById('leg').innerHTML=[['INJ','Injured, N days'],['+HGP','Queued HGP (+HGC alike)'],['HGP','Homegrown (nation)'],['HGC','Homegrown (club)'],['LOAN','On loan from X'],['NFS','Not for sale'],['U21','Under 21']].map(([l,t])=>`<span class="t" style="width:${TW[l]}px"><span class="itag${l[0]=='+'?' q':''}" style="left:0;width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]}">${l}</span></span><span>${t}</span>`).join('');
+const vh=[['Name',150],['Tags',45],['A  stack',90],['B  priority + count',110],['Spread (hover)',210],['Tooltip (collapsed cell)',300]];
+let vr='<tr>'+vh.map(h=>`<th style="width:${h[1]}px">${h[0]}</th>`).join('')+'</tr>';
+[0,2,5,8,11,12].map(i=>PL[i]).forEach(r=>{const t=tags(r,'all');const sp=spread(t);const spd=t.length>1?`<div class="pop st" style="width:${sp[1]}px">${sp[0]}</div>`:`<span style="color:var(--dim);font-size:11px">single tag: does not expand</span>`;
+ vr+=`<tr><td>${r[0]}</td><td>${t.length}</td><td class="info"><div style="position:relative;height:24px">${collapsed(t,'a','#14151A')}</div></td><td class="info"><div style="position:relative;height:24px">${collapsed(t,'b','#14151A')}</div></td><td style="overflow:visible;padding:2px 10px"><div style="position:relative">${spd}</div></td><td style="font-size:11px;color:var(--tx2);white-space:normal;line-height:1.35;padding:3px 10px">${t.map(x=>x[1]).join('<br>')}</td></tr>`});
+document.getElementById('vs').innerHTML=vr;
+document.getElementById('inote').textContent='Mode: info='+IM+', replaces='+CM+'. Tag order = priority (INJ > queued > HGP/HGC > LOAN > NFS > U21). Row 13 (Mathys Tel) has 5 tags: A shows 3 plus +2, B shows INJ plus +4. The spread is a floating overlay anchored on the cell (recipe in the file comment).';
+})();
 </script></body></html>
