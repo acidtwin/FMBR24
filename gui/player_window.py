@@ -1631,21 +1631,21 @@ class PlayerWindow(QDialog):
     def _transfer_panel(self):
         """None when no row would be visible (nothing stored and PENDING markers off): the panel is not shown at all."""
         d = self._data
-        if not self._show_pending() and not any(d.get(k) for k in ('value', 'asking_price', 'transfer_status')):
+        if not self._show_pending() and not any(d.get(k) for k in ('value', 'not_for_sale', 'transfer_status')):
             return None
         panel, v = self._panel('Transfer')
         rows = []
-        for label, key in (('Market value', 'value'), ('Asking price', 'asking_price'),
-                           ('Transfer / loan status', 'transfer_status')):
-            val = d.get(key)
-            if key == 'value' and d.get('not_for_sale'):        # the 300M is a flag: muted '-', the status row says why
-                val = _lab('-', 'pwWord')
-                val.setToolTip('Not for sale: the save stores no market value for this player.')
-            elif key == 'transfer_status' and val:              # long club names elide (mockup .kv .r), full text in the tip
-                val = _ElideLabel(val, 'pwKvR', natural=True)
-                val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                val.setToolTip(val._full)
-            rows.append((label, val if val else self._pend_chip(), not val))
+        val = d.get('value')
+        if d.get('not_for_sale'):                                # the 300M is a flag: muted '-', the status row says why
+            val = _lab('-', 'pwWord')
+            val.setToolTip('Not for sale: the save stores no market value for this player.')
+        rows.append(('Market value', val if val else self._pend_chip(), not val))
+        st = d.get('transfer_status')                            # only real data; listing / asking price are not in the save: no rows
+        if st:                                                   # long club names elide (mockup .kv .r), full text in the tip
+            st = _ElideLabel(st, 'pwKvR', natural=True)
+            st.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            st.setToolTip(st._full)
+            rows.append(('Transfer / loan status', st, False))
         for i, (label, right, pend) in enumerate(rows):
             v.addWidget(self._kv(label, right, i % 2 == 1, pending=pend))
         v.addSpacing(10)
