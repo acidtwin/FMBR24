@@ -165,12 +165,7 @@ class TagSpread(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
-        for k in range(7):   # soft shadow (QGraphicsDropShadowEffect would allocate an offscreen pixmap per show)
-            p.setBrush(QColor(0, 0, 0, round(16 * s)))
-            p.drawRoundedRect(card.translated(0, 6).adjusted(-k, -k, k, k), 4 + k, 4 + k)
-        for off, a in ((3, 20), (2, 41), (1, 72)):   # stacked hard rects under the card
-            p.setBrush(QColor(0, 0, 0, round(a * s)))
-            p.drawRoundedRect(card.translated(0, off), 4, 4)
+        # no shadow and no outline on the hover card (user): just the row colour behind the spread tags
         p.setPen(Qt.PenStyle.NoPen)   # no outline on the hover card (user), the shadow alone lifts it
         p.setBrush(bg)
         p.drawRoundedRect(card, 4, 4)
