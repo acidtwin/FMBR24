@@ -231,6 +231,11 @@ QDialog#playerWindow QFrame#pwHeader {{ background:transparent; border:1px solid
 QDialog#playerWindow QFrame#pwRowAlt {{ background:{C_ALT}; }}
 QDialog#playerWindow QFrame#pwRowNat {{ background:{c['selection_bg']}; }}
 QDialog#playerWindow QFrame#pwRow {{ background:transparent; }}
+QDialog#playerWindow QFrame#pwRowTot {{ background:transparent; border:none; border-top:1px solid {c['border_bright']}; }}
+QDialog#playerWindow QLabel#pwKvB {{ font-weight:bold; }}
+QDialog#playerWindow QLabel#pwRateGood, QDialog#playerWindow QLabel#pwRateAvg {{ font-size:12px; font-weight:bold; padding:0 6px; border-radius:8px; }}
+QDialog#playerWindow QLabel#pwRateGood {{ background:rgba(93,196,90,38); color:#5dc45a; border:1px solid rgba(93,196,90,71); }}
+QDialog#playerWindow QLabel#pwRateAvg {{ background:rgba(74,95,115,31); color:#4a5f73; border:1px solid rgba(74,95,115,51); }}
 QDialog#playerWindow QFrame#pwTabStrip {{ background:transparent; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QPushButton#pwTab {{ background:transparent; border:none; border-left:3px solid transparent;
     color:{c['text_secondary']}; text-align:left; padding:0 2px 0 9px; font-size:12px; font-weight:600; border-radius:0; }}
@@ -1115,44 +1120,93 @@ class PlayerWindow(QDialog):
         if not rows:
             note_chip(db_msg if no_db else 'No career history is stored for this player.')
             return self._page(panel, stretch={0: 1})
-        cols = (('Season', 78, 'l'), ('Club', 0, 'l'), ('', 64, 'l'), ('Apps', 44, 'r'), ('Goals', 44, 'r'),
-                ('Fee', 70, 'r'))
+        # Career Stats columns (mockup tabHistory): season 62 | club flex | tag 66 | info 52 | nation 118 | division 150 |
+        # apps 38 | gls 34 | asts 34 | pom 38 | avg 50; gap 8, row 26, total row 30
+        cols = (('Season', 62, 'l'), ('Club', 0, 'l'), ('', 66, 'l'), ('Info', 52, 'r'), ('Nation', 118, 'l'),
+                ('Division', 150, 'l'), ('Apps', 38, 'r'), ('Gls', 34, 'r'), ('Asts', 34, 'r'), ('POM', 38, 'r'),
+                ('Avg', 50, 'r'))
+        RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
-        def line(vals, name, tips=None):
+        def line(vals, name, tips=None, height=26):
             row = QFrame()
             row.setObjectName(name)
-            row.setFixedHeight(26)
+            row.setFixedHeight(height)
             h = QHBoxLayout(row)
             h.setContentsMargins(12, 0, 12, 0)
             h.setSpacing(8)
-            for (title, w, al), (text, obj) in zip(cols, vals):
-                lab = _ElideLabel(text, obj) if w == 0 else _lab(text, obj)
+            for (title, w, al), val in zip(cols, vals):
+                if isinstance(val, QWidget):
+                    lab = val
+                else:
+                    text, obj = val
+                    lab = _ElideLabel(text, obj) if w == 0 else _lab(text, obj)
+                    if al == 'r':
+                        lab.setAlignment(RIGHT)
                 if w:
                     lab.setFixedWidth(w)
-                if al == 'r':
-                    lab.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 h.addWidget(lab, 1 if w == 0 else 0)
             if tips:
                 row.setToolTip(tips)
             return row
 
+        def nation_cell(nid):
+            cell = QWidget()
+            cl = QHBoxLayout(cell)
+            cl.setContentsMargins(0, 0, 0, 0)
+            cl.setSpacing(6)
+            from fm_editor.nations import nation_flag as _nf, nation_name as _nn
+            flag, nm = _nf(nid), _nn(nid)
+            if flag:
+                fl = _lab(flag, 'pwFlag', None, 16)
+                ff = QFont('Noto Color Emoji')
+                ff.setPixelSize(14)
+                fl.setFont(ff)
+                cl.addWidget(fl)
+            cl.addWidget(_ElideLabel(nm or '', 'pwKvL'), 1)
+            return cell
+
+        def avg_cell(rating):
+            cell = QWidget()
+            cl = QHBoxLayout(cell)
+            cl.setContentsMargins(0, 0, 0, 0)
+            if rating is None:
+                cl.addWidget(_lab('-', 'pwKvL', RIGHT))
+            else:
+                cl.addStretch()
+                pill = _lab(f'{rating:.2f}', 'pwRateGood' if rating >= 7.0 else 'pwRateAvg', Qt.AlignmentFlag.AlignCenter, 18)
+                cl.addWidget(pill)
+            return cell
+
+        def num(x, obj='pwKvR'):
+            return ('-' if x is None else str(x), obj)
+
+        from fm_editor.history import career_totals
         v.addWidget(line([(t, 'pwColHead') for t, _w, _a in cols], 'pwRow'))
         for i, r in enumerate(rows):
             club = r.get('club') or 'Unknown club'
             kind = {'loan': 'Loan', 'youth': 'Youth', 'youth loan': 'Youth loan'}.get(r.get('kind'), '')
             vals = [(r['season'], 'pwKvR'), (club, 'pwKvR' if r.get('club') else 'pwKvL'), (kind, 'pwKvL'),
-                    ('-' if r['apps'] is None else str(r['apps']), 'pwKvR'),
-                    ('-' if r['goals'] is None else str(r['goals']), 'pwKvR'),
-                    (self._fmt_fee(r.get('fee')), 'pwKvL')]
-            tip = ('Current club: this season, from the save. Appearances and goals are all competitions.'
-                   if r.get('current') else None if r.get('club') else f"Club id {r['club_raw']} is not in the club tables")
+                    (self._fmt_fee(r.get('fee')), 'pwKvL'), nation_cell(r.get('nation')),
+                    (r.get('division') or '-', 'pwKvL'), num(r['apps']), num(r['goals']), num(r.get('assists')),
+                    num(r.get('pom')), avg_cell(r.get('rating'))]
+            tip = ('Current club: this season, from the save. Appearances, goals, assists, POM and rating are all '
+                   'competitions.' if r.get('current') else None if r.get('club')
+                   else f"Club id {r['club_raw']} is not in the club tables")
             v.addWidget(line(vals, 'pwRowAlt' if i % 2 else 'pwRow', tip))
+        if not no_db:                       # mockup: the no-install state is the current row + note + PENDING only
+            t = career_totals(rows)
+            v.addWidget(line([('Total', 'pwKvB'), ('', 'pwKvB'), ('', 'pwKvB'), (self._fmt_fee(t['fee']) or '-', 'pwKvB'),
+                              ('', 'pwKvB'), ('', 'pwKvB'), num(t['apps'], 'pwKvB'), num(t['goals'], 'pwKvB'),
+                              num(t['assists'], 'pwKvB'), num(t['pom'], 'pwKvB'), avg_cell(t['avg'])], 'pwRowTot',
+                             'Totals of the recorded cells. The average rating is weighted by appearances.', 30))
         if no_db:
             note_chip(db_msg.replace('Career history is', 'Earlier seasons are'))
             return self._page(panel, stretch={0: 1})
-        note = _lab('League appearances and goals per season. Rows up to the last season of the FM install '
-                    'database come from it; later seasons come from this save. The current season is added from the '
-                    'squad data (all competitions). Fee = transfer fee paid for the move at the end of that row.',
+        note = _lab('League appearances and goals per season; assists, player of the match and average rating are '
+                    "recorded for the current season only ('-' = not recorded). Rows up to the last season of the FM "
+                    'install database come from it; later seasons come from this save. The current season is added '
+                    'from the squad data (all competitions). Info = transfer fee paid for the move at the end of that '
+                    'row. Division names are shown only where known.',
                     'pwNote')
         note.setWordWrap(True)
         note.setContentsMargins(12, 8, 12, 12)

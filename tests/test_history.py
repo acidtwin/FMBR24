@@ -91,6 +91,19 @@ def test_current_row():
     print('ok: current season row (young one-club, missing club, loan, no duplicate, free agent, sources, season label)')
 
 
+def test_totals():
+    """Total row of the Career Stats table: sums of the recorded cells, rating weighted by apps, None = '-'."""
+    from fm_editor import history as H
+    rows = [{'fee': 98000000, 'apps': 16, 'goals': 6, 'assists': 2, 'pom': 1, 'rating': 7.15, 'rated': 16},
+            {'fee': None, 'apps': 18, 'goals': 4, 'assists': 2, 'pom': 0, 'rating': 6.98, 'rated': 18},
+            {'fee': None, 'apps': 35, 'goals': 6, 'assists': None, 'pom': None, 'rating': None, 'rated': None}]
+    assert H.career_totals(rows) == {'fee': 98000000, 'apps': 69, 'goals': 16, 'assists': 4, 'pom': 1, 'avg': 7.06}
+    assert H.career_totals([{'apps': None, 'goals': None}]) == {'fee': None, 'apps': None, 'goals': None,
+                                                                'assists': None, 'pom': None, 'avg': None}
+    assert H.COMP_NAMES[11] == 'Premier Division' and H.COMP_NAMES[32] == 'Serie A'
+    print('ok: career totals')
+
+
 def test_real_counts():
     """Real snapshot: counts before (stored rows only) / after (with the current row) on every 20th player."""
     import pickle
@@ -139,12 +152,26 @@ def test_real_counts():
     last = vdv['rows'][-1]
     assert (last['season'], last['club'], last['apps'], last['goals']) == ('2027/28', 'Tottenham Hotspur', 28, 2), last
     assert vdv['rows'][7]['fee'] == 34298584 and not vdv['rows'][7]['current']          # stored rows unchanged
+    assert (last['assists'], last['pom'], last['rating'], last['division']) == (2, 0, 7.01, 'Premier Division'), last
+    # Nico Paz (in-game Career Stats, 9 Feb 2028): the past rows the save reproduces (league apps/goals + division name)
+    paz = H.career_for_person(by_id[101766], sd)
+    assert [(r['season'], r['club'], r['division'], r['apps'], r['goals'], r['assists'], r['pom'], r['rating'])
+            for r in paz['rows'][1:5]] == [
+        ('2021/22', 'Real Madrid Castilla C.F.', 'Spanish Federation 1B', 6, 0, None, None, None),
+        ('2022/23', 'Real Madrid Castilla C.F.', 'Spanish Federation 1A', 14, 1, None, None, None),
+        ('2023/24', 'Real Madrid C.F.', 'First Division', 4, 0, None, None, None),
+        ('2024/25', 'Como 1907', 'Serie A', 35, 6, None, None, None)], paz['rows']
+    cur = paz['rows'][-1]       # snapshot (2 Jan 2028): all-competition season stats, same fields as the squad screen
+    assert (cur['assists'], cur['pom'], cur['rating'], cur['division']) == (5, 4, 7.58, 'Premier Division'), cur
+    # the game's 2025/26-2026/27 rows (Como 18/4/2/0 6.98, Spurs 16/6/2/1 7.15) are NOT in pl_hist: they sit in
+    # player_stats_hist_dt.cmt rows that carry no person id (see HANDOVER History section), so they are not shown
     set_ref('2024-07-01')
 
 
 def main():
     from fm_editor import history as H
     test_current_row()
+    test_totals()
     skip_if_missing()
     assert_snapshot(SAVE)
     if not H.install_db_dir(SAVE):

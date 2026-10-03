@@ -457,13 +457,21 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .card{flex:1;min-width:0}
 .card .kv .r{display:flex;align-items:center;gap:6px}
 .rd{display:block;margin:0 auto}
-/* ---- HISTORY (Career history table; widths 78 | club flex | kind 64 | apps 44 | goals 44 | fee 70, gap 8, row 26) ---- */
+/* ---- HISTORY (Career Stats table like the in-game screen; 914 px column: season 62 | club flex (~168) | tag 66 | info 52 | nation 118 (flag 16 + name) | division 150 | apps 38 | gls 34 | asts 34 | pom 38 | avg 50, gap 8, row 26, total row 30) ---- */
 .hrow{height:26px;padding:0 12px;display:flex;align-items:center;gap:8px;flex:none}
 .hrow.alt{background:var(--alt)}
 .hrow>*{white-space:nowrap;overflow:hidden;flex:none}
-.hrow .hs{width:78px;font-weight:var(--semi)}.hrow .hc{flex:1;min-width:0;text-overflow:ellipsis;font-weight:var(--semi)}.hrow .hc.un{font-weight:400;color:var(--tx2)}
-.hrow .hk{width:64px;color:var(--tx2)}.hrow .ha,.hrow .hg{width:44px;text-align:right;font-weight:var(--semi)}.hrow .hf{width:70px;text-align:right;color:var(--tx2)}
+.hrow .hs{width:62px;font-weight:var(--semi)}.hrow .hc{flex:1;min-width:0;text-overflow:ellipsis;font-weight:var(--semi)}.hrow .hc.un{font-weight:400;color:var(--tx2)}
+.hrow .hk{width:66px;color:var(--tx2)}.hrow .hf{width:52px;text-align:right;color:var(--tx2)}
+.hrow .hn{width:118px;display:flex;align-items:center;gap:6px;color:var(--tx2)}.hrow .hn .fl{font-size:14px;line-height:1}.hrow .hn .nm{overflow:hidden;text-overflow:ellipsis}
+.hrow .hd{width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--tx2)}
+.hrow .ha,.hrow .hg,.hrow .hs2,.hrow .hp{text-align:right;font-weight:var(--semi)}.hrow .ha{width:38px}.hrow .hg,.hrow .hs2{width:34px}.hrow .hp{width:38px}
+.hrow .hv{width:50px;text-align:right;color:var(--tx2)}
+/* Avg = the club page's rating pill (gui/main_window _CLUB_PILL_*): green from 7.00, muted below; 13 px there, 12 px here to fit the 26 px row */
+.hrow .hv .rp{display:inline-block;height:18px;line-height:16px;padding:0 6px;border-radius:9px;font-size:12px;font-weight:700;border:1px solid rgba(74,95,115,.2);background:rgba(74,95,115,.12);color:#4a5f73}
+.hrow .hv .rp.good{border-color:rgba(93,196,90,.28);background:rgba(93,196,90,.15);color:#5dc45a}
 .hrow.hh>*{font-weight:700;color:var(--tx2);font-size:11px}
+.hrow.ht{height:30px;border-top:1px solid var(--border2);margin-top:2px}.hrow.ht>*{font-weight:700;color:var(--tx)}.hrow.ht .hf{color:var(--tx)}
 .hnote{padding:8px 12px 12px;color:var(--tx2);font-size:11px;line-height:15px}
 .hpn{flex:1;align-self:flex-start}
 /* ---- CONTRACT / COMING SOON ---- */
@@ -641,17 +649,18 @@ const LOW={
  posf:{GK:1,SW:5,DL:7,DC:8,DR:8,WBL:9,WBR:8,DM:16,ML:13,MC:18,MR:13,AML:10,AMC:15,AMR:10,ST:7},
  g:scaleG(OUT.g,.6)};
 LOW.g.foot=[['Left Foot',6,6],['Right Foot',11,11]];
-/* Career history sample (fm_editor/history.career_for_person rows): kind '' | 'loan' | 'youth' | 'youth loan'; club null = 'Unknown club'; fee null = blank, 0 = Free */
+/* Career history sample (fm_editor/history.career_for_person rows): kind '' | 'loan' | 'youth' | 'youth loan'; club null = 'Unknown club'; fee null = blank, 0 = Free; n = nation (flag + name), d = division name (null = '-'; only competitions verified in-game are named),
+   a = apps, g = goals, as = assists, p = POM, v = average rating, null = '-' (not recorded). Assists / POM / rating exist in the save only for the CURRENT season (p['stats']); earlier rows show '-' like the in-game screen does for old seasons. */
 const HIST=[
- {s:'2018/19',k:'youth',c:'FC Volendam U19',a:12,g:1,f:null},
- {s:'2019/20',k:'',c:'FC Volendam',a:19,g:0,f:null},
- {s:'2020/21',k:'loan',c:'Excelsior',a:26,g:2,f:null},
- {s:'2021/22',k:'',c:'FC Volendam',a:0,g:0,f:3000000},
- {s:'2021/22',k:'',c:null,a:5,g:0,f:0},
- {s:'2022/23',k:'',c:'VfL Wolfsburg',a:33,g:1,f:34300000},
- {s:'2023/24',k:'',c:'Tottenham',a:27,g:3,f:null},
- {s:'2024/25',k:'youth loan',c:'Tottenham U21',a:null,g:null,f:null},
- {s:'2027/28',k:'',c:'Tottenham',a:14,g:1,f:null,cur:1}];   /* cur = the CURRENT season row (always present for a player with a club; apps/goals = season stats, all competitions; blank '-' without stats). A loanee gets his parent club row first, then the loan club row (kind Loan). */
+ {s:'2018/19',k:'youth',c:'FC Volendam U19',n:'Netherlands',d:null,a:12,g:1,as:null,p:null,v:null,f:null},
+ {s:'2019/20',k:'',c:'FC Volendam',n:'Netherlands',d:null,a:19,g:0,as:null,p:null,v:null,f:null},
+ {s:'2020/21',k:'loan',c:'Excelsior',n:'Netherlands',d:null,a:26,g:2,as:null,p:null,v:null,f:null},
+ {s:'2021/22',k:'',c:'FC Volendam',n:'Netherlands',d:null,a:0,g:0,as:null,p:null,v:null,f:3000000},
+ {s:'2021/22',k:'',c:null,n:null,d:null,a:5,g:0,as:null,p:null,v:null,f:0},
+ {s:'2022/23',k:'',c:'VfL Wolfsburg',n:'Germany',d:null,a:33,g:1,as:null,p:null,v:null,f:34300000},
+ {s:'2023/24',k:'',c:'Tottenham',n:'England',d:'Premier Division',a:27,g:3,as:null,p:null,v:null,f:null},
+ {s:'2024/25',k:'youth loan',c:'Tottenham U21',n:'England',d:null,a:null,g:null,as:null,p:null,v:null,f:null},
+ {s:'2027/28',k:'',c:'Tottenham',n:'England',d:'Premier Division',a:28,g:2,as:2,p:0,v:7.01,f:null,cur:1}];   /* cur = the CURRENT season row (always present for a player with a club; apps/goals/assists/POM/rating = season stats, all competitions; blank '-' without stats). A loanee gets his parent club row first, then the loan club row (kind Loan). */
 const SAMPLES={out:OUT,gk:GKP,low:LOW};
 /* 1c. VALUE BY AGE sample data = REAL MODEL OUTPUT, not hand-drawn. How generated: scratchpad scripts (value-chart branch review) fit the within-player value model + CA-path tables on 6 pairs of the user's own
    FM24 saves (see the VALUE BY AGE CHART block), then curve(age, ca, pa, gk, value, years_left) was run per case. pts = [age, expected value, band low, band high, at-full-potential value] in GBP,
@@ -799,7 +808,7 @@ const tierKey=()=>[['1–4',1],['5–8',2],['9–11',3],['12–13',4],['14–16'
 /* =====================================================================================================================
    3. PERSISTENT SHELL: header (never changes per tab; pills + queue widget), tab strip, action strip
    ===================================================================================================================== */
-const NATFLAG={Netherlands:'\u{1F1F3}\u{1F1F1}',Italy:'\u{1F1EE}\u{1F1F9}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};   // in the app: the same flag emoji font as the tables
+const NATFLAG={Netherlands:'\u{1F1F3}\u{1F1F1}',Germany:'\u{1F1E9}\u{1F1EA}',Italy:'\u{1F1EE}\u{1F1F9}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};   // in the app: the same flag emoji font as the tables
 /* The header is identical on every tab (no per-tab slot): identity + HGP/HGC pills | CA | PA | DEV RATE | Changes queued.
    HEADER VARIANTS (?hdr=a|b|c). Injury information is NOT in the header (Fitness card). Height / weight are NOT in the header for A and B: Position card 'Physique' row (hidden when absent).
    A calm  : line 1 = name + position badge ...... HGP HGC (small, right end) | line 2 = flag nation · club · age (birth date in the age tooltip)
@@ -1178,16 +1187,22 @@ function tabTraining(){const d=D(),rl=S.pot&&d.recP?d.recP:d.rec;
   const rec=(rl||[]).map(([n,sc,has])=>`<div class="rec${has?' has':''}"><span class="n">${has?'\u2713 ':''}${n}</span><b class="c${tier(Math.round(sc))}">${sc.toFixed(1)}</b></div>`).join('')+(d.recNote?`<div class="rnote">${d.recNote}</div>`:'');
   return `<div class="c-col" style="width:440px"><div class="pn" data-tip="Average of the attributes behind each trait (source: GuideToFM). Needs an average of 11+ (Settings > Trait recommender threshold).">${ph('Recommended traits',sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur'))}<div style="padding-bottom:4px">${rec}</div></div>
     <div class="pn" style="padding:14px 12px 16px;display:flex;flex-direction:column;align-items:flex-start;gap:8px"><span class="chip soon">COMING SOON</span><span class="pnote" style="font-size:12px;line-height:1.5">Training focus, schedules and development notes will live here.</span></div></div>`}
-/* Career history: install-DB rows + this save's seasons (fm_editor/history.py). Fee = fee paid for the move at the end of that row. No rows -> note + PENDING chip. */
+/* Career history (the in-game Career Stats screen): install-DB rows + this save's seasons (fm_editor/history.py). Info = fee paid for the move at the end of that row. Total row = fee sum, apps, goals, assists, POM (sums of the recorded cells) and the rating average weighted by appearances. No rows -> note + PENDING chip. */
 function tabHistory(){
   const kind={loan:'Loan',youth:'Youth','youth loan':'Youth loan'};
-  const CURTIP='Current club: this season, from the save. Appearances and goals are all competitions.';
-  const rowH=(r,i)=>`<div class="hrow${i%2?' alt':''}"${r.cur?` data-tip="${CURTIP}"`:r.c?'':' data-tip="Club id 99999 is not in the club tables"'}><span class="hs">${r.s}</span><span class="hc${r.c?'':' un'}">${r.c||'Unknown club'}</span><span class="hk">${kind[r.k]||''}</span><span class="ha">${r.a==null?'-':r.a}</span><span class="hg">${r.g==null?'-':r.g}</span><span class="hf">${money(r.f)}</span></div>`;
-  const head=`<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="ha">Apps</span><span class="hg">Goals</span><span class="hf">Fee</span></div>`;
+  const CURTIP='Current club: this season, from the save. Appearances, goals, assists, POM and rating are all competitions.';
+  const sum=k=>{const v=HIST.map(r=>r[k]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0):null};
+  const rated=HIST.filter(r=>r.v!=null),rw=rated.reduce((a,r)=>a+(r.a||0),0);
+  const avg=rw?rated.reduce((a,r)=>a+r.v*(r.a||0),0)/rw:null;
+  const dash=x=>x==null?'-':x;
+  const pill=v=>v==null?'-':`<span class="rp${v>=7?' good':''}">${v.toFixed(2)}</span>`;
+  const rowH=(r,i)=>`<div class="hrow${i%2?' alt':''}"${r.cur?` data-tip="${CURTIP}"`:r.c?'':' data-tip="Club id 99999 is not in the club tables"'}><span class="hs">${r.s}</span><span class="hc${r.c?'':' un'}">${r.c||'Unknown club'}</span><span class="hk">${kind[r.k]||''}</span><span class="hf">${money(r.f)}</span><span class="hn">${r.n?`<span class="fl">${NATFLAG[r.n]||''}</span><span class="nm">${r.n}</span>`:''}</span><span class="hd">${r.d||'-'}</span><span class="ha">${dash(r.a)}</span><span class="hg">${dash(r.g)}</span><span class="hs2">${dash(r.as)}</span><span class="hp">${dash(r.p)}</span><span class="hv">${pill(r.v)}</span></div>`;
+  const head=`<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="hf">Info</span><span class="hn">Nation</span><span class="hd">Division</span><span class="ha">Apps</span><span class="hg">Gls</span><span class="hs2">Asts</span><span class="hp">POM</span><span class="hv">Avg</span></div>`;
+  const total=`<div class="hrow ht" data-tip="Totals of the recorded cells. The average rating is weighted by appearances."><span class="hs">Total</span><span class="hc"></span><span class="hk"></span><span class="hf">${money(sum('f'))||'-'}</span><span class="hn"></span><span class="hd"></span><span class="ha">${dash(sum('a'))}</span><span class="hg">${dash(sum('g'))}</span><span class="hs2">${dash(sum('as'))}</span><span class="hp">${dash(sum('p'))}</span><span class="hv">${pill(avg)}</span></div>`;
   /* FM install DB not found: only the current club row (from the save) + the message and the PENDING chip */
-  if(!S.data)return `<div class="pn hpn">${ph('Career history')}${head}${rowH({s:'2027/28',k:'',c:'Tottenham',a:null,g:null,f:null,cur:1},0)}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Earlier seasons are read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
-  return `<div class="pn hpn">${ph('Career history')}${head}${HIST.map(rowH).join('')}
-    <div class="hnote">League appearances and goals per season. Rows up to the last season of the FM install database come from it; later seasons come from this save. The current season is added from the squad data (all competitions). Fee = transfer fee paid for the move at the end of that row.</div></div>`}
+  if(!S.data)return `<div class="pn hpn">${ph('Career history')}${head}${rowH({s:'2027/28',k:'',c:'Tottenham',n:'England',d:'Premier Division',a:null,g:null,as:null,p:null,v:null,f:null,cur:1},0)}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Earlier seasons are read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
+  return `<div class="pn hpn">${ph('Career history')}${head}${HIST.map(rowH).join('')}${total}
+    <div class="hnote">League appearances and goals per season; assists, player of the match and average rating are recorded for the current season only ('-' = not recorded). Rows up to the last season of the FM install database come from it; later seasons come from this save. The current season is added from the squad data (all competitions). Info = transfer fee paid for the move at the end of that row. Division names are shown only where known.</div></div>`}
 
 /* ---------- registry: order = tab strip order (page = tab body; the header is shared) ---------- */
 const TABS=[
