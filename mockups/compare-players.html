@@ -39,7 +39,7 @@ THE WINDOW  (1122 x 760: 12 pad | header 80 | 12 | main 592 | 12 | strip 52, as 
     left 33 % panel 'Compare' (header: Current | Full Potential): ONE six-axis radar with both players, legend, then 'Difference by group' (6 mini diverging bars).
     right column: 'Attributes' panel (header: attributes-won tally) = the Profile groups in three columns (Technical + Footedness | Mental | Physical + Hidden; keepers: Goalkeeping + Footedness |
     Mental | Physical + Hidden), each row name | A tile | '3 >' difference | B tile (tier colour tiles as the Profile; the arrow points at the winner, in the winner's colour; '=' level; lower-is-better attributes
-    compared on 21-v), group means in each column header; below it the 'Key facts' strip (age, contract end, value, wage per week, height / weight, traits count, each with a plain difference line).
+    compared on 21-v), column headers show only the group name; below it the 'Key facts' strip (age, contract end, transfer value, wage per week, height / weight, traits count, each with a plain difference line).
 
 IDENTITY COLOURS (needed so two players can be told apart without colliding with ratings): A sky blue #52B0FF, B orchid #D77CFF. No tier colour (red, orange, grey, white, yellow, green) is blue or
   violet, so a player colour never reads as a rating. Both are >= 5.8:1 on #1A2226 (AA for text). Never colour alone: A = solid outline + circle marker, B = dashed outline + diamond marker; A is
@@ -68,7 +68,7 @@ OVERLAID RADAR  (reuse RadarWidget geometry)
   marker A circle r4, B diamond (square half-side 3.6 rotated 45) both with a 1.5 #14151A ring.
   Labels: group name 9/700 caps #8B96A8, values 12/700 'A / B' in the identity colours (two drawText runs), anchors as the player-window radar (top: baseline y_v-24, bottom y_v+14, sides +-7).
 ATTRIBUTE TABLE
-  Three columns of 22 px rows (name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20), column header 22 px: group name 11/700 caps tracking .08em + the two group means in the identity colours.
+  Three columns of 22 px rows (name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20), column header 22 px: group name 11/700 caps tracking .08em (no group means: removed by the user).
   Diff text: '3 >' / '< 3' in the winner's colour, '=' #525B68 when level.  Panel body scrolls vertically (6 px bar), columns are plain layouts, no horizontal scroll.
 DIFFERENCE BARS
   6 rows of 20 px: label 78 | track 8 px #343740 split at the centre (gap 2) | value 30 right aligned 11.  The winner's half is filled in its identity colour, length = |d| / 4 of the half (clamped); '=' under 0.05.
@@ -256,6 +256,7 @@ const PL={
 const CODE={GK:'GK',SW:'SW',DL:'D(L)',DC:'D(C)',DR:'D(R)',WBL:'WB(L)',WBR:'WB(R)',DM:'DM',ML:'M(L)',MC:'M(C)',MR:'M(R)',AML:'AM(L)',AMC:'AM(C)',AMR:'AM(R)',ST:'ST'};
 const BADGE={GK:'bGK',SW:'bD',DL:'bD',DC:'bD',DR:'bD',WBL:'bD',WBR:'bD',DM:'bDM',ML:'bM',MC:'bM',MR:'bM',AML:'bM',AMC:'bM',AMR:'bM',ST:'bST'};
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
+const fmtV=v=>v===3e8?'Not for sale':fmtM(v);
 const fmtM=v=>v>=1e7?'£'+Math.round(v/1e6)+'M':v>=1e6?'£'+(Math.round(v/1e5)/10)+'M':v>=1e3?'£'+Math.round(v/1e3)+'K':'£'+Math.round(v);
 const NATFLAG={Spain:'\u{1F1EA}\u{1F1F8}',Sweden:'\u{1F1F8}\u{1F1EA}',Norway:'\u{1F1F3}\u{1F1F4}',Czechia:'\u{1F1E8}\u{1F1FF}',Portugal:'\u{1F1F5}\u{1F1F9}',Germany:'\u{1F1E9}\u{1F1EA}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};
 /* 6-axis radar groups (gui/pw_widgets.py RADAR_OUT / RADAR_GK; own groups, not the game's) */
@@ -350,7 +351,7 @@ function radarAB(ax,bx){
   return `<svg class="rd" style="margin:0 auto" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Overlaid radar of six attribute groups for ${A().name} and ${B().name}">${s}</svg>`;
 }
 function attrCol(p,q,key){
-  return `<div class="ach"><span>${GRPN[key]}</span><span class="m"><span class="ca" title="${sn(p)} group mean">${dec(gmean(p,key))}</span><span class="cb" title="${sn(q)} group mean">${dec(gmean(q,key))}</span></span></div>`+p.g[key].map((a,i)=>{const b=q.g[key][i],d=good(a)-good(b),ad=Math.abs(d);
+  return `<div class="ach"><span>${GRPN[key]}</span></div>`+p.g[key].map((a,i)=>{const b=q.g[key][i],d=good(a)-good(b),ad=Math.abs(d);
     const df=d===0?`<span class="df" title="Level">=</span>`:d>0?`<span class="df ca" title="${sn(p)} higher by ${ad}">‹ ${ad}</span>`:`<span class="df cb" title="${sn(q)} higher by ${ad}">${ad} ›</span>`;
     return `<div class="ar" title="${a[0]}: ${sn(p)} ${gv(a)}, ${sn(q)} ${gv(b)}${a[3]?' (lower is better)':''}"><span class="an">${a[0]}</span>${tileV(a)}${df}${tileV(b)}</div>`}).join('');
 }
@@ -368,11 +369,11 @@ function factsAB(){
   const dv=Math.abs(p.value-q.value),dy=Math.abs(p.age-q.age),dc=Math.abs(p.yl-q.yl),num=s=>s.replace(/ \D+$/,'');
   const F=[['Age',row(`${p.age}`,`${q.age}`,dy?`${dy} yr${dy>1?'s':''} apart`:'same age')],
    ['Contract',row(`${p.until}`,`${q.until}`,dc>=.05?`${dc.toFixed(1)} yrs apart`:'same length')],
-   ['Value',row(fmtM(p.value),fmtM(q.value),dv?`${fmtM(dv)} apart`:'equal')],
+   ['Transfer value',row(fmtV(p.value),fmtV(q.value),(p.value===3e8||q.value===3e8)?'':(dv?`${fmtM(dv)} apart`:'equal'),'Market value as stored in the save; a value of exactly £300M is the game\'s "Not for sale" marker. The asking price is not in the save.')],
    ['Wage p/w',row(p.wage.replace(' p/w',''),q.wage.replace(' p/w',''),'')],
    ['cm / kg',row(`${num(p.height)} · ${num(p.weight)}`,`${num(q.height)} · ${num(q.weight)}`,'',`Height / weight: ${p.name} ${p.height}, ${p.weight}; ${q.name} ${q.height}, ${q.weight}`)],
    ['Traits',row(`${p.traits.length}`,`${q.traits.length}`,p.traits.length===q.traits.length?'same count':'')]];
-  return `<div class="pn" style="flex:none">${ph('Key facts','<span class="pnote">Market value and wage as stored in the save</span>')}<div class="facts">${F.map(([l,h])=>`<div class="fact"><small>${l}</small>${h}</div>`).join('')}</div></div>`;
+  return `<div class="pn" style="flex:none">${ph('Key facts','<span class="pnote">Transfer value (market value) and wage as stored in the save</span>')}<div class="facts">${F.map(([l,h])=>`<div class="fact"><small>${l}</small>${h}</div>`).join('')}</div></div>`;
 }
 function edges(ax,bx){
   const rows=ax.map((a,i)=>{const d=a.v-bx[i].v,ad=Math.abs(d),w=Math.min(100,ad/4*100),c=d>.05?'ca':d<-.05?'cb':'';
