@@ -7,6 +7,7 @@ QSortFilterProxyModel with a Python lessThan is ~1 s per sort at this size.
 """
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PyQt6.QtGui import QColor
+from fm_editor import infotags
 
 HG_ROLE = Qt.ItemDataRole.UserRole + 1       # HGP/HGC cell: 'set' | 'queued' | ''
 ROWQ_ROLE = Qt.ItemDataRole.UserRole + 2     # row: True when that person has ANY queued edit
@@ -14,6 +15,8 @@ HG_BASE_ROLE = Qt.ItemDataRole.UserRole + 3  # QTableWidget HG cells: value in t
 MEDIA_UID_ROLE = Qt.ItemDataRole.UserRole + 4   # Name cell: the person's identity uid (face picture key)
 CLUB_UID_ROLE = Qt.ItemDataRole.UserRole + 5    # Club cell: the club's parsed save uid (badge key), None = no club
 NATION_ROLE = Qt.ItemDataRole.UserRole + 6      # Nation cell: our nation entity id (flag key)
+INFO_ROLE = Qt.ItemDataRole.UserRole + 7        # Info cell: its tag list [(code, label, tooltip)] (fm_editor.infotags)
+INFO_BASE_ROLE = Qt.ItemDataRole.UserRole + 8   # QTableWidget Info cell: (person, tags_for kwargs without the queue)
 ROW_TINT = QColor(234, 217, 92, 26)          # rgba(234,217,92,.10): faint yellow under a queued row (painted by the delegates)
 
 
@@ -54,12 +57,16 @@ class PeopleModel(QAbstractTableModel):
         self.blank_header = set()   # columns whose header label is hidden (the 40 px club badge column)
         self.queued = {}            # person id -> {'hgp','hgc'} queued edits (set_queue)
         self._by_id = None          # person id -> src index, built lazily
+        self.info_col = None        # Info column (fm_editor.infotags): tags are computed lazily per row and cached
+        self.info_fn = None         # fn(person, queued kinds) -> [(code, label, tooltip)]
+        self._info = {}             # src index -> tags
 
     # -- data ---------------------------------------------------------------
     def set_data(self, src, rows):
         self.beginResetModel()
         self.src, self.rows = src, rows
         self._keys = {}
+        self._info = {}
         self._by_id = None
         self._base = list(range(len(src)))
         self._resort()
@@ -81,10 +88,19 @@ class PeopleModel(QAbstractTableModel):
         self._resort()
         self.endResetModel()
 
+    def info_tags(self, si):
+        t = self._info.get(si)
+        if t is None:
+            p = self.src[si]
+            t = self._info[si] = self.info_fn(p, self.queued.get(p.get('id'), ()))
+        return t
+
     def _key_list(self, col):
         k = self._keys.get(col)
         if k is None:
-            if col in self.hg_cols:   # set or queued first, then unset
+            if col == self.info_col:
+                k = [infotags.sort_key(self.info_tags(i)) for i in range(len(self.src))]
+            elif col in self.hg_cols:   # set or queued first, then unset
                 kind, q = self.hg_cols[col], self.queued
                 k = [0 if r[col] or kind in q.get(p.get('id'), ()) else 1 for r, p in zip(self.rows, self.src)]
             elif col < len(self.spec):
@@ -127,7 +143,13 @@ class PeopleModel(QAbstractTableModel):
             return
         for c in self.hg_cols:
             self._keys.pop(c, None)
-        if self._sort[0] in self.hg_cols:
+        if self.info_col is not None:
+            self._keys.pop(self.info_col, None)
+            if self._by_id is None:
+                self._by_id = {p.get('id'): i for i, p in enumerate(self.src)}
+            for pid in changed:
+                self._info.pop(self._by_id.get(pid), None)
+        if self._sort[0] in self.hg_cols or self._sort[0] == self.info_col:
             self.sort(*self._sort)
             return
         if self._by_id is None:
@@ -170,6 +192,11 @@ class PeopleModel(QAbstractTableModel):
         if not index.isValid():
             return None
         r, c = index.row(), index.column()
+        if c == self.info_col and role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole, INFO_ROLE,
+                                            Qt.ItemDataRole.AccessibleTextRole):
+            t = self.info_tags(self.view[r])
+            return (t if role == INFO_ROLE else infotags.joined(t) if role == Qt.ItemDataRole.DisplayRole
+                    else infotags.tooltip(t) or None)
         if role == Qt.ItemDataRole.DisplayRole:
             si = self.view[r]
             row = self.rows[si]

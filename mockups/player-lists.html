@@ -80,10 +80,14 @@ HOVER SPREAD  (identical in A and B; rows with ONE tag do not expand, hit-test: 
   Geometry: x = cell.left - 1, y = cell.top - 1, height = row height + 2 (26 at 24px rows), width = 6 + sum(tag widths) + 4*(n-1) + 8; if it would pass the viewport's right edge, shift left to fit. It spreads RIGHT over the next columns.
   Look: fill = the row colour EXACT (alt #161721, normal #14151A, selected #2A1B4A; read it from option.palette), 1px border #343740 (selected: rgba(154,124,255,.55)), radius 4,
         shadow = 3 rounded rects under the card at +1/+2/+3 px, QColor(0,0,0, 72/41/20) + a soft 6px one at alpha 115 (QGraphicsDropShadowEffect is avoided: offscreen pixmap per show). Tags: 4px gaps, full labels, no ring.
-  Animation: none (instant, like the game). Optional later: 90ms QVariantAnimation on width.
+  Animation (DECIDED, user request): ONE spread factor s in 0..1 drives the overlay's paint. Enter: s -> 1 in 180ms OutCubic (mockup: ease-out). Leave: s -> 0 in 120ms InCubic, then hide the overlay (the cell's own stack shows again, identical at s=0).
+    One QVariantAnimation reused; re-entering mid-collapse starts from the CURRENT s (interruptible, no jump). No timers left running (the animation stops at its end).
+    Per tag i: left(s) = lerp(collapsed_left_i, spread_left_i, s), collapsed_left_i = 6 + fw + 9*min(i,2) - width_i (tags i >= 3 sit at i=2's slot and fade in with alpha s), spread_left_i = 6 + sum(prev widths + 4).
+    Label of a back tag: alpha s (it is clipped/unreadable collapsed). '+n' marker: alpha 1-s. Front tag: label always full. Card width = lerp(collapsed extent w0, spread width w1, s); card border + shadow alpha scale with s; fill = row colour always.
+    Paint order always back-to-front (last tag first, front tag LAST) with the 1px row-colour ring, so partially overlapped tags read right mid-flight.
   Tooltips: collapsed cell tooltip (Qt.ToolTipRole of the Info item) = every line, newline separated, e.g. 'Injured, 12 days' + newline + 'Homegrown player (nation)'.  Over the spread, QToolTip.showText per tag rect: that tag's own line (TAGS above).
   Accessibility: the tooltip text IS the screen-reader / keyboard text: also set it as Qt.AccessibleTextRole, and make the item DisplayRole the short labels joined by a space ('INJ HGP HGC') so Ctrl+C, type-ahead and accessibility see the same data. The overlay is mouse only; keyboard users read the tooltip / status bar of the selected row.
-SORT KEY (item UserRole, header click sorts the QTableWidget): count of tags DESC, then priority of the front tag (INJ first), then the next tags. key = n*10**6 + sum((9 - rank_i) * 10**(5-i)) with rank = index in PRI (INJ 0 ... U21 7). No tags = 0 (sorts last descending).
+SORT KEY (item UserRole, header click sorts the QTableWidget): APP DECISION: injured first (so 'sort by INJ' keeps its old meaning), then count of tags DESC, then priority of the front tag, then the next tags. key = (1 if INJ else 0)*10**7 + n*10**6 + sum((9 - rank_i) * 10**(5-i)) with rank = index in PRI (INJ 0 ... U21 7). No tags = 0 (sorts last descending).
 REPLACES: INJ (35px) + HGP (50) + HGC (50) = 135px freed, Info costs 80 (A) / 64 (B): net saving 55 / 71 px. HGP/HGC queue UI (toolbar Make HGP/HGC, player window pills) is unchanged; queued rows keep the row tint (ROWQ_ROLE), the column only adds the +HGP/+HGC tag.
 -->
 <style>
@@ -118,15 +122,22 @@ td.g{padding:0 0 0 10px}
 .imk{position:absolute;top:0;height:24px;font:700 9px/24px "Noto Sans",sans-serif;color:var(--tx2)}
 .ichip{position:absolute;top:3px;height:18px;min-width:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#2A2D35;color:var(--tx2);font:700 9px/18px "Noto Sans",sans-serif;text-align:center}
 td.info{padding:0;overflow:visible}
-.pop{display:none;position:absolute;left:0;top:0;z-index:30;border:1px solid #343740;border-radius:4px;box-sizing:border-box;background:#14151A;box-shadow:0 1px 0 rgba(0,0,0,.28),0 2px 0 rgba(0,0,0,.16),0 3px 0 rgba(0,0,0,.08),0 6px 14px rgba(0,0,0,.45);margin:-1px 0 0 -1px;height:26px}
-.pop .itag{top:4px}
+@property --s{syntax:'<number>';inherits:true;initial-value:0}
+/* spread factor --s 0..1 drives everything (width, tag lefts, label / border / shadow alpha); the app animates the same factor with a QVariantAnimation */
+.pop{--s:0;--e:rgba(0,0,0,0);visibility:hidden;position:absolute;left:0;top:0;z-index:30;border:1px solid rgba(52,55,64,var(--s));border-radius:4px;box-sizing:border-box;background:#14151A;width:calc((var(--w0) + (var(--w1) - var(--w0))*var(--s))*1px);
+ box-shadow:0 1px 0 rgba(0,0,0,calc(.28*var(--s))),0 2px 0 rgba(0,0,0,calc(.16*var(--s))),0 3px 0 rgba(0,0,0,calc(.08*var(--s))),0 6px 14px rgba(0,0,0,calc(.45*var(--s)));margin:-1px 0 0 -1px;height:26px;
+ transition:--s 120ms ease-in,visibility 0s 120ms}
+.pop .itag{top:3px;left:calc((var(--l0) + (var(--l1) - var(--l0))*var(--s))*1px)}
+.pop .itag i{font-style:normal;opacity:var(--s)}.pop .itag.f i{opacity:1}.pop .itag.h{opacity:var(--s)}
+.pop .imk{opacity:calc(1 - var(--s));top:0}
 tr:nth-child(even) td.info .pop{background:#161721}
-tr.sel td.info .pop{background:#2A1B4A;border-color:rgba(154,124,255,.55)}
+tr.sel td.info .pop{background:#2A1B4A;border-color:rgba(154,124,255,calc(.55*var(--s)))}
 td.info.mult:hover,td.info.force{z-index:20}
-td.info.mult:hover .pop,td.info.force .pop{display:block}
-td.info.mult:hover .istk,td.info.force .istk{visibility:hidden}
+td.info.mult:hover .pop,td.info.force .pop{--s:1;visibility:visible;transition:--s 180ms ease-out,visibility 0s}
+td.info .istk{transition:visibility 0s 120ms}
+td.info.mult:hover .istk,td.info.force .istk{visibility:hidden;transition:visibility 0s}
 table.sheet td{height:30px}
-.pop.st{display:block;position:relative;margin:0;box-shadow:none}
+.pop.st{--s:1;visibility:visible;position:relative;margin:0;box-shadow:none;transition:none}
 .leg{display:flex;gap:10px 18px;flex-wrap:wrap;font-size:11px;color:var(--tx2);margin:8px 0 4px;align-items:center}
 .leg .t{position:relative;display:inline-block;height:18px}
 .leg .t .itag{top:0}
@@ -229,9 +240,14 @@ const collapsed=(t,mode,rowbg)=>{if(!t.length)return '';const fw=TW[t[0][0]];let
   if(t.length>3)h+=`<span class="imk" style="left:${L0+fw+9*(k-1)+4}px">+${t.length-3}</span>`}
  else{h+=tg(t[0][0],L0,2);if(t.length>1)h+=`<span class="ichip" style="left:${L0+fw+4}px">+${t.length-1}</span>`}
  return `<div class="istk">${h}</div>`};
-const spread=t=>{let x=6,h='';t.forEach(([l,tip])=>{h+=`<span class="itag${l[0]=='+'?' q':''}" style="left:${x}px;width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]}" title="${tip}">${l}</span>`;x+=TW[l]+4});return [h,x+4]};
-const infoTd=(t,mode,rowbg,forced)=>{const tip=t.map(x=>x[1]).join('&#10;');const sp=spread(t);
- return `<td class="info${t.length>1?' mult':''}${forced?' force':''}" title="${tip}">${collapsed(t,mode,rowbg)}${t.length>1?`<div class="pop" style="width:${sp[1]}px">${sp[0]}</div>`:''}</td>`};
+const spread=(t,bg)=>{let x=6,h='';const fw=TW[t[0][0]],k=Math.min(3,t.length);
+ t.forEach(([l,tip],i)=>{const l1=x,l0=6+fw+9*Math.min(i,2)-TW[l];
+  h+=`<span class="itag${l[0]=='+'?' q':''}${i==0?' f':''}${i>2?' h':''}" style="--l0:${l0};--l1:${l1};width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]};z-index:${10-i};box-shadow:0 0 0 1px ${bg}" title="${tip}"><i>${l}</i></span>`;x+=TW[l]+4});
+ let w0=6+fw+9*(k-1)+4;if(t.length>3){h+=`<span class="imk" style="left:${6+fw+9*(k-1)+4}px">+${t.length-3}</span>`;w0+=12}
+ return [h,x+4,w0]};
+const pw=sp=>`--w0:${sp[2]};--w1:${sp[1]}`;
+const infoTd=(t,mode,rowbg,forced)=>{const tip=t.map(x=>x[1]).join('&#10;');const sp=t.length>1?spread(t,rowbg):null;
+ return `<td class="info${t.length>1?' mult':''}${forced?' force':''}" title="${tip}">${collapsed(t,mode,rowbg)}${sp?`<div class="pop" style="${pw(sp)}">${sp[0]}</div>`:''}</td>`};
 const IW=IM=='a'?80:64;
 const hdr=[['Name',150],...(IM=='off'?[['INJ',35]]:[]),['Pos',55],['CA',76],['Dev',76],['Age',40],['Nation',60],...(IM=='off'||CM=='inj'?[['HGP',50],['HGC',50]]:[]),...(IM!='off'?[['Info',IW,'sorted']]:[])];
 const th=hdr.map(h=>`<th style="width:${h[1]}px" class="${h[2]||''}">${h[0]}</th>`).join('');
@@ -248,7 +264,7 @@ document.getElementById('it').innerHTML='<tr>'+th+'</tr>'+rowsH;
 document.getElementById('leg').innerHTML=[['INJ','Injured, N days'],['+HGP','Queued HGP (+HGC alike)'],['HGP','Homegrown (nation)'],['HGC','Homegrown (club)'],['LOAN','On loan from X'],['NFS','Not for sale'],['U21','Under 21']].map(([l,t])=>`<span class="t" style="width:${TW[l]}px"><span class="itag${l[0]=='+'?' q':''}" style="left:0;width:${TW[l]}px;background:${ST[l][0]};color:${ST[l][1]}">${l}</span></span><span>${t}</span>`).join('');
 const vh=[['Name',150],['Tags',45],['A  stack',90],['B  priority + count',110],['Spread (hover)',210],['Tooltip (collapsed cell)',300]];
 let vr='<tr>'+vh.map(h=>`<th style="width:${h[1]}px">${h[0]}</th>`).join('')+'</tr>';
-[0,2,5,8,11,12].map(i=>PL[i]).forEach(r=>{const t=tags(r,'all');const sp=spread(t);const spd=t.length>1?`<div class="pop st" style="width:${sp[1]}px">${sp[0]}</div>`:`<span style="color:var(--dim);font-size:11px">single tag: does not expand</span>`;
+[0,2,5,8,11,12].map(i=>PL[i]).forEach(r=>{const t=tags(r,'all');const sp=spread(t,'#14151A');const spd=t.length>1?`<div class="pop st" style="${pw(sp)}">${sp[0]}</div>`:`<span style="color:var(--dim);font-size:11px">single tag: does not expand</span>`;
  vr+=`<tr><td>${r[0]}</td><td>${t.length}</td><td class="info"><div style="position:relative;height:24px">${collapsed(t,'a','#14151A')}</div></td><td class="info"><div style="position:relative;height:24px">${collapsed(t,'b','#14151A')}</div></td><td style="overflow:visible;padding:2px 10px"><div style="position:relative">${spd}</div></td><td style="font-size:11px;color:var(--tx2);white-space:normal;line-height:1.35;padding:3px 10px">${t.map(x=>x[1]).join('<br>')}</td></tr>`});
 document.getElementById('vs').innerHTML=vr;
 document.getElementById('inote').textContent='Mode: info='+IM+', replaces='+CM+'. Tag order = priority (INJ > queued > HGP/HGC > LOAN > NFS > U21). Row 13 (Mathys Tel) has 5 tags: A shows 3 plus +2, B shows INJ plus +4. The spread is a floating overlay anchored on the cell (recipe in the file comment).';
