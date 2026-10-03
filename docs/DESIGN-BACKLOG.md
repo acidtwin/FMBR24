@@ -26,10 +26,10 @@ Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is a
 
 ## 2. Goal-net header texture
 
-- **Status:** four variants drawn; the user has NOT chosen yet. Nothing built (the app header texture is still the plain pitch grid `_grid_lines` in `gui/main_window.py`).
+- **Status:** BUILT. The user chose A (Diamond) as the DEFAULT; B Square-knot, C Perspective, D Honeycomb (light sweep + goal post) and the old Pitch lines stay as options in Settings > Header texture (`header_texture`, `gui/header_net.py`, test `tests/test_header_texture.py`). Nothing left here except tuning if the user asks.
 - **Mockup:** `mockups/header-net.html`; `?v=a|b|c|d` (`g` = the current pitch grid, reference), `&glow` (animate the loading glow), `&glow=peak`, `&bare=1`, `&k=` strength, `&w=` header width. The file header comment holds the generator pseudocode and constants.
 - **Variants:** A diamond mesh (classic netting); B square-knot net (sagging orthogonal mesh; the previous agent's RECOMMENDATION); C perspective net hanging in the goal mouth (radial mask + corner shadow); D honeycomb + light sweep + post/crossbar corner.
-- **Build notes:** one function `net_geometry(variant, w, h)` returns strands, knots, mask, deco. Cache ONE `QPixmap` per `(w, h, dpr)` in the slot of `_g_cache` (as `_glow_layers` does); `paintEvent` becomes one `drawPixmap`. The loading glow (`HERO_GLOW`) reuses the same strand path/mask: core and halo pixmaps stroke the same path in the tint `QColor(150,130,255)` and re-apply the mask (`DestinationIn`); halo widths become per-net (8, 4 px for the finer nets), peak 0.10 / period 3400 unchanged. Replaces `_grid_lines` as the single source of the texture and the glow mask. Net alpha never above about 0.08 white (title/subtitle legibility). Test: extend `test_hero_glow.py` and take offscreen PNGs of the Welcome and Club headers.
+- **Build notes (as built):** see HANDOVER hero section. Deviations from the mockup: flat caps / bevel joins (speed), curved nets stroked per strand (opaque union, then alpha), glow halo/core built from the same strands and mask.
 
 ## 3. Sidebar solid icon set
 
