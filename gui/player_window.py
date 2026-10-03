@@ -1094,7 +1094,7 @@ class PlayerWindow(QDialog):
             return ''
         if n == 0:
             return 'Free'
-        t = f'{n / 1e6:.1f}M' if n >= 1e6 else f'{n / 1e3:.0f}K'
+        t = f'{round(n / 1e6)}M' if n >= 1e7 else f'{n / 1e6:.1f}M' if n >= 1e6 else f'{n / 1e3:.0f}K'   # 10M+: whole millions
         return '£' + t.replace('.0M', 'M')
 
     def _page_history(self):
@@ -1202,11 +1202,11 @@ class PlayerWindow(QDialog):
         if no_db:
             note_chip(db_msg.replace('Career history is', 'Earlier seasons are'))
             return self._page(panel, stretch={0: 1})
-        note = _lab('League appearances and goals per season; assists, player of the match and average rating are '
-                    "recorded for the current season only ('-' = not recorded). Rows up to the last season of the FM "
-                    'install database come from it; later seasons come from this save. The current season is added '
-                    'from the squad data (all competitions). Info = transfer fee paid for the move at the end of that '
-                    'row. Division names are shown only where known.',
+        note = _lab('League appearances and goals per season; assists, player of the match and average rating come from '
+                    "the save's season statistics for 2026/27 on ('-' = not recorded). Rows up to 2024/25 come from the FM "
+                    'install database, later seasons from this save. The current season is added from the squad data (all '
+                    "competitions). Info = transfer fee paid to join that row's club. Division names are shown only where "
+                    'known.',
                     'pwNote')
         note.setWordWrap(True)
         note.setContentsMargins(12, 8, 12, 12)
