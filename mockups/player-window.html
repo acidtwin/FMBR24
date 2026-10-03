@@ -613,7 +613,8 @@ const HIST=[
  {s:'2021/22',k:'',c:null,a:5,g:0,f:0},
  {s:'2022/23',k:'',c:'VfL Wolfsburg',a:33,g:1,f:34300000},
  {s:'2023/24',k:'',c:'Tottenham',a:27,g:3,f:null},
- {s:'2024/25',k:'youth loan',c:'Tottenham U21',a:null,g:null,f:null}];
+ {s:'2024/25',k:'youth loan',c:'Tottenham U21',a:null,g:null,f:null},
+ {s:'2027/28',k:'',c:'Tottenham',a:14,g:1,f:null,cur:1}];   /* cur = the CURRENT season row (always present for a player with a club; apps/goals = season stats, all competitions; blank '-' without stats). A loanee gets his parent club row first, then the loan club row (kind Loan). */
 const SAMPLES={out:OUT,gk:GKP,low:LOW};
 /* 1c. VALUE BY AGE sample data = REAL MODEL OUTPUT, not hand-drawn. How generated: scratchpad scripts (value-chart branch review) fit the within-player value model + CA-path tables on 6 pairs of the user's own
    FM24 saves (see the VALUE BY AGE CHART block), then curve(age, ca, pa, gk, value, years_left) was run per case. pts = [age, expected value, band low, band high, at-full-potential value] in GBP,
@@ -1141,11 +1142,14 @@ function tabTraining(){const d=D(),rl=S.pot&&d.recP?d.recP:d.rec;
     <div class="pn" style="padding:14px 12px 16px;display:flex;flex-direction:column;align-items:flex-start;gap:8px"><span class="chip soon">COMING SOON</span><span class="pnote" style="font-size:12px;line-height:1.5">Training focus, schedules and development notes will live here.</span></div></div>`}
 /* Career history: install-DB rows + this save's seasons (fm_editor/history.py). Fee = fee paid for the move at the end of that row. No rows -> note + PENDING chip. */
 function tabHistory(){
-  if(!S.data)return `<div class="pn hpn">${ph('Career history')}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Career history is read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
   const kind={loan:'Loan',youth:'Youth','youth loan':'Youth loan'};
-  const rows=HIST.map((r,i)=>`<div class="hrow${i%2?' alt':''}"${r.c?'':' data-tip="Club id 99999 is not in the club tables"'}><span class="hs">${r.s}</span><span class="hc${r.c?'':' un'}">${r.c||'Unknown club'}</span><span class="hk">${kind[r.k]||''}</span><span class="ha">${r.a==null?'-':r.a}</span><span class="hg">${r.g==null?'-':r.g}</span><span class="hf">${money(r.f)}</span></div>`).join('');
-  return `<div class="pn hpn">${ph('Career history')}<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="ha">Apps</span><span class="hg">Goals</span><span class="hf">Fee</span></div>${rows}
-    <div class="hnote">League appearances and goals per season. Rows up to the last season of the FM install database come from it; later seasons come from this save. Fee = transfer fee paid for the move at the end of that row.</div></div>`}
+  const CURTIP='Current club: this season, from the save. Appearances and goals are all competitions.';
+  const rowH=(r,i)=>`<div class="hrow${i%2?' alt':''}"${r.cur?` data-tip="${CURTIP}"`:r.c?'':' data-tip="Club id 99999 is not in the club tables"'}><span class="hs">${r.s}</span><span class="hc${r.c?'':' un'}">${r.c||'Unknown club'}</span><span class="hk">${kind[r.k]||''}</span><span class="ha">${r.a==null?'-':r.a}</span><span class="hg">${r.g==null?'-':r.g}</span><span class="hf">${money(r.f)}</span></div>`;
+  const head=`<div class="hrow hh"><span class="hs">Season</span><span class="hc">Club</span><span class="hk"></span><span class="ha">Apps</span><span class="hg">Goals</span><span class="hf">Fee</span></div>`;
+  /* FM install DB not found: only the current club row (from the save) + the message and the PENDING chip */
+  if(!S.data)return `<div class="pn hpn">${ph('Career history')}${head}${rowH({s:'2027/28',k:'',c:'Tottenham',a:null,g:null,f:null,cur:1},0)}<div class="hnote" style="font-size:11px;padding:10px 12px 0">Earlier seasons are read from the Football Manager 24 install database, which was not found (Steam library of this save, or the FMBR24_FM_DB folder).</div><div style="padding:10px 12px 14px">${pendV()}</div></div>`;
+  return `<div class="pn hpn">${ph('Career history')}${head}${HIST.map(rowH).join('')}
+    <div class="hnote">League appearances and goals per season. Rows up to the last season of the FM install database come from it; later seasons come from this save. The current season is added from the squad data (all competitions). Fee = transfer fee paid for the move at the end of that row.</div></div>`}
 
 /* ---------- registry: order = tab strip order (page = tab body; the header is shared) ---------- */
 const TABS=[
