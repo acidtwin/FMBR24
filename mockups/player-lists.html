@@ -2,7 +2,8 @@
 <html lang="en"><head><meta charset="UTF-8"><title>Player lists: Dev column graphic</title>
 <!--
 PLAYER LISTS MOCKUP: the Dev (development rate, 1-20) column of Squads / Players / Reports / Shortlist-style tables.
-Open with ?dev=a|b|c|d|e|stars|numbers   (or use the review bar). CA / PA keep stars (see list-stars.html).
+DECISION: the Dev column uses STYLE B (five pips) = Settings 'Graphic'. Styles A, C, D, E stay selectable below as alternatives / reserved (E = growth stairs is reserved for a future use, recipe in docs/DESIGN-BACKLOG.md).
+STYLE D (ring) is USED for the ROLE RATING column of Best by Role (see ROLE RATING RING). Open with ?dev=a|b|c|d|e|stars|numbers   (or use the review bar). CA / PA keep stars (see list-stars.html).
 Skin tokens = list-stars.html / player-window.html (--bg #14151A, --alt #161721, --sel #2A1B4A, --hdr #292B32, --bd #343740).
 Rows are 24px high here (the real tables are 24-27). Dev column width 76 in every graphic style (same as CA/PA stars), 45 in Numbers.
 
@@ -20,7 +21,7 @@ STYLE A  slim meter + tiny number
   number : drawText at x+44, 9px font, colour #8B96A8 (the dim text colour), left aligned, vertically centred. Optional (drop it => 'clean meter').
   cost   : 2 rounded rects + 1 text.
 
-STYLE B  five pips
+STYLE B  five pips  (CHOSEN, the app default 'Graphic')
   pip    : 8x8 QRectF, radius 1.5, gap 2  =>  5*8 + 4*2 = 48 wide. y = cy-4.   n = ceil(v/4)  (1-4 -> 1, 5-8 -> 2, 9-12 -> 3, 13-16 -> 4, 17-20 -> 5)
   lit    : TIER colour; unlit #3A4050.   Same 5-step quantisation as the stars (dev_stars), so Stars and Pips agree.
   cost   : 5 rounded rects.
@@ -31,16 +32,22 @@ STYLE C  growth chevrons (shape = speed)
   colour : TIER colour for all chevrons; the dash uses the red/orange tier colour at alpha 200.
   cost   : <=3 polylines (drawPolyline) or one dash rect.
 
-STYLE D  ring gauge + number
+STYLE D  ring gauge + number  (alternative for Dev; USED for the Role Rating column, see below)
   ring   : 14x14 box at x, cy-7. QRectF(x+1, cy-6, 12, 12), pen width 2, FlatCap. Track: full circle (drawEllipse) #3A4050.
   fill   : drawArc(rect, 90*16, -round(360*16*v/20)) (clockwise from 12 o'clock) in TIER colour.
   number : drawText at x+19, 10px font, colour #8B96A8.  (A digit inside a 14px ring is ~7px: illegible, so the number sits beside it.)
   cost   : 1 ellipse + 1 arc + 1 text.
 
-STYLE E  growth stairs (the recommendation)  ascending 5-step bars = 'how fast it climbs'
+STYLE E  growth stairs (RESERVED for a future use; not used now)  ascending 5-step bars = 'how fast it climbs'
   bars   : width 3, gap 1.5  =>  5*3 + 4*1.5 = 21 wide.  heights 5, 7.5, 10, 12.5, 15 (bottom aligned at cy+7.5), radius 0.8.
   lit    : bar i lit when i < ceil(v/4); TIER colour. Unlit #3A4050.
   cost   : 5 rects. Reads as a rising curve even in greyscale: the taller the last lit bar, the faster the growth.
+
+ROLE RATING RING (Best by Role report, the 'Rating' column that takes the Dev column's place; style D geometry)
+  value  : the report's integer rating 1-20 (rolepos.score_to_rating = round(role percent / 5), the same 1-20 scale as Dev; sort uses it).
+  fill   : v/20 of the circle, clockwise from 12 o'clock: drawArc(rect, 90*16, -round(360*16*v/20)).  (v=10 = half ring, 20 = full ring.)
+  colour : TIER colour of v (same tier() as everywhere; 17-20 green = 83-100 %, 14-16 yellow, ...). Number beside the ring (10px, #8B96A8) keeps the exact value.
+  tooltip: 'Role rating 14 of 20'.  Column width 56 (the real Rating column was 45; it now holds ring + number).  Unknown value = '?' text.
 -->
 <style>
 :root{--bg:#14151A;--alt:#161721;--sel:#2A1B4A;--hdr:#292B32;--bd:#343740;--tx:#fff;--tx2:#8B96A8;--dim:#525B68}
@@ -72,14 +79,15 @@ td.g{padding:0 0 0 10px}
 <table id="t"></table>
 <div class="cols">
  <div><h3>Player Reports (Name, Pos, CA, PA, Dev)</h3><table id="r"></table></div>
+ <div><h3>Best by Role (Name, Pos, CA, PA, Rating = style D ring + number; Dev is not shown there). Tooltip: 'Role rating 14 of 20'</h3><table id="rr"></table></div>
  <div><h3>Value ramp 1-20 (what each step looks like; sorted by Dev ascending)</h3><table id="ramp" class="ramp"></table></div>
 </div>
 <div class="note" id="note"></div>
 <script>
 const MODES=['a','b','c','d','e','stars','numbers'];
-const NAMES={a:'A  slim meter',b:'B  five pips',c:'C  chevrons',d:'D  ring',e:'E  growth stairs',stars:'Stars (current)',numbers:'Numbers'};
-const q=new URLSearchParams(location.search).get('dev');const MODE=MODES.includes(q)?q:'e';
-document.getElementById('bar').innerHTML='Dev display: '+MODES.map(m=>`<a href="?dev=${m}" class="${m==MODE?'on':''}">${NAMES[m]}</a>`).join('')+' &nbsp; (Settings: Development rate display = Graphic / Stars / Numbers; Graphic = the chosen style)';
+const NAMES={a:'A  slim meter (alt)',b:'B  five pips (chosen)',c:'C  chevrons (alt)',d:'D  ring (alt; used for Role Rating)',e:'E  growth stairs (reserved)',stars:'Stars',numbers:'Numbers'};
+const q=new URLSearchParams(location.search).get('dev');const MODE=MODES.includes(q)?q:'b';
+document.getElementById('bar').innerHTML='Dev display: '+MODES.map(m=>`<a href="?dev=${m}" class="${m==MODE?'on':''}">${NAMES[m]}</a>`).join('')+' &nbsp; (Settings: Development rate display = Graphic / Stars / Numbers; Graphic = B five pips; A, C, D, E are alternatives / reserved)';
 const TH=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
 const EMPTY='#3A4050',DIM='#8B96A8';
@@ -118,6 +126,9 @@ document.getElementById('t').innerHTML='<tr>'+hd.map(TD).join('')+'</tr>'+rows.m
 // Reports: Name, Pos, CA, PA, Dev
 const rh=[['Name',150],['Pos',55],['CA',76],['PA',76],['Dev',W.d,'sorted']];
 document.getElementById('r').innerHTML='<tr>'+rh.map(TD).join('')+'</tr>'+rows.slice(0,8).map((r,k)=>`<tr class="${k==1?'sel':k==4?'hov':''}"><td>${r[0]}</td><td><span class="pos">${r[2]}</span></td><td class="g">${cp(r[3])}</td><td class="g">${cp(r[4])}</td>${dc(r[5])}</tr>`).join('');
+const rrh=[['Name',150],['Pos',55],['CA',76],['PA',76],['Rating',56,'sorted']];
+const rc=v=>v==null?'?':G.d(v);
+document.getElementById('rr').innerHTML='<tr>'+rrh.map(TD).join('')+'</tr>'+[[17,'Jude Bellingham','AMC',172,190],[16,'Reece James','DR',160,171],[14,'Kylian Mbappe','ST',187,188],[11,'Late Bloomer','DM',98,140],[9,'Steady Eddie','DL',104,109],[6,'Slow Burner','MC',90,128],[3,'Stalled Prospect','AML',70,141],[20,'Lamine Yamal','AMR',141,200]].sort((a,b)=>b[0]-a[0]).map((r,k)=>`<tr class="${k==1?'sel':k==4?'hov':''}"><td>${r[1]}</td><td><span class="pos">${r[2]}</span></td><td class="g">${cp(r[3])}</td><td class="g">${cp(r[4])}</td><td class="g" title="Role rating ${r[0]} of 20">${rc(r[0])}</td></tr>`).join('');
 let rp='<tr><th style="width:40px">Dev</th><th style="width:'+W.d+'px">Cell</th></tr>';
 for(let v=1;v<=20;v++)rp+=`<tr><td>${v}</td>${dc(v)}</tr>`;
 document.getElementById('ramp').innerHTML=rp;

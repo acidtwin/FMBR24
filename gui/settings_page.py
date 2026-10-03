@@ -428,6 +428,10 @@ class SettingsPage(QWidget):
         self._ability = self._select(220)
         self._ability.addItem('Stars  (default)', 'stars')
         self._ability.addItem('Numbers', 'numbers')
+        self._dev = self._select(220)
+        self._dev.addItem('Graphic  (default)', 'graphic')
+        self._dev.addItem('Stars', 'stars')
+        self._dev.addItem('Numbers', 'numbers')
         seg, seg_l = _bare(QHBoxLayout)
         seg_l.setSpacing(0)
         for name, text, on in (('setSegL', 'Comfortable', True), ('setSegR', 'Compact', False)):
@@ -455,6 +459,11 @@ class SettingsPage(QWidget):
                       'Show CA, PA and Dev Rate as stars or raw numbers in the player window header. '
                       'Stars are an approximation; hover for the number.',
                       self._ctl_line(self._ability)),
+            self._row('Development rate display',
+                      'How the Dev column of the player lists shows development rate (1-20). Graphic is five '
+                      'tier-coloured pips; the player window header keeps stars. CA and PA follow Ability display. '
+                      'Hover for the number.',
+                      self._ctl_line(self._dev)),
             self._row('Table density', 'Row height in every table.', seg, soon=True),
         ])
 
@@ -602,6 +611,7 @@ class SettingsPage(QWidget):
         self._use_cache.toggled.connect(self._on_changed)
         self._trait_thr.currentIndexChanged.connect(self._on_changed)
         self._ability.currentIndexChanged.connect(self._on_changed)
+        self._dev.currentIndexChanged.connect(self._on_changed)
         self._theme.currentIndexChanged.connect(self._on_changed)
         self._htex.currentIndexChanged.connect(self._on_changed)
         self._faces_on.toggled.connect(self._on_changed)
@@ -627,6 +637,7 @@ class SettingsPage(QWidget):
             'use_cache': self._use_cache.isChecked(),
             'trait_threshold': self._trait_thr.currentData(),
             'ability_display': self._ability.currentData(),
+            'dev_display': self._dev.currentData(),
             'player_theme': self._theme.currentData(),
             'header_texture': self._htex.currentData(),
             'faces_enabled': self._faces_on.isChecked(),
@@ -640,7 +651,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -648,6 +659,7 @@ class SettingsPage(QWidget):
         self._use_cache.setChecked(v['use_cache'])
         self._trait_thr.setCurrentIndex(max(0, self._trait_thr.findData(v['trait_threshold'])))
         self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
+        self._dev.setCurrentIndex(max(0, self._dev.findData(v['dev_display'])))
         self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
         self._htex.setCurrentIndex(max(0, self._htex.findData(v['header_texture'])))
         self._faces_on.setChecked(v['faces_enabled'])
@@ -655,7 +667,7 @@ class SettingsPage(QWidget):
         self._flags_on.setChecked(v['flags_enabled'])
         self._faces_dir.setText(v['faces_dir'])
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()

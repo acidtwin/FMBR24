@@ -370,37 +370,41 @@ st.sortItems(1, Qt.SortOrder.AscendingOrder)
 names = [st.item(r, 1).text() for r in range(st.rowCount())]
 assert names == sorted(names), names
 
-# --- Dev stars: raw sort, raw tooltip, Numbers mode, Best by Role's Rating stays a number -------------------------------------
+# --- Dev graphic (five pips, Settings > Development rate display): raw sort, tooltip, Ability display independent, Best by Role ring ----
 for tb, dev in ((w._table, 5), (w._reports_table, 5), (w._players_table, 5)):
     dl = tb.itemDelegateForColumn(dev)
-    assert isinstance(dl, D) and dl._label == 'Dev' and dl._stars_fn is dev_stars and tb.columnWidth(dev) == 76, (tb, dev)
-assert not isinstance(w._shortlist_table.itemDelegateForColumn(5), D) or w._shortlist_table.itemDelegateForColumn(5)._label == 'PA'
+    assert isinstance(dl, M.DevDelegate) and dl._label == 'Dev' and dl._stars_fn is dev_stars and tb.columnWidth(dev) == 76, (tb, dev)
+assert not isinstance(w._shortlist_table.itemDelegateForColumn(5), M.DevDelegate)
 dd = w._reports_table.itemDelegateForColumn(5)
 ridx = w._reports_table.model().index(0, 5)
 shown = ridx.data()
-assert dd.tip(ridx) == f'Dev {shown}'
-gold = lambda im: sum(1 for y in range(im.height()) for x in range(im.width())
-                      if QColor(im.pixel(x, y)).red() > 200 and QColor(im.pixel(x, y)).green() > 150 and QColor(im.pixel(x, y)).blue() < 90)
-assert gold(paint(w._reports_table, 5, 0)) > 0
+assert dd.tip(ridx) == f'Dev {shown} of 20'
 w._reports_table.sortItems(5, Qt.SortOrder.AscendingOrder)
 raw = [int(w._reports_table.item(r, 5).text()) for r in range(w._reports_table.rowCount())]
 assert raw == sorted(raw), raw
 w._current_report_key = 'best_role'
 w._report_ratings = {p['id']: 40 + p['id'] for p in people}
 w._populate_reports_table(people)
-assert not w._reports_table.itemDelegateForColumn(5).enabled and gold(paint(w._reports_table, 5, 0)) == 0 and w._reports_table.columnWidth(5) >= 45
-assert w._reports_table.itemDelegateForColumn(5).tip(w._reports_table.model().index(0, 5)) is None
+rd = w._reports_table.itemDelegateForColumn(5)
+assert isinstance(rd, M.RoleRingDelegate) and w._reports_table.columnWidth(5) >= 56
+rdx = w._reports_table.model().index(0, 5)
+assert rd._raw(rdx) is not None
 w._current_report_key = 'prospects'
 w._populate_reports_table(people)
-assert w._reports_table.itemDelegateForColumn(5).enabled
-# Numbers mode via the real Settings path: Dev goes back to a 45 px number column, then back to stars
+assert isinstance(w._reports_table.itemDelegateForColumn(5), M.DevDelegate)
+# Ability display = Numbers: CA/PA go to 45 px, Dev (own setting, graphic) stays 76; then Dev = Numbers: 45
 w._settings_page.saved.emit(dict(settings.load(), ability_display='numbers'))
 wait(svc)
 faces.set_club_uids([601, 602, 727, 728, 729])
 for tb in (w._table, w._reports_table, w._players_table):
+    assert tb.columnWidth(5) == 76 and tb.columnWidth(3) == 45, tb.columnWidth(5)
+w._settings_page.saved.emit(dict(settings.load(), ability_display='numbers', dev_display='numbers'))
+wait(svc)
+faces.set_club_uids([601, 602, 727, 728, 729])
+for tb in (w._table, w._reports_table, w._players_table):
     assert tb.columnWidth(5) == 45 and tb.columnWidth(3) == 45, tb.columnWidth(5)
-assert gold(paint(w._reports_table, 5, 0, 45)) == 0
-w._settings_page.saved.emit(dict(settings.load(), ability_display='stars'))
+assert w._reports_table.itemDelegateForColumn(5).tip(w._reports_table.model().index(0, 5)) is None
+w._settings_page.saved.emit(dict(settings.load(), ability_display='stars', dev_display='graphic'))
 wait(svc)
 faces.set_club_uids([601, 602, 727, 728, 729])
 for tb in (w._table, w._reports_table, w._players_table):
