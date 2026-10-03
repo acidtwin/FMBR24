@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from fm_editor import potential as _pot
+from gui import pw_background as _pwbg
 from fm_editor import settings as _settings
 from fm_editor.abilitystars import ability_stars, dev_stars
 from gui.faces import get_service as _faces_service
@@ -526,6 +527,9 @@ class PlayerWindow(QDialog):
         self.setMinimumSize(1062, 640)
         self.resize(1122, 760)
         self.setStyleSheet(_dlg_qss())
+        # faint random stadium photo behind the panels (gui/pw_background.py; user-folder images, Settings on/off)
+        self._bg_src = _pwbg.pick_background() if _settings.load().get('player_background', True) else None
+        self._bg_scaled = None   # (size, pixmap) cache of the cover-scaled photo
         self._ability_stars = _settings.ability_as_stars()  # read once when the window opens
         self._person = person
         self._save_data = save_data
@@ -584,6 +588,18 @@ class PlayerWindow(QDialog):
         b = self._save_data.get('b') if self._save_data else None
         self._hgp = bool(p.get('hgp', False))
         self._hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(COLORS['window_bg']))
+        if self._bg_src is not None:
+            sz = self.size()
+            if self._bg_scaled is None or self._bg_scaled[0] != sz:
+                self._bg_scaled = (sz, _pwbg.cover(self._bg_src, sz.width(), sz.height()))
+            if self._bg_scaled[1] is not None:
+                p.setOpacity(_pwbg.OPACITY)
+                p.drawPixmap(0, 0, self._bg_scaled[1])
+        p.end()
 
     # -- shell: header / (tab strip | pages) / action strip ---------------------------------------
     def _build(self):

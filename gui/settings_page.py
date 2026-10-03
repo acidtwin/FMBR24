@@ -418,6 +418,7 @@ class SettingsPage(QWidget):
         self._landing = self._select(220)
         for key, label in _LANDING_LABELS:
             self._landing.addItem(label, key)
+        self._pbg = self._check(True)
         self._theme = self._select(220)
         for tid, t in _pw_themes.THEMES.items():
             self._theme.addItem(t.name, tid)
@@ -448,6 +449,10 @@ class SettingsPage(QWidget):
             self._row('Player window theme',
                       'Texture for the player window header, tab menu and action bar.',
                       self._ctl_line(self._theme)),
+            self._row('Player window background',
+                      'A faint stadium photo behind the panels, picked at random each time a player window opens. '
+                      'Put images in ~/.local/share/fmbr24/backgrounds.',
+                      self._ctl_line(self._pbg)),
             self._row('Header texture',
                       'Faint pattern in the page header bar, and what lights up during the first load. '
                       'Diamond is the default.',
@@ -613,6 +618,7 @@ class SettingsPage(QWidget):
         self._ability.currentIndexChanged.connect(self._on_changed)
         self._dev.currentIndexChanged.connect(self._on_changed)
         self._theme.currentIndexChanged.connect(self._on_changed)
+        self._pbg.toggled.connect(self._on_changed)
         self._htex.currentIndexChanged.connect(self._on_changed)
         self._faces_on.toggled.connect(self._on_changed)
         self._logos_on.toggled.connect(self._on_changed)
@@ -639,6 +645,7 @@ class SettingsPage(QWidget):
             'ability_display': self._ability.currentData(),
             'dev_display': self._dev.currentData(),
             'player_theme': self._theme.currentData(),
+            'player_background': self._pbg.isChecked(),
             'header_texture': self._htex.currentData(),
             'faces_enabled': self._faces_on.isChecked(),
             'logos_enabled': self._logos_on.isChecked(),
@@ -651,7 +658,7 @@ class SettingsPage(QWidget):
 
     def _apply_values(self, v):
         """Push a settings dict into the widgets (signals blocked; caller refreshes)."""
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._pbg, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(True)
         self._folder.setText(v['default_save_dir'])
         self._landing.setCurrentIndex(max(0, self._landing.findData(v['landing_page'])))
@@ -661,13 +668,14 @@ class SettingsPage(QWidget):
         self._ability.setCurrentIndex(max(0, self._ability.findData(v['ability_display'])))
         self._dev.setCurrentIndex(max(0, self._dev.findData(v['dev_display'])))
         self._theme.setCurrentIndex(max(0, self._theme.findData(v['player_theme'])))
+        self._pbg.setChecked(v['player_background'])
         self._htex.setCurrentIndex(max(0, self._htex.findData(v['header_texture'])))
         self._faces_on.setChecked(v['faces_enabled'])
         self._logos_on.setChecked(v['logos_enabled'])
         self._flags_on.setChecked(v['flags_enabled'])
         self._faces_dir.setText(v['faces_dir'])
         self._fill_presets(v['role_weights_preset'])
-        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
+        for w in (self._folder, self._landing, self._pending, self._use_cache, self._preset, self._trait_thr, self._ability, self._dev, self._theme, self._pbg, self._htex, self._faces_on, self._logos_on, self._flags_on, self._faces_dir):
             w.blockSignals(False)
         self._after_preset_change()
         self._on_changed()

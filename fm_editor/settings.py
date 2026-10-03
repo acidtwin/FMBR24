@@ -29,6 +29,7 @@ DEFAULTS = {
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
     'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
     'dev_display': 'graphic',          # Dev column of the player lists: 'graphic' (five pips), 'stars' or raw 'numbers'
+    'player_background': True,         # faint random stadium photo behind the player window panels (gui/pw_background.py)
     'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
     'header_texture': 'diamond',       # page header bar pattern + loading-glow mask (gui/header_net.py)
     'faces_enabled': True,             # show facepack pictures (player window header, staff dialog)
