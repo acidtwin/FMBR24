@@ -198,7 +198,18 @@ html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{hei
 .ach .m{margin-left:auto;display:flex;gap:6px;letter-spacing:0;text-transform:none;font-weight:700}
 .ar{height:22px;display:flex;align-items:center;gap:4px}
 .ar .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ar .df{width:34px;text-align:center;font-size:11px;font-weight:700;flex:none;color:var(--tx3)}
+/* DIFF CELL (34 x 20, between the two 26 x 20 value tiles): a split bar.  Track = two 14 px halves with a 2 px gap (x 2..16 | 18..32) around a 2 px centre tick (x 16..18), 6 px high, r3, tier-3 tint (the tile language).
+   The winner's half is filled from the centre outwards in its identity colour, length = 3 + (min(|d|, 6) - 1) / 5 * 11 px (+1 = 3 px ... +6 or more = 14 px, the full half); a 1 x 10 px #8B96A8 centre tick anchors the zero line;
+   level = the track only (fainter), no fill.
+   Alternatives tried on paper and dropped: (B) 1-3 chevrons scaled to the difference (reads as text, three sizes of glyph, jittery in a column of 14 rows), (C) 3 pips that fill left or right
+   (only 4 magnitudes, the eye has to count), (D) outlining the winner's tile (strong, but 40 outlined tiles drown the tier colours).  The exact number stays in the row tooltip and in aria-label. */
+.ar .df{width:34px;height:20px;flex:none;position:relative;display:block}
+.ar .df .h{position:absolute;top:7px;height:6px;width:14px;background:rgba(139,150,168,.18)}
+.ar .df::after{content:"";position:absolute;left:16px;top:5px;width:2px;height:10px;border-radius:1px;background:var(--tx2)}   /* centre tick: 2 px wide, the gap between the halves */
+.ar .df .h.l{left:2px;border-radius:3px 0 0 3px}.ar .df .h.r{left:18px;border-radius:0 3px 3px 0}
+.ar .df .h i{position:absolute;top:0;bottom:0;display:block}
+.ar .df .h.l i{right:0;background:var(--a);border-radius:3px 0 0 3px}.ar .df .h.r i{left:0;background:var(--b);border-radius:0 3px 3px 0}
+.ar .df.eq .h{background:rgba(139,150,168,.08)}.ar .df.eq::after{background:var(--tx3)}
 .ar:hover{background:var(--alt)}
 .facts{display:grid;grid-template-columns:repeat(6,1fr);gap:0;padding:0 4px 8px}
 .fact{padding:2px 8px 0 10px;min-width:0;border-left:1px solid var(--border)}
@@ -298,6 +309,7 @@ const dec=n=>n.toFixed(1);
    Outfield: the 11 goalkeeping attributes are not listed (as the Profile).  Keeper: the outfield Technical group is HIDDEN (decision 3 in the header comment). */
 const GRPN={tech:'Technical',ment:'Mental',phys:'Physical',hid:'Hidden',gk:'Goalkeeping',foot:'Footedness'};
 const grpKeys=p=>isGK(p)?['gk','ment','phys','hid','foot']:['tech','ment','phys','hid','foot'];
+const DF_CAP=6;   // table diff bar: differences of 6 or more fill the whole half (one place to change)
 const counted=k=>k!=='foot';   // attributes won: every attribute counts equally; Footedness is not 'better or worse'
 function tally(a,b){let wa=0,wb=0,lv=0;grpKeys(a).filter(counted).forEach(k=>a.g[k].forEach((t,i)=>{const d=good(t)-good(b.g[k][i]);d>0?wa++:d<0?wb++:lv++}));return{wa,wb,lv}}
 const gmean=(p,k)=>p.g[k].reduce((s,t)=>s+good(t),0)/p.g[k].length;
@@ -352,7 +364,8 @@ function radarAB(ax,bx){
 }
 function attrCol(p,q,key){
   return `<div class="ach"><span>${GRPN[key]}</span></div>`+p.g[key].map((a,i)=>{const b=q.g[key][i],d=good(a)-good(b),ad=Math.abs(d);
-    const df=d===0?`<span class="df" title="Level">=</span>`:d>0?`<span class="df ca" title="${sn(p)} higher by ${ad}">‹ ${ad}</span>`:`<span class="df cb" title="${sn(q)} higher by ${ad}">${ad} ›</span>`;
+    const w=ad?3+(Math.min(ad,DF_CAP)-1)/(DF_CAP-1)*11:0,who=d>0?sn(p):sn(q),lab=d===0?'Level':`${who} higher by ${ad}`;
+    const df=`<span class="df${d===0?' eq':''}" role="img" aria-label="${lab}" title="${lab}"><span class="h l">${d>0?`<i style="width:${w.toFixed(1)}px"></i>`:''}</span><span class="h r">${d<0?`<i style="width:${w.toFixed(1)}px"></i>`:''}</span></span>`;
     return `<div class="ar" title="${a[0]}: ${sn(p)} ${gv(a)}, ${sn(q)} ${gv(b)}${a[3]?' (lower is better)':''}"><span class="an">${a[0]}</span>${tileV(a)}${df}${tileV(b)}</div>`}).join('');
 }
 /* tally in the header of the Attributes panel: markers + counts, 'level' last */
