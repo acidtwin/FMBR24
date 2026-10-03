@@ -85,7 +85,7 @@ def test_panel():
     w, rows = transfer_rows(person(value_est=300_000_000))                    # Not for sale
     assert rows['Transfer / loan status'] == ('Not for sale', True), rows
     assert rows['Market value'] == ('-', True), rows                          # no '£300M', not a PENDING chip
-    assert rows['Asking price'] == ('PENDING', True), rows
+    assert 'Asking price' not in rows, rows
     assert '300' not in ' '.join(lb.text() for lb in w._stack.currentWidget().findChildren(QLabel) if '£' in lb.text())
     assert w._vchart.curve().empty                                            # value chart: empty state, as before
     w.close()
@@ -99,19 +99,19 @@ def test_panel():
     assert rows['Transfer / loan status'] == ('On loan', True), rows
     w.close()
 
-    w, rows = transfer_rows(person())                                         # normal player: PENDING chip stays
-    assert rows['Transfer / loan status'] == ('PENDING', True) and rows['Asking price'] == ('PENDING', True), rows
+    w, rows = transfer_rows(person())                                         # normal player: no status / asking price rows at all
+    assert 'Transfer / loan status' not in rows and 'Asking price' not in rows and rows['Market value'][0] == '£50M', rows
     w.close()
 
     mw._SHOW_PENDING = False                                                  # Settings > Show PENDING markers OFF
     try:
         w, rows = transfer_rows(person())
-        assert rows['Transfer / loan status'][1] is False and rows['Asking price'][1] is False, rows
+        assert 'Transfer / loan status' not in rows and 'Asking price' not in rows, rows
         assert rows['Market value'] == ('£50M', True), rows
         w.close()
         w, rows = transfer_rows(person(loan_parent=2))                        # real data stays visible
         assert rows['Transfer / loan status'] == ('On loan from Tottenham Hotspur', True), rows
-        assert rows['Asking price'][1] is False, rows
+        assert 'Asking price' not in rows, rows
         w.close()
         w, rows = transfer_rows(person(value_est=0))                          # nothing stored: the panel is not built
         assert rows == {}, rows
