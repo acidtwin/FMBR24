@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Player lists: Dev column graphic</title>
+<!--
+PLAYER LISTS MOCKUP: the Dev (development rate, 1-20) column of Squads / Players / Reports / Shortlist-style tables.
+Open with ?dev=a|b|c|d|e|stars|numbers   (or use the review bar). CA / PA keep stars (see list-stars.html).
+Skin tokens = list-stars.html / player-window.html (--bg #14151A, --alt #161721, --sel #2A1B4A, --hdr #292B32, --bd #343740).
+Rows are 24px high here (the real tables are 24-27). Dev column width 76 in every graphic style (same as CA/PA stars), 45 in Numbers.
+
+COMMON (all QPainter, StarsDelegate-style, no pixmaps needed; cache nothing, every primitive is a rect/line/arc/polygon)
+  tier(v) = gui/player_window.py tier(): 1-4 red #E8696A | 5-8 orange #E0973C | 9-11 grey #8B96A8 | 12-13 white #E6EAF0 | 14-16 yellow #EAD95C | 17-20 green #52C287
+  empty / track colour #3A4050 (same as the empty stars). Left inset x = cell.left + 10. Vertically centred: cy = cell.top + h/2.
+  Antialiasing ON for A, C, D, E (rounded rects, lines, arcs); B can be drawn with it off. Raw value = the cell text (EditRole/DisplayRole) so
+  sort stays 1-20. Tooltip in every graphic and stars mode: 'Dev 14 of 20'. Unknown value ('?' / '-') = the text, nothing painted.
+  Colour-blind safe: colour is only a redundant second channel. LENGTH / COUNT / SHAPE carry the value in every style.
+  Selected row: app QSS #2A1B4A; graphic drawn on top unchanged (track #3A4050 still contrasts). Hover: app QSS has none; here a faint rgba(255,255,255,.04) is shown to prove legibility.
+
+STYLE A  slim meter + tiny number
+  track  : QRectF(x, cy-2, 40, 4)  radius 2, fill #3A4050
+  fill   : QRectF(x, cy-2, max(3, round(40*v/20)), 4) radius 2, fill TIER colour (alpha 255)
+  number : drawText at x+44, 9px font, colour #8B96A8 (the dim text colour), left aligned, vertically centred. Optional (drop it => 'clean meter').
+  cost   : 2 rounded rects + 1 text.
+
+STYLE B  five pips
+  pip    : 8x8 QRectF, radius 1.5, gap 2  =>  5*8 + 4*2 = 48 wide. y = cy-4.   n = ceil(v/4)  (1-4 -> 1, 5-8 -> 2, 9-12 -> 3, 13-16 -> 4, 17-20 -> 5)
+  lit    : TIER colour; unlit #3A4050.   Same 5-step quantisation as the stars (dev_stars), so Stars and Pips agree.
+  cost   : 5 rounded rects.
+
+STYLE C  growth chevrons (shape = speed)
+  glyph box 14 wide x 14 high, x = cell.left+10, top = cy-7. Chevron = 3-point polyline (0,3.5)-(5,0)-(10,3.5) offset +2 in x, pen 1.6px, round cap/join, no fill.
+  count  : v<=4 -> 0 chevrons + a flat dash QRectF(2, 6.2, 10, 1.6) (no growth);  5-9 -> 1;  10-14 -> 2;  15-20 -> 3.  Stacked upwards, step 4px: chevron k at y = 10 - 4k + 3.
+  colour : TIER colour for all chevrons; the dash uses the red/orange tier colour at alpha 200.
+  cost   : <=3 polylines (drawPolyline) or one dash rect.
+
+STYLE D  ring gauge + number
+  ring   : 14x14 box at x, cy-7. QRectF(x+1, cy-6, 12, 12), pen width 2, FlatCap. Track: full circle (drawEllipse) #3A4050.
+  fill   : drawArc(rect, 90*16, -round(360*16*v/20)) (clockwise from 12 o'clock) in TIER colour.
+  number : drawText at x+19, 10px font, colour #8B96A8.  (A digit inside a 14px ring is ~7px: illegible, so the number sits beside it.)
+  cost   : 1 ellipse + 1 arc + 1 text.
+
+STYLE E  growth stairs (the recommendation)  ascending 5-step bars = 'how fast it climbs'
+  bars   : width 3, gap 1.5  =>  5*3 + 4*1.5 = 21 wide.  heights 5, 7.5, 10, 12.5, 15 (bottom aligned at cy+7.5), radius 0.8.
+  lit    : bar i lit when i < ceil(v/4); TIER colour. Unlit #3A4050.
+  cost   : 5 rects. Reads as a rising curve even in greyscale: the taller the last lit bar, the faster the growth.
+-->
+<style>
+:root{--bg:#14151A;--alt:#161721;--sel:#2A1B4A;--hdr:#292B32;--bd:#343740;--tx:#fff;--tx2:#8B96A8;--dim:#525B68}
+body{margin:0;padding:16px;background:#101116;color:var(--tx);font:13px/1.2 "Noto Sans",sans-serif}
+h3{font-size:12px;font-weight:600;color:var(--tx2);margin:18px 0 6px}
+.bar{margin-bottom:8px;font-size:12px;color:var(--tx2);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bar a{color:#9A7CFF;text-decoration:none;padding:3px 9px;border:1px solid var(--bd);border-radius:3px}
+.bar a.on{background:#2A1B4A;color:#fff;border-color:#9A7CFF}
+table{border-collapse:collapse;table-layout:fixed;background:var(--bg);width:max-content}
+th{background:var(--hdr);color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:400;text-align:left;padding:6px 10px;border-right:1px solid var(--bd);border-bottom:1px solid var(--bd);overflow:hidden;white-space:nowrap}
+th.sorted{color:#fff}
+td{height:24px;padding:0 10px;border-bottom:1px solid rgba(52,55,64,.6);overflow:hidden;white-space:nowrap;box-sizing:border-box;position:relative}
+tr:nth-child(even) td{background:var(--alt)}
+tr.hov td{background-image:linear-gradient(rgba(255,255,255,.05),rgba(255,255,255,.05))}
+tr.sel td{background:var(--sel);background-image:none}
+td.g{padding:0 0 0 10px}
+.g svg{display:block;height:24px;overflow:visible}
+.stars{display:flex;gap:2px;align-items:center;height:100%}.stars svg{width:10px;height:10px;flex:none}
+.pos{display:inline-block;background:#2A2D35;color:var(--tx2);font:700 10px/16px sans-serif;padding:0 5px;border-radius:2px}
+.flag{display:inline-block;width:16px;height:11px;border-radius:2px;vertical-align:-2px;margin-right:6px}
+.hgp{display:inline-block;font:700 9px/14px sans-serif;border:1px solid #EAD95C;color:#EAD95C;padding:0 4px;border-radius:7px}
+.inj{color:#E8696A;font-weight:700;font-size:11px}
+.note{font-size:11px;color:var(--dim);margin-top:4px;max-width:760px}
+.ramp td,.ramp th{padding:0 8px}.ramp td{height:24px;text-align:left}
+.cols{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+</style></head><body>
+<div class="bar" id="bar"></div>
+<h3>Players / Squads (Name, INJ, Pos, CA, PA, Dev, Age, Nation, HGP). 3rd row selected, 6th row hovered. Tooltip on any Dev cell: 'Dev 14 of 20'</h3>
+<table id="t"></table>
+<div class="cols">
+ <div><h3>Player Reports (Name, Pos, CA, PA, Dev)</h3><table id="r"></table></div>
+ <div><h3>Value ramp 1-20 (what each step looks like; sorted by Dev ascending)</h3><table id="ramp" class="ramp"></table></div>
+</div>
+<div class="note" id="note"></div>
+<script>
+const MODES=['a','b','c','d','e','stars','numbers'];
+const NAMES={a:'A  slim meter',b:'B  five pips',c:'C  chevrons',d:'D  ring',e:'E  growth stairs',stars:'Stars (current)',numbers:'Numbers'};
+const q=new URLSearchParams(location.search).get('dev');const MODE=MODES.includes(q)?q:'e';
+document.getElementById('bar').innerHTML='Dev display: '+MODES.map(m=>`<a href="?dev=${m}" class="${m==MODE?'on':''}">${NAMES[m]}</a>`).join('')+' &nbsp; (Settings: Development rate display = Graphic / Stars / Numbers; Graphic = the chosen style)';
+const TH=['','#E8696A','#E0973C','#8B96A8','#E6EAF0','#EAD95C','#52C287'];
+const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
+const EMPTY='#3A4050',DIM='#8B96A8';
+const R=(x,y,w,h,r,f)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${f}"/>`;
+const T=(x,s,c,fs)=>`<text x="${x}" y="12" dominant-baseline="central" font-size="${fs}" fill="${c}" font-family="Noto Sans,sans-serif">${s}</text>`;
+const svg=(w,b)=>`<svg width="${w}" viewBox="0 0 ${w} 24">${b}</svg>`;
+const star=n=>{let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));const P='M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z';
+ s+=`<svg viewBox="0 0 15 15"><defs><clipPath id="c${i}_${n}_${Math.random()}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="${P}" fill="#3A4050"/></svg>`}return s};
+const starsHtml=v=>{const n=Math.max(.5,Math.min(5,Math.floor(v/4*2+.5)/2));let s='';
+ for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));const id='s'+Math.random().toString(36).slice(2);const P='M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z';
+ s+=`<svg viewBox="0 0 15 15"><defs><clipPath id="${id}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="${P}" fill="#3A4050"/><path d="${P}" fill="#F5C518" clip-path="url(#${id})"/></svg>`}return `<div class="stars">${s}</div>`};
+const arc=(cx,cy,r,f)=>{if(f>=1)return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="C" stroke-width="2"/>`;const a=f*2*Math.PI;const x=cx+r*Math.sin(a),y=cy-r*Math.cos(a);
+ return `<path d="M${cx} ${cy-r}A${r} ${r} 0 ${f>.5?1:0} 1 ${x.toFixed(2)} ${y.toFixed(2)}" fill="none" stroke="C" stroke-width="2"/>`};
+const G={
+ a:v=>{const c=TH[tier(v)];return svg(66,R(0,10,40,4,2,EMPTY)+R(0,10,Math.max(3,Math.round(40*v/20)),4,2,c)+T(44,v,DIM,9))},
+ b:v=>{const n=Math.ceil(v/4),c=TH[tier(v)];let s='';for(let i=0;i<5;i++)s+=R(i*10,8,8,8,1.5,i<n?c:EMPTY);return svg(48,s)},
+ c:v=>{const c=TH[tier(v)];const n=v<=4?0:v<=9?1:v<=14?2:3;if(!n)return svg(14,R(2,11.2,10,1.6,.8,c).replace('fill="'+c+'"','fill="'+c+'" opacity=".8"'));
+  let s='';for(let k=0;k<n;k++){const y=17-4*k;s+=`<polyline points="2,${y} 7,${y-3.5} 12,${y}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`}return svg(14,s)},
+ d:v=>{const c=TH[tier(v)];return svg(34,`<circle cx="7" cy="12" r="6" fill="none" stroke="${EMPTY}" stroke-width="2"/>`+arc(7,12,6,v/20).replace(/C/g,c)+T(19,v,DIM,10))},
+ e:v=>{const n=Math.ceil(v/4),c=TH[tier(v)];let s='';for(let i=0;i<5;i++){const h=5+2.5*i;s+=R(i*4.5,19.5-h,3,h,.8,i<n?c:EMPTY)}return svg(21,s)}
+};
+const cell=v=>v==null?'?':MODE=='numbers'?v:MODE=='stars'?starsHtml(v):G[MODE](v);
+const W={n:150,i:35,p:55,s:76,d:MODE=='numbers'?45:76,a:40,f:80,h:50};
+const dc=(v)=>`<td class="${MODE=='numbers'?'':'g'}" title="${v==null?'':'Dev '+v+' of 20'}">${cell(v)}</td>`;
+const rows=[['Kylian Mbappe','','ST',187,188,17,25,'#2A4D9B','Y'],['Jude Bellingham','','AMC',172,190,18,21,'#C8102E',''],['Reece James','INJ','DR',160,171,12,24,'#C8102E',''],
+ ['Lamine Yamal','','AMR',141,200,20,17,'#C60B1E','Y'],['Nick Woltemade','','ST',110,125,10,22,'#222','' ],['Academy Kid','','MC',45,152,14,16,'#C8102E','Y'],
+ ['Journeyman','','DC',86,86,8,34,'#2A4D9B',''],['Late Bloomer','','DM',98,140,15,23,'#2A4D9B',''],['Slow Burner','','MC',90,128,6,20,'#C8102E',''],['Stalled Prospect','','AML',70,141,3,19,'#E8A200',''],
+ ['Steady Eddie','','DL',104,109,9,29,'#2A4D9B',''],['Wonderkid GK','','GK',62,168,19,16,'#C60B1E','Y'],['Veteran','','DC',118,118,4,36,'#C8102E',''],['Unknown','','GK',null,null,null,30,'#888','']];
+const TD=(t)=>`<th style="width:${t[1]}px" class="${t[2]||''}">${t[0]}</th>`;
+const hd=[['Name',W.n],['INJ',W.i],['Pos',W.p],['CA',W.s],['PA',W.s],['Dev',W.d,'sorted'],['Age',W.a],['Nation',W.f],['HGP',W.h]];
+const cp=(v,k)=>v==null?'?':starsCA(v);
+const starsCA=v=>{const n=Math.max(.5,Math.min(5,Math.floor(v/40*2+.5)/2));let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i));const id='k'+Math.random().toString(36).slice(2);const P='M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z';
+ s+=`<svg viewBox="0 0 15 15"><defs><clipPath id="${id}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="${P}" fill="#3A4050"/><path d="${P}" fill="#F5C518" clip-path="url(#${id})"/></svg>`}return `<div class="stars">${s}</div>`};
+document.getElementById('t').innerHTML='<tr>'+hd.map(TD).join('')+'</tr>'+rows.map((r,k)=>`<tr class="${k==2?'sel':k==5?'hov':''}"><td>${r[0]}</td><td class="inj">${r[1]}</td><td><span class="pos">${r[2]}</span></td>`+
+ `<td class="g" title="CA ${r[3]}">${cp(r[3])}</td><td class="g" title="PA ${r[4]}">${cp(r[4])}</td>`+dc(r[5])+`<td>${r[6]}</td><td><span class="flag" style="background:${r[7]}"></span></td><td>${r[8]?'<span class="hgp">HGP</span>':''}</td></tr>`).join('');
+// Reports: Name, Pos, CA, PA, Dev
+const rh=[['Name',150],['Pos',55],['CA',76],['PA',76],['Dev',W.d,'sorted']];
+document.getElementById('r').innerHTML='<tr>'+rh.map(TD).join('')+'</tr>'+rows.slice(0,8).map((r,k)=>`<tr class="${k==1?'sel':k==4?'hov':''}"><td>${r[0]}</td><td><span class="pos">${r[2]}</span></td><td class="g">${cp(r[3])}</td><td class="g">${cp(r[4])}</td>${dc(r[5])}</tr>`).join('');
+let rp='<tr><th style="width:40px">Dev</th><th style="width:'+W.d+'px">Cell</th></tr>';
+for(let v=1;v<=20;v++)rp+=`<tr><td>${v}</td>${dc(v)}</tr>`;
+document.getElementById('ramp').innerHTML=rp;
+document.getElementById('note').textContent='Mode: '+NAMES[MODE]+'. Sorting uses the raw 1-20 value in every mode. Numbers mode keeps the plain value (width 45).';
+</script></body></html>
