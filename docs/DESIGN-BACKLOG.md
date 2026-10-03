@@ -1,6 +1,6 @@
 # Design backlog: mockups to come back to
 
-Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is approved by the user BEFORE any app code (`CLAUDE.md`, mockup first; translate mechanically, never by eye). Serve the live mockups with `cd <MAIN checkout>/mockups && python3 -m http.server 8792`; the user tests them at http://localhost:8792 by refreshing. State of the app: `HANDOVER.md`.
+Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is approved by the user BEFORE any app code (`CLAUDE.md`, mockup first; translate mechanically, never by eye). Open the mockups straight from disk (`file:///.../mockups/<name>.html`); no web server; the user tests them at http://localhost:8792 by refreshing. State of the app: `HANDOVER.md`.
 
 ## 1. Compare players
 

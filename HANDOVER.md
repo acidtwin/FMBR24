@@ -25,7 +25,7 @@ FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<nam
 
 - Remote `git@github.com:acidtwin/FMBR24.git`, **PUBLIC**. `main` is the only branch (local) and the integration branch, 37 commits ahead of `origin/main` (not pushed; push only when asked). No other local branches or worktrees (`.claude/worktrees/` is an empty dir); `origin/feat/player-staff-shortlists` (superseded PR #1) still exists on the remote. The old stale staff-parsing worktree was archived OUTSIDE the repo to `~/fmbr24-archive` (`staff-extended-wip.patch`, `probe_staff_extended.py`; unreviewed, not part of the project). Parent `Claude Code Projects` is a separate monorepo: never push it. Explicit `git add` paths.
 - **GitHub account is FLAGGED (open issue, user-side):** GitHub's abuse system flagged the user's account (profile 404 to the public, repo images do not load, installing the Claude GitHub app returns 404). A support ticket is open with Nadia at GitHub support. Until cleared: README images will NOT render for visitors, GitHub features (app, Pages, social preview) cannot be relied on. Push still works over the SSH key; after every restart the user runs `ssh-add ~/.ssh/id_ed25519` (never store passphrases). Do not push until the user says the account is cleared (or asks).
-- **Mockup server:** the live mockups (`mockups/*.html`) are served on :8792 with `cd <MAIN checkout>/mockups && python3 -m http.server 8792`. Start it from the main checkout: a server started from a deleted worktree returns 404.
+- **Mockups:** open `mockups/*.html` directly from disk (`file:///.../mockups/<name>.html`), no web server (user decision 2026-10-03: servers waste time and tokens).
 
 ## 3. Architecture
 
