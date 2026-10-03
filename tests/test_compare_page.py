@@ -179,6 +179,22 @@ assert rows == [7, 5, 6], rows          # recents newest first, without the keep
 assert 1 not in rows and not any(p['positions'][0] == 20 for p in pk.rows()), 'current player excluded, keepers hidden'
 pk.set_source('short')
 assert [p['id'] for p in pk.rows()] == [6]
+# regression: the app-level filter sees a press on the QWindow (not a QWidget) first; a click over the popup (tab, row)
+# must NOT close it, a click outside must
+from PyQt6.QtCore import QEvent as _QE, QPointF as _QP, Qt as _Qt
+from PyQt6.QtGui import QMouseEvent as _QM
+def _press(obj, global_pt):
+    ev = _QM(_QE.Type.MouseButtonPress, _QP(0, 0), _QP(global_pt), _Qt.MouseButton.LeftButton, _Qt.MouseButton.LeftButton, _Qt.KeyboardModifier.NoModifier)
+    pk.eventFilter(obj, ev)
+_win = host.windowHandle()
+_inside = pk.mapToGlobal(pk.rect().center())
+_press(_win, _inside)
+assert pk.isVisible(), 'click over the popup (delivered at window level) closed it'
+_press(_win, host.mapToGlobal(host.rect().bottomRight()) - __import__('PyQt6.QtCore', fromlist=['QPoint']).QPoint(2, 2))
+assert not pk.isVisible(), 'click outside must close it'
+cb.open_picker()
+pump(3)
+pk.set_source('short')
 pk.set_source('squad')
 assert {p['id'] for p in pk.rows()} == {2, 5}, 'human squad without A and without the keeper'
 pk.set_query('ca')

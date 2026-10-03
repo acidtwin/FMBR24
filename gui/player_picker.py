@@ -487,9 +487,10 @@ class PlayerPicker(QFrame):
                 self.close_popup()
                 return k == Qt.Key.Key_Escape
         elif t == QEvent.Type.MouseButtonPress and self.isVisible():
-            w = obj if isinstance(obj, QWidget) else None
             gp = ev.globalPosition().toPoint()
-            inside = w is not None and (self.isAncestorOf(w) or w is self)
+            # the app-level filter sees the press on the QWindow first (obj is not a QWidget), so decide by GEOMETRY:
+            # a click anywhere over the popup is inside (tabs, rows, search box), whatever object receives it
+            inside = self.rect().contains(self.mapFromGlobal(gp))
             on_edit = self._edit is not None and self._edit.rect().contains(self._edit.mapFromGlobal(gp)) \
                 or (self._anchor is not None and self._anchor.rect().contains(self._anchor.mapFromGlobal(gp)))
             if not inside and not on_edit:
