@@ -243,7 +243,7 @@ for _ in range(2000):
 btn = win._nav_btns['compare']
 assert btn.text().strip() == 'Compare Players' and btn.isEnabled()
 keys = list(win._nav_btns)
-assert keys[-1] == 'compare' and keys[-2] == 'staff_shortlist', 'last item of MAIN'
+assert keys[-1] == 'compare' and keys[-2] == 'staff_shortlist', 'registered after the MAIN items'
 win._set_busy(True, 'Saving')
 assert not btn.isEnabled(), 'busy lock covers the new nav button'
 win._set_busy(False)

@@ -98,29 +98,33 @@ w.show(); app.processEvents()
 assert h._g_timer.isActive()
 w._set_busy(False); h.glow_stop()
 
-# the glow never leaks onto the page the load lands on
+# the fade-out never leaks onto the page the load lands on
 w._set_busy(True, 'Parsing save file')
 h._glow_begin()
 assert h.glow_active()
-h.set_page('save_info')
+w._set_busy(False)                       # fade starts ...
+assert h._g_state == 'end'
+h.set_page('save_info')                  # ... and is cut when the landing page shows
 assert not h.glow_active() and not h._g_timer.isActive() and h.glow_intensity() == 0.0
-w._set_busy(False)
 h.set_page('welcome')
 
-# reload / save (veil) never glow
-for snap, word in (({'dummy': 1}, 'Parsing save file'), (None, 'Saving')):
-    w._ui_snap = snap
-    w._set_busy(True, word)
-    assert w._veil_word and not h.glow_active() and not h._g_timer.isActive(), word
-    w._set_busy(False)
-    assert not h.glow_active()
-w._ui_snap = None
-
-# other pages never start the glow
-for key in ('club', 'squad', 'settings', 'save_info'):
+# every load and reload glows, on whatever page is showing; a save does not
+for key in ('welcome', 'club', 'squad', 'settings', 'save_info', 'reports'):
     h.set_page(key)
-    w._set_busy(True, 'Parsing save file')
+    for snap in (None, {'dummy': 1}):    # load, reload
+        w._ui_snap = snap
+        w._set_busy(True, 'Parsing save file')
+        assert h._g_state == 'wait' and h._g_delay.isActive(), (key, snap)
+        h.set_page(key)                  # a header refresh mid-load must not kill the glow
+        assert h._g_state == 'wait', key
+        h._glow_begin()
+        assert h._g_state == 'run' and h._g_timer.isActive(), key
+        w._set_busy(False)
+        assert h._g_state == 'end'
+        h.glow_stop()
+    w._ui_snap = None
+    w._set_busy(True, 'Saving')
     assert not h.glow_active() and not h._g_timer.isActive(), key
     w._set_busy(False)
 h.set_page('welcome')
-print('OK: hero glow (grid mask, subtle smooth pulse, ends with the load, first-load only, timer stops)')
+print('OK: hero glow (grid mask, subtle smooth pulse, every load/reload on any page, ends with the load, timer stops)')

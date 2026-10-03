@@ -1857,8 +1857,8 @@ class _HeaderHeroWidget(QWidget):
 
     def set_page(self, key: str):
         self._page = key
-        if key != 'welcome' and self._g_state != 'off':
-            self.glow_stop()   # never leak onto the page the load lands on
+        if self._g_state == 'end':
+            self.glow_stop()   # the fade-out never leaks onto the page the load lands on
         filename = self._PAGE_IMAGE.get(key, self._FALLBACK)
         self._bg_pixmap = self._load(filename)
         self.update()
@@ -1883,13 +1883,11 @@ class _HeaderHeroWidget(QWidget):
             self._t_cache = (key, _header_net.texture_pixmap(self._texture, *key[:3]))
         return self._t_cache[1]
 
-    # -- loading glow (Welcome page, first load only) ----------------------------
+    # -- loading glow (any page, every load / reload) ----------------------------
 
     def glow_start(self):
-        """First load began (Welcome hero only; the caller says nothing about veils). The glow itself starts after
+        """A load / reload began (any page). The glow itself starts after
         `delay_ms`, so a sub-second load never glows and a ~2 s cached load gets a short, gentle pulse."""
-        if self._page != 'welcome':
-            return
         self._g_state = 'wait'
         self._g_delay.start()
 
@@ -2832,7 +2830,6 @@ class MainWindow(QMainWindow):
             ('club_staff', _SVG_STAFF,     'Club Staff'),
             ('shortlist',  _SVG_SHORTLIST, 'Player Shortlist'),
             ('staff_shortlist', _SVG_SHORTLIST, 'Staff Shortlist'),
-            ('compare',    _SVG_COMPARE,   'Compare Players'),
         ]:
             if key == 'squad':
                 btn = self._make_nav_btn(svg, label, self._nav_to_squad_view, _nav_icon_names[key])
@@ -2857,6 +2854,11 @@ class MainWindow(QMainWindow):
             _SVG_STAFF, 'Staff', lambda checked: self._nav_to('staff'), 'staff')
         self._scouting_staff_nav_btn.setEnabled(False)
         vbox.addWidget(self._scouting_staff_nav_btn)
+
+        self._nav_btns['compare'] = self._make_nav_btn(
+            _SVG_COMPARE, 'Compare Players', lambda checked: self._nav_to('compare'), _nav_icon_names['compare'])
+        self._nav_btns['compare'].setEnabled(False)
+        vbox.addWidget(self._nav_btns['compare'])
 
         vbox.addWidget(self._make_section_label('PLAYER REPORTS'))
 
@@ -6667,8 +6669,8 @@ class MainWindow(QMainWindow):
             self._veil_word = 'Saving' if msg == 'Saving' else ('Reloading' if self._ui_snap is not None else None)
             self._busy_veil.set_text(self._veil_word or '', 1)
             self._dot_timer.start()
-            if self._veil_word is None:
-                self._hero.glow_start()   # first load only (reload / save use the veil); no-op off the Welcome page
+            if msg != 'Saving':
+                self._hero.glow_start()   # every load and reload, on whatever page is showing (a save does not glow)
             self._load_btn.setText('Loading')
             for k, btn in self._nav_btns.items():
                 btn.setEnabled(False)

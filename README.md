@@ -46,7 +46,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Kit lookup from your installed kit packs (`graphics/kits/<pack>`, home / away / third): available to the code, no screen uses it yet
 
 **Compare players**
-- A Compare Players page (sidebar, last item of MAIN): pick two players from searchable selectors (type any name in the save, or choose from your recently viewed players, your squad or your shortlist) and see them on one overlaid radar with an attribute table that shows who is ahead and by how much, the number of attributes each one wins, and key facts (age, contract, transfer value or Not for sale, wage, size, traits). Goalkeepers are only compared with goalkeepers
+- A Compare Players page (sidebar, in the SCOUTING section after Staff): pick two players from searchable selectors (type any name in the save, or choose from your recently viewed players, your squad or your shortlist) and see them on one overlaid radar with an attribute table that shows who is ahead and by how much, the number of attributes each one wins, and key facts (age, contract, transfer value or Not for sale, wage, size, traits). Goalkeepers are only compared with goalkeepers
 - The radar has an Overview (6 axes) and a Detailed mode (12 outfield / 11 goalkeeper axes such as shooting, ball control, passing, aerial, pace), Current or Full Potential, stars or raw numbers like everywhere else (Settings)
 - `Compare to...` in the player window opens the page with that player as player A; the last 8 players whose window you opened are remembered per save
 
