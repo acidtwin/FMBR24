@@ -18,6 +18,8 @@ LANDING_PAGES = ('save_info', 'club', 'players')
 ABILITY_DISPLAYS = ('stars', 'numbers')
 PLAYER_THEMES = ('steel', 'pitch', 'floodlit', 'plain')  # = ids of gui/pw_themes.THEMES (tests/test_themes.py checks)
 
+HEADER_TEXTURES = ('diamond', 'squareknot', 'perspective', 'honeycomb', 'pitch')  # = gui/header_net.TEXTURES (tests/test_header_texture.py checks)
+
 DEFAULTS = {
     'default_save_dir': '',            # '' = not set -> old behaviour (Steam dir / home)
     'role_weights_preset': 'FMScout Community',
@@ -26,6 +28,7 @@ DEFAULTS = {
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
     'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
     'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
+    'header_texture': 'diamond',       # page header bar pattern + loading-glow mask (gui/header_net.py)
     'faces_enabled': True,             # show facepack pictures (player window header, staff dialog)
     'logos_enabled': True,             # show club badges from the installed logo packs (same FM24 folder / pack order as faces)
     'flags_enabled': True,             # show nation pictures (lists) and competition logos (Club page) from the logo packs
@@ -74,6 +77,8 @@ def _clean(raw):
         out['faces_pack_order'] = list(DEFAULTS['faces_pack_order'])
     if out['player_theme'] not in PLAYER_THEMES:
         out['player_theme'] = DEFAULTS['player_theme']
+    if out['header_texture'] not in HEADER_TEXTURES:
+        out['header_texture'] = DEFAULTS['header_texture']
     return out
 
 
