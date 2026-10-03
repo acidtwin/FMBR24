@@ -63,7 +63,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 
 ## Screenshots
 
-Click a picture for the full size. They are generated from a real save with `scripts/make_screenshots.py`.
+Click a picture for the full size. They are generated from a real save with `scripts/make_screenshots.py`; faces and club badges come from the facepack and logo pack installed on the machine.
 
 <table>
   <tr>

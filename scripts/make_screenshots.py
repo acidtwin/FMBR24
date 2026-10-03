@@ -46,10 +46,13 @@ def pump(n=3):
     app.processEvents()
 
 
+MEDIA_OFF = '--no-media' in sys.argv   # python3 scripts/make_screenshots.py save.fm --no-media = no third-party pictures
+
+
 def load(w, path):
     from fm_editor import settings as S  # fresh parse every run: the parse cache holds ~170 fewer staff than a fresh parse
-    S.save({**S.load(), 'use_cache': False, 'faces_enabled': False,
-            'logos_enabled': False, 'flags_enabled': False})  # no third-party facepack pictures, club logos or flags in published shots
+    media = not MEDIA_OFF   # faces / club badges / competition logos from the user's installed packs (user decision 2026-10-03: shown)
+    S.save({**S.load(), 'use_cache': False, 'faces_enabled': media, 'logos_enabled': media, 'flags_enabled': media})
     w._load_path(path)
     t0 = time.time()
     while w._save_data is None or w._busy:
@@ -57,6 +60,14 @@ def load(w, path):
         time.sleep(0.01)
         if time.time() - t0 > 900:
             raise SystemExit('Timed out parsing the save')
+    if media:   # wait for the picture index (built in a background thread) so the first grabs already show faces and badges
+        from gui.main_window import _faces_service
+        svc, t1 = _faces_service(), time.time()
+        while (svc.loading() or not svc.active('person')) and time.time() - t1 < 180:
+            app.processEvents()
+            time.sleep(0.05)
+        pump()
+        print('pictures:', 'ready' if svc.active('person') else 'NOT available (no pack found) - shots without faces')
 
 
 def pick_player(w):
@@ -193,6 +204,7 @@ def main():
     ap.add_argument('--manager-name', default='Manager',
                     help="name shown for the manager (default hides the real one; pass '' to keep it)")
     ap.add_argument('--out', default=os.path.join(ROOT, 'docs', 'screenshots'))
+    ap.add_argument('--no-media', action='store_true', help='hide faces, club badges and logos (default: shown, from your installed packs)')
     ap.add_argument('--only', nargs='*', choices=sorted(SHOTS), help='regenerate just these shots')
     a = ap.parse_args()
     if not a.save or not os.path.isfile(a.save):
