@@ -528,8 +528,7 @@ class PlayerWindow(QDialog):
         self.resize(1122, 760)
         self.setStyleSheet(_dlg_qss())
         # faint random stadium photo behind the panels (gui/pw_background.py; user-folder images, Settings on/off)
-        self._bg_src = _pwbg.pick_background() if _settings.load().get('player_background', True) else None
-        self._bg_scaled = None   # (size, pixmap) cache of the cover-scaled photo
+        self._bg = _pwbg.BgPainter(_settings.load().get('player_background', True))
         self._ability_stars = _settings.ability_as_stars()  # read once when the window opens
         self._person = person
         self._save_data = save_data
@@ -590,16 +589,7 @@ class PlayerWindow(QDialog):
         self._hgc = is_hgc(b, p, self._club_entity_id) if (b is not None and self._club_entity_id) else None
 
     def paintEvent(self, e):
-        p = QPainter(self)
-        p.fillRect(self.rect(), QColor(COLORS['window_bg']))
-        if self._bg_src is not None:
-            sz = self.size()
-            if self._bg_scaled is None or self._bg_scaled[0] != sz:
-                self._bg_scaled = (sz, _pwbg.cover(self._bg_src, sz.width(), sz.height()))
-            if self._bg_scaled[1] is not None:
-                p.setOpacity(_pwbg.OPACITY)
-                p.drawPixmap(0, 0, self._bg_scaled[1])
-        p.end()
+        self._bg.paint(self, COLORS['window_bg'])
 
     # -- shell: header / (tab strip | pages) / action strip ---------------------------------------
     def _build(self):

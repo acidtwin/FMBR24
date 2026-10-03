@@ -450,8 +450,8 @@ class SettingsPage(QWidget):
                       'Texture for the player window header, tab menu and action bar.',
                       self._ctl_line(self._theme)),
             self._row('Player window background',
-                      'A faint stadium photo behind the panels, picked at random each time a player window opens. '
-                      'Put images in ~/.local/share/fmbr24/backgrounds.',
+                      'A faint stadium photo behind the player and staff windows, picked at random each time one opens. '
+                      'Add your own images in ~/.local/share/fmbr24/backgrounds.',
                       self._ctl_line(self._pbg)),
             self._row('Header texture',
                       'Faint pattern in the page header bar, and what lights up during the first load. '

@@ -30,6 +30,7 @@ from gui.player_picker import PickerContext
 from gui.search_suggest import _SearchSuggest, _SuggestDelegate, _SG_MAX  # noqa: F401 (re-exported)
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
+from gui import pw_background as _pwbg
 from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
 from gui import header_net as _header_net
@@ -1367,12 +1368,19 @@ class StaffDetailDialog(QDialog):
     def __init__(self, person, save_data, parent=None):
         super().__init__(parent)
         self.setWindowTitle(person.get('name', 'Staff'))
+        self.setObjectName('staffDialog')
         self.setMinimumSize(680, 480)
         self.resize(780, 560)
+        # faint random stadium photo behind the panels, same as the player window (gui/pw_background.py)
+        self._bg = _pwbg.BgPainter(_settings_mod.load().get('player_background', True))
+        self.setStyleSheet(f"QDialog#staffDialog QWidget {{ background:transparent; }}")
         self._person = person
         self._save_data = save_data
         self._shortlist_added = False
         self._build()
+
+    def paintEvent(self, e):
+        self._bg.paint(self, COLORS['window_bg'])
 
     def _build(self):
         p = self._person
@@ -1442,7 +1450,7 @@ class StaffDetailDialog(QDialog):
 
         # Body
         body = QWidget()
-        body.setStyleSheet(f"background:{COLORS['window_bg']};")
+        body.setStyleSheet("background:transparent;")  # lets the faint background photo show
         body_hbox = QHBoxLayout(body)
         body_hbox.setContentsMargins(0, 0, 0, 0)
         body_hbox.setSpacing(0)
@@ -1521,9 +1529,9 @@ class StaffDetailDialog(QDialog):
         center_scroll = QScrollArea()
         center_scroll.setWidgetResizable(True)
         center_scroll.setStyleSheet(
-            f"QScrollArea {{ border:none; background:{COLORS['window_bg']}; }}")
+            "QScrollArea { border:none; background:transparent; }")
         center_w = QWidget()
-        center_w.setStyleSheet(f"background:{COLORS['window_bg']};")
+        center_w.setStyleSheet("background:transparent;")
         center_vbox = QVBoxLayout(center_w)
         center_vbox.setContentsMargins(16, 16, 16, 16)
         center_vbox.setSpacing(8)
