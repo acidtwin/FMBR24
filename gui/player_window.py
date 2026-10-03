@@ -1091,12 +1091,11 @@ class PlayerWindow(QDialog):
         c = self._career()
         rows = c.get('rows') or []
         panel, v = self._panel('Career history')
-        if not rows:
-            if c.get('status') == 'no_install':
-                msg = ('Career history is read from the Football Manager 24 install database, which was not found '
-                       '(Steam library of this save, or the FMBR24_FM_DB folder).')
-            else:
-                msg = 'No career history is stored for this player.'
+        no_db = c.get('status') == 'no_install'
+        db_msg = ('Career history is read from the Football Manager 24 install database, which was not found '
+                  '(Steam library of this save, or the FMBR24_FM_DB folder).')
+
+        def note_chip(msg):                                 # message + PENDING chip (no rows, or no install DB)
             note = _lab(msg, 'pwNote')
             note.setWordWrap(True)
             note.setContentsMargins(12, 10, 12, 0)
@@ -1107,6 +1106,9 @@ class PlayerWindow(QDialog):
             cl.addWidget(self._pend_chip())
             cl.addStretch()
             v.addWidget(chip)
+
+        if not rows:
+            note_chip(db_msg if no_db else 'No career history is stored for this player.')
             return self._page(panel, stretch={0: 1})
         cols = (('Season', 78, 'l'), ('Club', 0, 'l'), ('', 64, 'l'), ('Apps', 44, 'r'), ('Goals', 44, 'r'),
                 ('Fee', 70, 'r'))
@@ -1137,11 +1139,16 @@ class PlayerWindow(QDialog):
                     ('-' if r['apps'] is None else str(r['apps']), 'pwKvR'),
                     ('-' if r['goals'] is None else str(r['goals']), 'pwKvR'),
                     (self._fmt_fee(r.get('fee')), 'pwKvL')]
-            tip = None if r.get('club') else f"Club id {r['club_raw']} is not in the club tables"
+            tip = ('Current club: this season, from the save. Appearances and goals are all competitions.'
+                   if r.get('current') else None if r.get('club') else f"Club id {r['club_raw']} is not in the club tables")
             v.addWidget(line(vals, 'pwRowAlt' if i % 2 else 'pwRow', tip))
+        if no_db:
+            note_chip(db_msg.replace('Career history is', 'Earlier seasons are'))
+            return self._page(panel, stretch={0: 1})
         note = _lab('League appearances and goals per season. Rows up to the last season of the FM install '
-                    'database come from it; later seasons come from this save. Fee = transfer fee paid for the move '
-                    'at the end of that row.', 'pwNote')
+                    'database come from it; later seasons come from this save. The current season is added from the '
+                    'squad data (all competitions). Fee = transfer fee paid for the move at the end of that row.',
+                    'pwNote')
         note.setWordWrap(True)
         note.setContentsMargins(12, 8, 12, 12)
         v.addWidget(note)

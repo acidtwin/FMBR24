@@ -390,12 +390,95 @@ class Clubs:
 
 
 _CLUBOBJ = {}
+_IDX = {}         # (id(clubs), id(sub_squads)) -> ({club id: club}, {club entity id: club}, {pid: club id of a youth/reserve array})
+
+
+def _club_index(sd):
+    clubs, sub = sd.get('clubs') or [], sd.get('sub_squads') or {}
+    key = (id(clubs), id(sub))
+    with _LOCK:
+        hit = _IDX.get(key)
+    if hit is None:
+        by_id = {c['id']: c for c in clubs}
+        by_ent = {c['id'] + 1: c for c in clubs}
+        sub_of = {}
+        for cid, kinds in sub.items():
+            for pids in kinds.values():
+                for pid in pids:
+                    sub_of.setdefault(pid, cid)
+        hit = (by_id, by_ent, sub_of)
+        with _LOCK:
+            _IDX.clear()
+            _IDX[key] = hit
+    return hit
+
+
+def current_clubs(person, sd):
+    """(club dict, parent club dict or None) the player belongs to NOW, or (None, None): the first-team squad
+    club (the BORROWING club for a loan), else the youth/reserve array club (sub_squads), else the club of the
+    last contract record (`employment`; on the 2 Jan 2028 snapshot these 8.2k players look like employed players,
+    24% have season stats and 83% are adults, free agents with no club record: 2% and 19%).
+    `person['loan_parent']` (gamedb.find_loans) gives the parent of a loanee."""
+    by_id, by_ent, sub_of = _club_index(sd)
+    pid = person.get('id')
+    cur = by_id.get((sd.get('squads') or {}).get(pid)) or by_id.get(sub_of.get(pid))
+    if cur is None:
+        cur = by_ent.get((sd.get('employment') or {}).get(pid))
+    par = by_id.get(person.get('loan_parent')) if cur is not None else None
+    return cur, (par if par is not cur else None)
+
+
+def current_season_year(ref, calendar_year=False):
+    """Start year of the season running on `ref` (the save's in-game date): July-June, or the calendar year for
+    the calendar-year leagues (CALENDAR_NATIONS)."""
+    return ref.year if calendar_year or ref.month >= 7 else ref.year - 1
+
+
+def _add_current(out, person, sd):
+    """Append the CURRENT season row(s) to out['rows'] (oldest first, so last): the club the player is at now,
+    preceded by his parent club on a loan. Season = the in-game date's; apps/goals from person['stats'] (all
+    competitions of this season) else None. Not added when the rows already hold this season at that club."""
+    cur, par = current_clubs(person, sd)
+    if cur is None:
+        return
+    from fm_editor.agecalc import get_ref
+    rows = out['rows']
+    st = person.get('stats') or {}
+
+    def row(c, kind, apps, goals):
+        nat = c.get('nation')
+        y = current_season_year(get_ref(), nat in CALENDAR_NATIONS)
+        return y, {'year': y, 'year_end': None, 'kind': kind, 'apps': apps, 'goals': goals, 'fee': None,
+                   'club_raw': None, 'comp': None, 'order': 0, 'start': None, 'end': None, 'club': c['name'],
+                   'club_uid': c['uid'], 'nation': nat, 'from_save': True, 'current': True}
+
+    y, r = row(cur, 'loan' if par else None, st.get('apps'), st.get('goals'))
+    if any(x['club_uid'] == cur['uid'] and x['year'] >= y for x in rows):
+        return
+    if par is not None and not any(x['club_uid'] == par['uid'] and x['year'] >= y for x in rows):
+        _y, pr = row(par, None, None, None)
+        pr['current'] = False
+        pr['parent'] = True
+        rows.append({**pr, 'season': season_label(pr, pr['nation'] in CALENDAR_NATIONS)})
+    rows.append({**r, 'season': season_label(r, r['nation'] in CALENDAR_NATIONS)})
 
 
 def career_for_person(person, save_data, uid=None):
     """History of ONE player for the player window. `person` = people-list dict, `save_data` = the app's save
-    dict ('b', 'members', 'save_path', 'clubs'). Returns {'status': 'ok'|'no_install'|'none'|'no_uid',
-    'rows': [dict: season, year, kind, apps, goals, fee, club, club_uid, nation, from_save], 'install_dir'}."""
+    dict ('b', 'members', 'save_path', 'clubs', 'squads', 'sub_squads', 'employment'). Returns {'status':
+    'ok'|'no_install'|'none'|'no_uid', 'rows': [dict: season, year, kind, apps, goals, fee, club, club_uid,
+    nation, from_save, current], 'install_dir'}. Rows are the install DB + save rows (status 'ok') PLUS, whenever
+    the player has a club now, the current season row (`_add_current`), so a player without stored history
+    (status 'none', e.g. a newgen) still shows his club; status keeps saying why the stored history is missing."""
+    out = _career_stored(person, save_data, uid)
+    try:
+        _add_current(out, person, save_data or {})
+    except Exception:
+        pass                                # the current row is a bonus: never break the tab
+    return out
+
+
+def _career_stored(person, save_data, uid=None):
     sd = save_data or {}
     path = sd.get('save_path')
     d = install_db_dir(path)
@@ -423,6 +506,6 @@ def career_for_person(person, save_data, uid=None):
     for i, r in enumerate(h['rows']):
         cuid, name, nat = cl.lookup(r['club_raw'])
         out['rows'].append({**r, 'club': name, 'club_uid': cuid, 'nation': nat, 'from_save': i >= h['n_install'],
-                            'season': season_label(r, nat in CALENDAR_NATIONS)})
+                            'season': season_label(r, nat in CALENDAR_NATIONS), 'current': False})
     out['status'] = 'ok'
     return out
