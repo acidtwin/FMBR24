@@ -1,0 +1,40 @@
+# Compare Players: build plan (stage 2, after the mockups are approved)
+
+Mockups: `mockups/compare-players.html` (the page; states `?empty ?one ?open=a|b&q= ?axes=detail ?pair=gk ?nums ?pot ?min`) and `mockups/player-window.html#profile+cmp` (the `Compare to...` popup). Their header comments are the spec; this file is only the code plan.
+FM24 reference: its Comparison tab lets you pick the second player from your squad or from recently visited profiles (Passion4FM squad-analysis guide; the 'no recently viewed options' bug report and a Passion4FM post say FM26 regressed to squad + shortlist, sortitoutsi 'FM26: How to Compare Two Players'). We add whole-save search.
+
+## Modules (new unless marked)
+1. `fm_editor/radar_axes.py`: the four axis tables (OVERVIEW_OUT/GK moved here from `gui/pw_widgets.py`, DETAILED_OUT 12 / DETAILED_GK 11 as in the mockup), `axis_sets(is_gk, mode)`, `axis_values(attrs, axes)` (mean, lower-is-better as 21-v). `pw_widgets.RADAR_OUT/RADAR_GK` become re-exports, so `test_radar_axes.py` stays green.
+2. `fm_editor/player_search.py`: `rank_hits(index, query, limit, kinds, exclude_ids, gk=None)`: the ranking now inline in `_sg_refresh` (prefix, word start, substring; then kind, name; `heapq.nsmallest`). `_sg_refresh` calls it (main search unchanged), the pickers call it with `kinds=(2,)`. The index is the existing `MainWindow._sg_index()` (rebuilt lazily after a reload, `_sg_idx = None`).
+3. `fm_editor/recents.py`: `RecentPlayers`: LRU of 8 ids, no duplicates, `push(pid)` moves to front, `ids(exclude=None)`. DECISION: in memory AND persisted per save in `recent_players.json` in `settings.config_dir()` ({save_path: [ids]}); NOT in `settings.json` (Reset to defaults and `settings.load()` stay untouched). Ids no longer in `people` are dropped when read. Written on each push (8 ints).
+4. `gui/player_picker.py`: `PlayerPicker(QFrame)` popup (`Qt.Popup`, like the mockup: tabs Recent | Squad | Shortlist, search rows, footnote for hidden keepers, Up/Down/Enter/Esc) and `PlayerRowDelegate` (face 24x30, name, badge, flag, club badge, club, age, CA stars via `StarsDelegate`/`gui/stars.py`, number in numbers mode). Takes a small `PickerContext` (rank function, recents ids, squad ids, shortlist ids, person lookup); two hosts: `PlayerCombo` (QLineEdit based, the page selectors) and the popup of the player window (own search box).
+5. `gui/compare_page.py`: `ComparePage(QWidget)`: QScrollArea > selector bar (2 `PlayerCombo`, swap, Add both to Shortlist), header panels (reuse the header pieces of `player_window.py`: face, badge, CA/PA boxes), main area (compare panel, attribute table, key facts), empty state. Splits: `DiffCell` (34x20 painter), `CompareRadar` (new sibling of `RadarWidget` in `pw_widgets.py`: datasets, n axes, 358x336), `attrs_won()` pure function. `resizeEvent` flips the main QBoxLayout vertical below 900 px and applies the compact header QSS below 1100.
+6. Edited: `gui/player_window.py` (button `Compare to...` b2 before Add to Shortlist, Close last; `_compare_with` pid result like `_shortlist_added`; takes a `PickerContext`), `gui/main_window.py` (below), `fm_editor/cache.py` untouched (no new parsed field).
+
+## Integration in `main_window.py`
+- `_VIEW_INDEX['compare'] = 11`, page added to `_main_stack`; sidebar tuple `('compare', _SVG_COMPARE, 'Compare Players')` appended to the MAIN list after Staff Shortlist (it lands in `_nav_btns`, so `_set_busy` disables it with the others; add `self._nav_btns['compare'].setEnabled(idle and has_data)` to `_update_ui_state`; page opens with no player picked = empty state).
+- Icon: no compare icon. `resources/icons/pages/compare.png` is generated once from `players.png` (shirt outline kept, purple magnifier replaced by two swap arrows; PIL one-off, noted in HANDOVER); until then `_make_nav_btn` falls back to a new `_SVG_COMPARE` (two overlapped circles). The solid sidebar icon set redraws it later. `_update_header_for_view('compare')`: title 'Compare Players', subtitle names or 'Pick two players', `icon='compare'`, hero image falls back to the default (no new hero art).
+- `_nav_to('compare')` pushes history like the other pages; `_nav_restore` is generic through `_VIEW_INDEX`.
+- Reload / Save snapshot: `_capture_ui_state` stores `{'compare': [a_id, b_id], 'axes': mode}`; `_apply_ui_state` resolves the ids against the NEW `people` (objects are re-parsed), drops a missing player, keeps the radar mode. A reload while the popup is open just closes it.
+- Recents: `_run_player_window` pushes the pid BEFORE `exec()` (every entry point goes through it). After `exec()`: `if dlg._compare_with: self._open_compare(person, other)` (page A = this player, B = picked; the window is modal so it has closed). `PickerContext`: squad ids from the human club's `squads` map, shortlist ids from `_shortlist`.
+- `ability_display`: header boxes and picker rows follow Stars / Numbers through the existing `StarsDelegate.stars_on` + `_apply_ui_prefs` (add the page to the live-refresh list); NO new setting, so no Reset-to-defaults change; the star mapping stays `abilitystars.py` only.
+
+## Data needs
+Only what exists: parsed person (name, pos, nat, club via `squads`, age, CA/PA, contract, value, wage, height/weight, traits) + `player_extra_data` attributes and `potential.project_attrs` for Full Potential. No parser change, no cache bump. Picker rows read no attributes.
+
+## Tests (plain scripts under `tests/`, `FMBR24_CONFIG_DIR` temp, offscreen)
+- `test_radar_axes.py` (extend): each of the 4 tables is a partition (no duplicate; OUT sets cover the 41 outfield attributes exactly; GK sets only known attributes); detailed axis counts 12 / 11; lower-is-better inversion; `axis_values` of a hand-made attribute dict.
+- `test_recents.py`: LRU of 8, no duplicates, push moves to front, exclude-current, persistence round trip in a temp config dir, unknown ids dropped.
+- `test_player_search.py`: ranking order (prefix < word start < substring), `_SG_MAX`/limit, exclude ids, keeper-only filter, equal results to the old `_sg_refresh` rows for the main search.
+- `test_compare_page.py`: builds for an outfield pair and a GK pair, empty state and one-player state; `attrs_won` (Footedness and GK Technical excluded, 21-v attributes); Overview <-> Detailed toggle re-draws; `ability_display` numbers vs stars in header and picker rows; `.grab()` PNG for the 1200x780 and 1000x660 sizes (LOOK at them against the mockup).
+- Busy lock: extend `test_busy_veil.py` or a new check that `_nav_btns['compare']` is disabled by `_set_busy(True)` and enabled by `_update_ui_state`; `test_reload_restore.py`: compare page with two players survives a reload.
+- `test_player_window.py` (extend): action strip order Compare to... / Add to Shortlist / Close; picking sets `_compare_with`; popup excludes the current player and shows the last 8 recents.
+Run the new tests + the directly affected ones during the work; the full suite once at the very end.
+
+## Risks / notes
+- Popup focus: `Qt.Popup` steals the line edit's focus on X11/Wayland; the existing `_SearchSuggest` avoids it with a child frame and a key filter. Reuse that approach for the combos (child of the main window, `eventFilter` on the line edit), use a real popup only for the player-window button.
+- The main window is only 572 px tall at the default size: the page scrolls (one QScrollArea); nothing else scrolls.
+- Radar with 12 axes needs the label anchor maths of the mockup (cos based); keep `RadarWidget`'s single-dataset API for the player window.
+- Keepers only vs keepers is enforced in the picker AND in `ComparePage.set_players` (clears the other side).
+- Lists (Squads / Players / Shortlist) do not launch Compare in this step; a context-menu entry is cheap later.
+- README feature list + screenshots (`scripts/make_screenshots.py`) after the build; HANDOVER section 3 icon note; DESIGN-BACKLOG item 1 marked built.

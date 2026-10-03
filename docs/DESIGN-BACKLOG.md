@@ -5,6 +5,7 @@ Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is a
 ## 1. Compare players
 
 - **Status:** mockup APPROVED as the direction ("very good so far"); the user wants to come back to it. NOT built: no `Compare` code exists in `gui/` or `fm_editor/`.
+- **Update (stage 1 of the build, awaiting approval):** Compare is now a PAGE (sidebar entry 'Compare Players') with two searchable selectors, an empty state, a Detailed radar (12 / 11 axes), a restyled diff cell, and a `Compare to...` popup in the player window; see `docs/plans/compare-players.md`. The window / picker-dialog flow below is superseded.
 - **Mockup:** `mockups/compare-players.html` (sample players are fictional). Views via URL: `?pair=out|gk|young|veteran`, `?nums`, `?pot`, `?pick`, `?swap`, `?noface`, `?min`, `?bare=1`. The header comment of the file is the spec (launch flows, geometry, QPainter porting notes, data needs).
 - **Direction:** variant A = overlaid radars of both players plus the full attribute table; ONE layout. A percentile "fingerprint pizza" view was tried and REMOVED by user decision (so were duels, similarity and peer data).
 - **Decisions recorded:**

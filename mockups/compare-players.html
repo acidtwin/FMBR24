@@ -118,7 +118,7 @@ ATTRIBUTE TABLE
 DIFFERENCE BARS
   rows of 20 px: label 78 | track 8 px #343740 split at the centre (gap 2) | value 30 right aligned 11.  The winner's half is filled in its identity colour, length = |d| / 4 of the half (clamped); '=' under 0.05.
 KEY FACTS
-  6 columns, label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
+  6 columns (fractions .8 .95 1.3 .9 1 .8), label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
 
 =====================================================================================================================
 DATA THE PAGE NEEDS FROM THE APP  (only what the player window already has, no new parsing)
@@ -329,6 +329,7 @@ html.min .win{height:660px}
 .pgi .scr{overflow:visible;flex:none}
 .pgi .a-cols{flex:none}
 .a-left{flex:0 0 36%;min-width:0}
+.facts{grid-template-columns:.8fr .95fr 1.3fr .9fr 1fr .8fr}   /* Key facts columns: 'Transfer value' needs the room at 630 px */
 /* selector bar */
 .pbar{display:flex;gap:8px;align-items:center;flex:none}
 .sel{flex:1;min-width:0;height:40px;border:1px solid var(--border2);border-radius:3px;background:var(--surface);display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;position:relative;cursor:text}
@@ -601,7 +602,7 @@ function popupHTML(slot){
   const c=cands(slot,S.src,S.q),q=S.q;
   const tabs=c.mode==='list'?`<div class="tabs">${segc('src',Object.entries(SRC_NAMES).map(([k,l])=>[k,l]),S.src,'List')}<span class="pnote">${S.src==='recent'?'last opened first':S.src==='squad'?'Veridian United':'Player Shortlist'}</span></div>`
     :`<div class="lbl" style="padding-top:8px">Players matching “${q.trim()}” · whole save</div>`;
-  const body=c.rows.length?c.rows.map((p,i)=>optHTML(p,i,slot,q)).join(''):`<div class="none">No player matches “${q.trim()}”${c.other?' (same kind as '+c.other.name+')':''}.</div>`;
+  const body=c.rows.length?c.rows.map((p,i)=>optHTML(p,i,slot,q)).join(''):`<div class="none">No ${c.other&&isGK(c.other)?'goalkeeper':'player'} matches “${q.trim()}”.</div>`;
   const hid=c.hidden?`<div class="hid">${c.hidden} ${c.hidden>1?'players':'player'} not shown: goalkeepers are only compared with goalkeepers.</div>`:'';
   const left=slot==='a'?'left:12px':'right:12px';
   return `<div class="pop" role="listbox" aria-label="Player suggestions" style="top:58px;${left}">${tabs}<div id="plist">${body}</div>${hid}<div class="ft"><span><kbd>↑</kbd><kbd>↓</kbd>move</span><span><kbd>Enter</kbd>pick</span><span><kbd>Esc</kbd>close</span></div></div>`;
