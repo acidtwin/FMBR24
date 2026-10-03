@@ -329,6 +329,7 @@ assert any(px(img, x, y) != (0x14, 0x15, 0x1A) for x in range(4, 36) for y in ra
 assert t.model().index(rB, 9).data(Qt.ItemDataRole.ToolTipRole) == 'No Badge United'
 assert C.sizeHint(t.itemDelegateForColumn(9), QStyleOptionViewItem(), t.model().index(rA, 9)).width() == 40
 # --- nation flag: England picture, Guyana (folder tree), no picture for uid-less ids = the old emoji / text cell, tooltip = name -----------
+M._LIST_NATION_PICTURES = True   # the picture mechanics are kept (lists default to the emoji flag, see below)
 rEng, rGuy, rNo = find(t, 0, 'P0'), find(t, 0, 'P2'), find(t, 0, 'P3')
 img = paint(t, 7, rEng)
 assert px(img, 20, 15) == (200, 20, 20) and px(img, 8, 15) == (0x14, 0x15, 0x1A) and px(img, 33, 15) == (0x14, 0x15, 0x1A)
@@ -338,6 +339,9 @@ assert t.model().index(rNo, 7).data(Qt.ItemDataRole.ToolTipRole) == 'Guatemala'
 img_no = paint(t, 7, rNo)                                              # Guatemala: no picture in the packs -> the unchanged text cell
 assert px(img_no, 20, 15) != (200, 20, 20)
 assert t.item(rEng, 7).data(M.NATION_ROLE) == 139 and t.item(rEng, 0).data(M.MEDIA_UID_ROLE) == 100
+M._LIST_NATION_PICTURES = False  # default: lists show the national flag (emoji), never the pack picture
+assert px(paint(t, 7, rEng), 20, 15) != (200, 20, 20) and px(paint(t, 7, rGuy), 20, 15) != (0, 150, 0), 'pictures must be off in lists'
+M._LIST_NATION_PICTURES = True
 
 # --- the same cells through the virtualised model (Players) ------------------------------------------------------------------
 pt = w._players_table

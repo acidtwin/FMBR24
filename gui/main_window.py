@@ -1157,11 +1157,14 @@ class _ClubBadgeDelegate(_RowMarkDelegate):
         return QSize(_BADGE_COL_W, sh.height()) if badges_active() else sh
 
 
+_LIST_NATION_PICTURES = False   # user: lists show the national FLAG (emoji) again, not the logo-pack nation picture
+
+
 class _FlagDelegate(_RowMarkDelegate):
-    """Nation cell as the nation's picture (22x22, left at the text inset) when the packs have one for the nation id (NATION_ROLE); otherwise the
+    """(Pictures are OFF in lists, see _LIST_NATION_PICTURES; set True to bring the pack pictures back.) Nation cell as the nation's picture (22x22, left at the text inset) when the packs have one for the nation id (NATION_ROLE); otherwise the
     old emoji / text cell, untouched. Tooltip = the nation's name (item ToolTipRole)."""
     def _has_pic(self, index):
-        return flags_active() and bool(_faces_service().path(index.data(NATION_ROLE), 'nation'))
+        return _LIST_NATION_PICTURES and flags_active() and bool(_faces_service().path(index.data(NATION_ROLE), 'nation'))
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
@@ -1171,7 +1174,7 @@ class _FlagDelegate(_RowMarkDelegate):
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
         px = _faces_service().nation_pixmap(index.data(NATION_ROLE), _FLAG_PX, painter.device().devicePixelRatioF()) \
-            if flags_active() else None
+            if (_LIST_NATION_PICTURES and flags_active()) else None
         if px is not None:
             r = option.rect
             painter.drawPixmap(r.x() + 10, r.y() + (r.height() - _FLAG_PX) // 2, px)   # left, under the header text (the Shortlist's last column is stretched)
