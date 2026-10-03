@@ -35,44 +35,14 @@ def _draw_centered(p, x, baseline, text, font, color):
     p.drawText(QPointF(x - w / 2, baseline), text)
 
 
-# -- Attribute groups radar: the app's OWN six scouting groups (mockup RADAR_OUT / RADAR_GK; NOT the game's Technical/Mental/...) ----
-# THE one table to edit: (axis name, attribute names, names scored lower-is-better i.e. 21 - v). Wheel order = clockwise from the top.
-# Outfield: the 36 non-hidden + 5 hidden attributes, each exactly once. GK: all 11 GK attributes + shared ones (Attacking/Creativity
-# attributes and Versatility unused). Axis value = mean of the (inverted) attribute values.
-_ATHLETICISM = ['Pace', 'Acceleration', 'Agility', 'Balance', 'Stamina', 'Strength', 'Jumping Reach', 'Natural Fitness']
-_MENTALITY = ['Aggression', 'Composure', 'Concentration', 'Decisions', 'Determination', 'Leadership', 'Teamwork', 'Work Rate']
-RADAR_OUT = [
-    ('Attacking', ['Finishing', 'Long Shots', 'Dribbling', 'Penalties', 'Free Kick', 'Off the Ball', 'Flair'], ()),
-    ('Creativity', ['Passing', 'Vision', 'Technique', 'First Touch', 'Crossing', 'Corners', 'Long Throws'], ()),
-    ('Athleticism', _ATHLETICISM, ()),
-    ('Defending', ['Tackling', 'Marking', 'Heading', 'Positioning', 'Anticipation', 'Bravery'], ()),
-    ('Reliability', ['Consistency', 'Important Matches', 'Injury Prone', 'Dirtiness', 'Versatility'],
-     ('Injury Prone', 'Dirtiness')),
-    ('Mentality', _MENTALITY, ()),
-]
-RADAR_GK = [
-    ('Shot-stopping', ['Reflexes', 'Handling', 'One on Ones', 'Punching'], ()),
-    ('Command', ['Aerial Reach', 'Command of Area', 'Communication', 'Rushing Out'], ()),
-    ('Athleticism', _ATHLETICISM, ()),
-    ('Distribution', ['Kicking', 'Throwing', 'Passing', 'First Touch'], ()),
-    ('Reliability', ['Consistency', 'Important Matches', 'Injury Prone', 'Dirtiness', 'Eccentricity'],
-     ('Injury Prone', 'Dirtiness', 'Eccentricity')),
-    ('Mentality', _MENTALITY + ['Anticipation', 'Positioning', 'Bravery'], ()),
-]
+# -- Attribute groups radar: the app's OWN six scouting groups (NOT the game's Technical/Mental/...). The axis tables live in
+# fm_editor/radar_axes.py (ONE place to edit; OVERVIEW = this radar, DETAILED = Compare page); re-exported under the old names.
+from fm_editor.radar_axes import OVERVIEW_GK as RADAR_GK, OVERVIEW_OUT as RADAR_OUT, axis_values  # noqa: E402
 
 
 def radar_axes(values, gk):
-    """values {attribute name: shown 1-20 value} -> [(axis name, mean 1-20, tooltip text)] in wheel order. Attributes missing from
-    `values` are skipped; an axis with none is dropped."""
-    out = []
-    for name, attrs, inv in (RADAR_GK if gk else RADAR_OUT):
-        have = [a for a in attrs if a in values]
-        if not have:
-            continue
-        mean = sum(21 - values[a] if a in inv else values[a] for a in have) / len(have)
-        tip = f"{name} = mean of {len(have)}: " + ', '.join(a + (' (21-v)' if a in inv else '') for a in have)
-        out.append((name, mean, tip))
-    return out
+    """values {attribute name: shown 1-20 value} -> [(axis name, mean 1-20, tooltip text)] in wheel order (six axes)."""
+    return axis_values(values, gk, 'overview')
 
 
 class RadarWidget(QWidget):
@@ -267,3 +237,125 @@ class FeetWidget(QWidget):
         p.setPen(SEC)
         p.drawText(QPointF(18, 181), '1')
         p.drawText(QPointF(186 - QFontMetricsF(f10).horizontalAdvance('20'), 181), '20')
+
+
+# -- Compare page: overlaid radar of two players, n axes (mockups/compare-players.html radarAB) ------------------------
+A_RGB, B_RGB = (82, 176, 255), (215, 124, 255)     # identity colours: A sky blue #52B0FF, B orchid #D77CFF
+
+
+class CompareRadar(QWidget):
+    """Two overlaid polygons on n axes (6 Overview, 12 / 11 Detailed): svg 358 x 336, centre (179, 170), R 106, vertex i at
+    -90 + 360 i / n degrees. Ring 10 / 20 labels sit between vertices 0-1 (n <= 8) or 1-2. B is drawn first (dashed outline, diamond
+    markers), then A (solid, circle markers). Labels = NAME 9/700 caps + 'A / B' 12/700 in the identity colours; the anchor comes
+    from cos: |cos| < .25 middle (top baseline y_v-24, bottom y_v+14), cos > 0 start (+7), else end (-7), others y_v-2.
+    Tooltip per axis (label + markers, hit-tested in event())."""
+    W, H, CX, CY, R = 358, 336, 179, 170, 106
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(self.W, self.H)
+        self.setMouseTracking(True)
+        self._ax = []        # [(name, a value, b value, tooltip)]
+        self._lay = []
+
+    def set_axes(self, axes):
+        self._ax = list(axes)
+        self._lay = self._layout()
+        self.update()
+
+    def _pt(self, i, k, n=None):
+        t = math.radians(-90 + i * 360 / (n or len(self._ax)))
+        return QPointF(self.CX + math.cos(t) * self.R * k, self.CY + math.sin(t) * self.R * k)
+
+    def _layout(self):
+        n = len(self._ax)
+        lab_f = _font(9, True)
+        fm = QFontMetricsF(lab_f)
+        out = []
+        for i, (name, av, bv, _t) in enumerate(self._ax):
+            q = self._pt(i, 1)
+            c = math.cos(math.radians(-90 + i * 360 / n))
+            s = math.sin(math.radians(-90 + i * 360 / n))
+            side = 'mid' if abs(c) < .25 else 'start' if c > 0 else 'end'
+            x = q.x() + (0 if side == 'mid' else 7 if side == 'start' else -7)
+            y1 = q.y() - 24 if s < -.9 else q.y() + 14 if s > .9 else q.y() - 2
+            w = max(fm.horizontalAdvance(name.upper()), fm.horizontalAdvance(f'{av:.1f} / {bv:.1f}') + 14)
+            left = x - w / 2 if side == 'mid' else x if side == 'start' else x - w
+            r = QRectF(left, y1 - 9, w, 25)
+            for v in (av, bv):
+                m = self._pt(i, v / 20)
+                r = r.united(QRectF(m.x() - 4, m.y() - 4, 8, 8))
+            out.append((x, side, y1, r))
+        return out
+
+    def event(self, e):
+        if e.type() == QEvent.Type.ToolTip:
+            for (_x, _s, _y, r), ax in zip(self._lay, self._ax):
+                if r.contains(QPointF(e.pos())):
+                    QToolTip.showText(e.globalPos(), ax[3], self)
+                    return True
+            QToolTip.hideText()
+            e.ignore()
+            return True
+        return super().event(e)
+
+    def paintEvent(self, _e):
+        ax = self._ax
+        n = len(ax)
+        if not n:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for k in (.25, .5, .75, 1):
+            p.setPen(QPen(QColor(255, 255, 255, _a(.22 if k == 1 else .10)), 1))
+            p.drawPolygon(QPolygonF([self._pt(i, k) for i in range(n)]))
+        p.setPen(QPen(QColor(255, 255, 255, _a(.10)), 1))
+        for i in range(n):
+            p.drawLine(QPointF(self.CX, self.CY), self._pt(i, 1))
+        sa = math.radians(-90 + (1.5 if n > 8 else .5) * 360 / n)
+        sf = _font(9)
+        p.setFont(sf)
+        p.setPen(SEC)
+        for v in (10, 20):
+            x, y = self.CX + math.cos(sa) * self.R * v / 20, self.CY + math.sin(sa) * self.R * v / 20
+            p.drawText(QPointF(x - 3 - QFontMetricsF(sf).horizontalAdvance(str(v)), y - 2), str(v))
+        # B first (dashed), then A
+        for idx, rgb, fill, dash in ((2, B_RGB, .18, True), (1, A_RGB, .22, False)):
+            pen = QPen(QColor(*rgb), 1.75)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            if dash:
+                pen.setDashPattern([6 / 1.75, 3 / 1.75])
+            p.setPen(pen)
+            p.setBrush(QColor(*rgb, _a(fill)))
+            p.drawPolygon(QPolygonF([self._pt(i, a[idx] / 20) for i, a in enumerate(ax)]))
+        ring = QPen(QColor('#14151A'), 1.5)
+        for i, a in enumerate(ax):
+            p.setPen(ring)
+            p.setBrush(QColor(*A_RGB))
+            p.drawEllipse(self._pt(i, a[1] / 20), 4, 4)
+            c = self._pt(i, a[2] / 20)
+            p.setBrush(QColor(*B_RGB))
+            p.save()
+            p.translate(c)
+            p.rotate(45)
+            p.drawRect(QRectF(-3.6, -3.6, 7.2, 7.2))
+            p.restore()
+        name_f, val_f = _font(9, True), _font(12, True)
+        for (name, av, bv, _t), (x, side, y1, _r) in zip(ax, self._lay):
+            runs = ((f'{av:.1f}', QColor(*A_RGB), val_f), (' / ', SEC, _font(12)), (f'{bv:.1f}', QColor(*B_RGB), val_f))
+            nm = name.upper()
+            nw = QFontMetricsF(name_f).horizontalAdvance(nm)
+            total = sum(QFontMetricsF(f).horizontalAdvance(t) for t, _c, f in runs)
+            for text, font, color, y, w in ((nm, name_f, SEC, y1, nw), (None, None, None, y1 + 14, total)):
+                x0 = x - w / 2 if side == 'mid' else x if side == 'start' else x - w
+                if text is not None:
+                    p.setFont(font)
+                    p.setPen(color)
+                    p.drawText(QPointF(x0, y), text)
+                else:
+                    for t, c, f in runs:
+                        p.setFont(f)
+                        p.setPen(c)
+                        p.drawText(QPointF(x0, y), t)
+                        x0 += QFontMetricsF(f).horizontalAdvance(t)

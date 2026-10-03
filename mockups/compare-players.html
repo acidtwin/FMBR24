@@ -6,87 +6,132 @@
 <title>Compare players</title>
 <!--
 =====================================================================================================================
-COMPARE PLAYERS - MOCKUP (new gui/compare_window.py, 'Compare with...' = FM Genie Scout's 'Compare With').
-DESIGN DECISION: overlaid radars of both players plus the full attribute table.  One layout, no alternative views.
-Same technical conventions as player-window.html: tokens on :root (copied), Noto Sans fallback, panels pn / ph 36, tier colours, flat dark theme (the real window can reuse the player-window theme registry for the header
-and action strip; not drawn here).  MOCKUP ONLY: nothing in gui/ or fm_editor/ changed.  Sample players are FICTIONAL.
+COMPARE PLAYERS - PAGE MOCKUP (new page in the main window, sidebar entry 'Compare Players').  Variant A (overlaid radars + attribute table) is APPROVED; stage-2 changes in this file:
+  page instead of a window, two searchable selectors, empty state, optional DETAILED radar (12 / 11 axes), restyled diff cell.
+Same technical conventions as player-window.html: tokens on :root (copied), Noto Sans fallback, panels pn / ph 36, tier colours, flat dark theme.  MOCKUP ONLY: nothing in gui/ or fm_editor/ changed.
+Sample players are FICTIONAL (the first 7 have hand-made attributes; the other 8 have attributes derived from a template by a seeded random walk, only so that every picker row opens a real comparison).
 =====================================================================================================================
 
-HOW TO VIEW (the review bar above the window is NOT part of the window; all of it is also settable in the URL)
-  ?pair=out|gk|young|veteran   sample pair: out = two midfielders (Ferrer 25y / Lindahl 28y) | gk = two goalkeepers | young = 19y high-PA winger vs 27y prime winger | veteran = 34y midfielder vs the 25y one
-  ?nums                 CA / PA as numbers + bar (Settings > Ability display = Numbers); default = stars (raw number in the title tooltip)
-  ?pot                  Full Potential values (the Current | Full Potential segmented control the player window has; here in the header of the left panel, it drives the radar, the bars and the table)
-  ?pick                 the picker dialog open over the window (text in the box: ?q=lind, default 'lind'); it works: type, Up/Down, Enter, Esc, click
-  ?swap                 B on the left
-  ?bare=1  (or #bare=1) hides the review bar and OS title bar: window starts at 0,0 and is 1122 x 760 (headless screenshot mode).   ?min  = the 1062 x 640 minimum size
-  ?noface               silhouette instead of the (synthetic) face pictures
-  e.g.  compare-players.html?pair=gk&nums      compare-players.html?pair=young&pot&bare=1      compare-players.html?pick
-  Buttons in the window are real buttons (Tab, Enter/Space); every bar and tile has a title tooltip. Review aids only: toast messages for Shortlist / Close.
+HOW TO VIEW (open this file with file:// in a browser, refresh to reload; the review bar above the window is NOT part of the window; every state is also settable in the URL)
+  ?pair=out|gk|young|veteran   sample pair: out = two midfielders | gk = two goalkeepers | young = 19y high-PA winger vs 27y prime winger | veteran = 34y midfielder vs the 25y one
+  ?axes=detail                 DETAILED radar (outfield 12 axes, keepers 11) instead of Overview (6).  Toggle in the Compare panel: 'Radar axes  Overview (6) | Detailed (12)'.  Default Overview.
+  ?empty                       EMPTY STATE: no player picked yet (the state of the page when the sidebar entry is opened without a player)
+  ?one                         one player picked (A), B still empty
+  ?open=a|b                    the selector's suggestion popup is open (A or B).  ?q=lind types a query (>= 2 characters searches the whole save, else the lists show); ?src=recent|squad|short the list tab
+  ?nums                        CA / PA as numbers + bar (Settings > Ability display = Numbers); default = stars (raw number in the title tooltip)
+  ?pot                         Full Potential values (the Current | Full Potential control in the header of the Compare panel; it drives radar, difference bars and table)
+  ?swap  ?noface  ?min         B on the left | silhouettes instead of face pictures | minimum window 1000 x 660 (page area 808 wide: the main area stacks into one column below 900 px)
+  ?h=1400                      review aid: window height (shows the whole page without scrolling)
+  ?bare=1                      hides the review bar and OS title bar: window starts at 0,0 and is 1200 x 780 (headless screenshot mode)
+  ?selftest                    runs the axis partition check (see 'RADAR AXES') and prints the result into the page title
+  e.g.  compare-players.html?empty    compare-players.html?open=b&q=ka    compare-players.html?axes=detail&pair=young    compare-players.html?pair=gk&axes=detail&nums
+  Everything inside the window works (Tab, Enter/Space, type in a selector, Up/Down/Enter/Esc in the popup).  Review aids only: toast messages for Shortlist.
 
-LAUNCH FLOWS
-  1. Player window action strip (left group): new 'Compare with...' button (Close stays the last button of the strip). It opens the picker with player A fixed.
-  2. Lists (Squads, Players, Reports, Shortlist): select exactly 2 rows -> toolbar 'Compare' button (enabled only for 2 rows) opens the window directly, no picker.
-     With 1 row selected the same button opens the picker with that row as A.
-  3. Picker (?pick): QDialog 540 wide. Search box (autocomplete = the main search index, players only), 'same position first' ordering, filter chip 'Outfield players only' / 'Goalkeepers only'
-     (a keeper is only offered keepers: their attributes and roles are not comparable), chips 'From list selection (n)' and 'Shortlist' as quick sources, Enter = Compare, buttons [Compare] [Cancel]
-     (Cancel is the dialog's Close = last). The same dialog is 'Change player B...' in the compare window.
+THE PAGE  (main window 1200 x 780 default, minimum 1000 x 660: sidebar 192 | hero 186 (nav row 38 + title block) | page area | status bar 22 -> the page area is 1008 x 572 by default, 808 x 452 at the minimum)
+  The page area is ONE QScrollArea (vertical bar, 6 px; nothing scrolls horizontally).  Inner column: pad 12, gap 12:
+    1. Selector bar (h 40):  [ A selector (flex) ] [ Swap sides 40 x 40 ] [ B selector (flex) ] [ Add both to Shortlist ]   (the last button only when both players are picked).  There is NO Close button on a page
+       (Close-last rule is for dialogs / strips: it still holds in the player-window popup flow, where Close stays the last button of that strip).
+    2. Header (h 80): the two player panels + VS, exactly as the approved window (3 px identity colour on top, face 54 x 64, name 20/700 + position badge, flag, club badge, age, CA / PA boxes 100 x 56).
+       An unpicked side is a dashed placeholder panel of the same size ('Player B: not picked yet').
+    3. Main: the approved variant A.  left 36 % panel 'Compare' (header: Current | Full Potential; first row: Radar axes Overview | Detailed; radar; legend; 'Difference by group / axis'),
+       right column 'Attributes' (tally in the header) + 'Key facts' (incl. Transfer value / 'Not for sale').  Panels no longer scroll inside: the PAGE scrolls (the window is shorter than the content at 780).
+       Below 900 px page width (QSS cannot do container queries: resizeEvent flips the QBoxLayout between horizontal / vertical) the main area is ONE column: Compare panel full width, then Attributes, then Key facts;
+       the header is compact below 1100 px (the default 1008 page too): names 17/700, CA / PA boxes 84 wide with 11 px stars, face 46 x 56, pad 10, gap 8; below 900: names 16, boxes 72 wide with 9 px stars (number 14).
+    4. EMPTY STATE (no player, or one player): one centred panel (max 640): ghost radar (two dashed polygons, rgba(255,255,255,.10), 180 px, no labels), title 'Pick two players to compare' 16/700,
+       sentence 12 #8B96A8 (with one player: 'Now pick the second player. Goalkeepers can only be compared with goalkeepers.'), then 'RECENTLY VIEWED' (the same service as the player window's Compare to... popup) as two columns of
+       up to 4 suggestion rows; a click fills the first empty slot.
+  Sidebar: new entry 'Compare Players' as the LAST item of the MAIN section (after Staff Shortlist: it is a tool, not a list; it does not split the two shortlists), same nav button as the others
+    (selected = selection_bg + 3 px accent edge + bold).  Enabled when a save is loaded (`has_data`), disabled while busy (it joins `_nav_btns`, so `_set_busy` / `_update_ui_state` cover it).
+    ICON: there is no compare icon.  Page icons are 512 px PNGs (white line art + ONE purple accent glyph, resources/icons/pages/).  Proposed `compare.png`: the shirt outline of players.png / squads.png with the purple accent glyph
+    replaced by two opposed arrows (swap), see the sidebar here.  Until the file exists `_make_nav_btn` falls back to the generic SVG icon (`_SVG_SQUAD` is the closest); the solid sidebar icon set (backlog 3) will redraw it.
+  Hero: title 'Compare Players', subtitle caps '<Name A> VS <Name B>' or 'PICK TWO PLAYERS'; the page icon in the title block as the other pages.
 
-THE WINDOW  (1122 x 760: 12 pad | header 80 | 12 | main 592 | 12 | strip 52, as the player window; minimum 1062 x 640; panels scroll vertically INSIDE with a 6 px bar, nothing scrolls horizontally)
-  Header: two player panels (A left, B right mirrored) with a 3 px identity colour on top: face 54x64, name 20/700 + position badge, flag + club badge 16x16 + club + age, CA and PA boxes 100x56
-    (stars 13 px, gap 2, or number + bar) | VS 40 wide.
-  Action strip h52: [Swap sides] [Change player B...] ... stretch ... [Add both to Shortlist] [Close]  - CLOSE IS THE LAST BUTTON.
-  Main area:
-    left 33 % panel 'Compare' (header: Current | Full Potential): ONE six-axis radar with both players, legend, then 'Difference by group' (6 mini diverging bars).
-    right column: 'Attributes' panel (header: attributes-won tally) = the Profile groups in three columns (Technical + Footedness | Mental | Physical + Hidden; keepers: Goalkeeping + Footedness |
-    Mental | Physical + Hidden), each row name | A tile | '3 >' difference | B tile (tier colour tiles as the Profile; the arrow points at the winner, in the winner's colour; '=' level; lower-is-better attributes
-    compared on 21-v), column headers show only the group name; below it the 'Key facts' strip (age, contract end, transfer value, wage per week, height / weight, traits count, each with a plain difference line).
+SELECTORS  (the 'searchable drop-downs')  Each = a combo: marker + letter (A blue circle / B orchid diamond) | face thumb 22 x 28 | editable text | position badge | clear x | chevron.  h 40, 1 px #454A58, r3; open = border #735CE4.
+  Click or focus: the text is selected and the popup opens with the list for an EMPTY query: tabs Recent | Squad | Shortlist, default Recent (the last 8 players whose window was opened, newest first).
+  Typing (>= 2 characters) switches to SEARCH: the whole save, the same index and ranking as the main search box (`_sg_index`: name starts with the query, then a word starts with it, then substring; then name),
+  at most 8 rows (`_SG_MAX`), players only.  The other slot's player is never offered; a keeper is only offered keepers (and the reverse): a footnote says how many were hidden.  Down / Up move, Enter picks, Esc closes
+  (and restores the previous player), Tab moves on.  Picking A when B is the wrong kind clears B (toast in the real app: status bar message).  Popup width 468 (min), anchored under the field (B: right edges aligned), pad 0, r4, 1 px #454A58,
+  shadow 0 12 32 rgba(0,0,0,.5) (QSS has none: draw it as a 1 px #14151A frame; the popup is a Qt.Popup QFrame like `_SearchSuggest`).
+  SUGGESTION ROW (h 44, pad 0 12, a 3 px left edge: transparent, selected = #735CE4 accent edge + selection_bg #2A1B4A):  face 24 x 30 r2 | name 13/700 (query highlighted, accent underline) over a 16 px line: position badge (h16),
+  flag, club badge 16 x 16, club, '·', age 'years' (all 11 #8B96A8) | CA stars 11 px (numbers mode: number 14/700 #735CE4, raw number in the tooltip).  List tabs: .sg segmented control (24 high), counts in brackets.
+  Real app: gui/search_suggest.py `_SearchSuggest` + `_SuggestDelegate` already draw a similar row (name, club, type); the delegate gets face / badge / stars columns for players (players only), the rest is reused.
 
-IDENTITY COLOURS (needed so two players can be told apart without colliding with ratings): A sky blue #52B0FF, B orchid #D77CFF. No tier colour (red, orange, grey, white, yellow, green) is blue or
-  violet, so a player colour never reads as a rating. Both are >= 5.8:1 on #1A2226 (AA for text). Never colour alone: A = solid outline + circle marker, B = dashed outline + diamond marker; A is
-  always left / first, B right / second; every legend names the players. In the table the winner is shown by the arrow and the winner's colour.
-  Star ratings rule: stars appear only in the header boxes: ?nums switches both to number + bar (CA / PA x/200 bar), raw number in the title in stars mode; mapping = fm_editor/abilitystars.py (value/40,
-  half_stars).  Attributes and group means are numbers by nature (not converted to stars).  No new Settings key (reuses ability_display).
+RADAR AXES  (Overview = approved 6 groups = `RADAR_OUT` / `RADAR_GK` in gui/pw_widgets.py; Detailed = NEW `fm_editor/radar_axes.py` tables below).  Every axis is the MEAN of its attributes (current or Full Potential), lower-is-better attributes
+  (Dirtiness, Injury Prone, Eccentricity) as 21 - v.  Both outfield sets are an exact PARTITION of the 36 outfield attributes + 5 hidden ones (Footedness is not a rating and is on no axis), so no attribute counts twice.
+  Axis names are ours, not the game's; every axis label has a hover tooltip listing the attributes.  Basis: FM's own attribute groups (FM Scout 'Understanding player attributes'), the Steam 'FM24 attributes you need at every position' guide
+  (CB: Jumping Reach, Tackling, Composure, Concentration, Strength | FB: Work Rate, Stamina, Positioning, Crossing | DM: First Touch, Teamwork, Composure, Positioning | CM: Work Rate, Stamina, Passing, Decisions |
+  AM: Vision, Flair, First Touch, Off the Ball, Technique | W: Agility, Pace, Dribbling, Balance, Flair | ST: Off the Ball, Composure, Determination, First Touch, Finishing | GK: Reflexes, One on Ones, Jumping Reach, Positioning, Decisions)
+  and the card taxonomy of football games (EA FC: Pace, Shooting, Passing, Dribbling, Defending, Physical, with aerial / composure separate).  Each axis is something a role needs on its own, so a CB (Aerial, Tackling, Positioning, Physicality),
+  a full-back (Delivery, Endurance, Pace), a playmaker (Passing, Ball control, Mentality) and a striker (Shooting, Positioning, Pace) all light different corners.
+    OUTFIELD, 12 axes, clockwise from the top
+      Shooting      Finishing, Long Shots, Penalties
+      Ball control  Dribbling, First Touch, Flair, Agility, Balance
+      Passing       Passing, Vision, Technique
+      Delivery      Crossing, Corners, Free Kick, Long Throws
+      Positioning   Positioning, Off the Ball, Anticipation, Concentration
+      Tackling      Tackling, Marking
+      Aerial        Heading, Jumping Reach
+      Physicality   Strength, Bravery, Aggression
+      Pace          Pace, Acceleration
+      Endurance     Stamina, Work Rate, Natural Fitness, Determination
+      Mentality     Composure, Decisions, Teamwork, Leadership
+      Reliability   Consistency, Important Matches, Injury Prone (inv), Dirtiness (inv), Versatility          (= 3+5+3+4+4+2+2+3+2+4+4+5 = 41)
+    GOALKEEPER, 11 axes (outfield attributes that do not matter for a keeper are on no axis, as in the 6-axis keeper set)
+      Reflexes      Reflexes, Agility, Balance
+      Handling      Handling, Punching
+      One on Ones   One on Ones, Rushing Out, Anticipation
+      Aerial        Aerial Reach, Command of Area, Jumping Reach
+      Organisation  Communication, Leadership, Teamwork
+      Positioning   Positioning, Concentration, Decisions
+      Distribution  Kicking, Throwing
+      Ball playing  Passing, First Touch, Technique, Vision
+      Athleticism   Acceleration, Pace, Strength, Stamina, Natural Fitness
+      Mentality     Composure, Determination, Bravery, Aggression
+      Reliability   Consistency, Important Matches, Injury Prone (inv), Dirtiness (inv), Eccentricity (inv)
+  Radar geometry for n axes: vertex i at -90 + 360 i / n degrees (same R 106, 358 x 336).  Label anchor from cos: |cos| < .25 -> middle (top: baseline y_v-24, bottom: y_v+14), cos > 0 -> start (+7), else end (-7), other labels baseline y_v-2.
+  Detailed mode keeps the A / B values under every label (12 px), checked at 12 axes: no label overlaps (neighbours are >= 39 px apart vertically on the sides).
+  'Difference by group' becomes 'Difference by axis' with 12 / 11 rows (the page scrolls).  Attributes won, table and key facts do not depend on the mode.
 
 DECISIONS (defaults, change them in one place each)
-  1. Identity colours stay blue (A) / orchid (B): variables --a and --b on :root.
-  2. 'Attributes won' counts ALL attributes equally (no role weighting).  Footedness is not counted (it is not better or worse).  Tooltip says so.
-  3. A goalkeeper's outfield Technical group is HIDDEN in the table (it is not listed as 'not counted').  Its values still feed the radar axis 'Distribution' (Passing, First Touch);
-     so the group is hidden in the table only, not removed from the maths.
-  4. Lists: exactly 2 selected rows open Compare directly; 1 selected row opens the picker.
-  5. Current | Full Potential sits in the header of the left panel (first thing in reading order; it governs radar, difference bars and table).
+  1. Identity colours stay blue (A) / orchid (B): variables --a and --b on :root.   2. 'Attributes won' counts ALL attributes equally; Footedness not counted.   3. A keeper's outfield Technical group is HIDDEN in the table
+  (still feeds the Overview axis Distribution and the Detailed axis Ball playing).   4. No group means in the table headers (removed by the user).   5. Key facts include Transfer value ('Not for sale' aware).
+  6. Radar axes default Overview; the choice is a view option of the page (kept for the session, not persisted).   7. Lists (Squads / Players / Shortlist) do not launch Compare in this step (the sidebar page + the player
+  window button are the entries); a context-menu 'Compare...' on list rows is a cheap later addition.
 
-SAMPLE DATA = the app's own logic run on fictional attributes (generator was a throwaway script, not in the repo): fm_editor.potential.project_attrs for Full Potential (display_value).
-  Radar axes, group means and differences are computed in JS from the attributes with the same rules as gui/pw_widgets.py (RADAR_OUT / RADAR_GK, inverted attributes as 21-v).
+DIFF CELL (table, between the two 26 x 20 value tiles, 34 x 20; replaces the text '2 >')
+  A split bar: track = two 14 px halves (x 2..16 | 18..32) around a 2 px centre tick, 6 px high, r3, rgba(139,150,168,.18).  The winner's half is filled from the centre outwards in its identity colour (A blue left, B orchid right = the same
+  convention as the Difference bars on the left), length = 3 + (min(|d|, 6) - 1) / 5 * 11 px (+1 = 3 px, +6 or more = the full 14 px; cap in ONE place: DF_CAP).  Level = track only, fainter (.08) and a dim tick.
+  Lower-is-better attributes use 21-v, so the bar always says who is better.  Exact number stays in the row tooltip and in the cell's aria-label ('Lindahl higher by 3').  Fill colours are >= 5.8:1 on #1A2226 (graphical objects need 3:1).
+  Alternatives tried on paper: chevrons 1-3 (reads as text), 3 pips (only 4 magnitudes), outlined winner tile (40 outlines drown the tier colours).
 
 =====================================================================================================================
 QPAINTER PORTING NOTES
 =====================================================================================================================
-
-OVERLAID RADAR  (reuse RadarWidget geometry)
-  R 106 at 358 x 336; centre (179,170); vertex i at -90 + 60 i deg; rings k .25 .5 .75 1 pen white a .10 / outer .22; spokes a .10; ring scale 10 / 20 (9 px #8B96A8) at -60 deg.  Draw polygon B first, then A.
+RADAR (generalise RadarWidget to datasets + size + n axes; keep RADAR_OUT / RADAR_GK and test_radar_axes.py green)
+  R 106 at 358 x 336; centre (179,170); vertex i at -90 + 360 i / n deg; rings k .25 .5 .75 1 pen white a .10 / outer .22; spokes a .10; ring scale 10 / 20 (9 px #8B96A8) at angle -90 + 180/n (n <= 8: between vertices 0 and 1) or -90 + 540/n (more axes: between vertices 1 and 2, clear of the top label).  Draw polygon B first, then A.
   A: brush QColor(82,176,255,56) (alpha .22), pen #52B0FF 1.75 round join; B: brush QColor(215,124,255,46) (alpha .18), pen #D77CFF 1.75 dash [3.4,1.7] (the pattern is in pen widths);
   marker A circle r4, B diamond (square half-side 3.6 rotated 45) both with a 1.5 #14151A ring.
-  Labels: group name 9/700 caps #8B96A8, values 12/700 'A / B' in the identity colours (two drawText runs), anchors as the player-window radar (top: baseline y_v-24, bottom y_v+14, sides +-7).
+  Labels: axis name 9/700 caps #8B96A8, values 12/700 'A / B' in the identity colours (two drawText runs), anchors as above.  Tooltip per label rect: QToolTip text = '<axis> (mean of n attributes): A x, B y. attr, attr...'.
 ATTRIBUTE TABLE
-  Three columns of 22 px rows (name flex | tile 26x20 | diff 34 centred 11/700 | tile 26x20), column header 22 px: group name 11/700 caps tracking .08em (no group means: removed by the user).
-  Diff text: '3 >' / '< 3' in the winner's colour, '=' #525B68 when level.  Panel body scrolls vertically (6 px bar), columns are plain layouts, no horizontal scroll.
+  Three columns of 22 px rows (name flex | tile 26x20 | diff 34x20 | tile 26x20), column header 22 px: group name 11/700 caps tracking .08em (no group means).  Diff cell: paint in a tiny QWidget (34 x 20): two rounded rects (QColor(139,150,168,46)),
+  fill rect from the centre outwards, 2 px tick QColor(139,150,168) (level: QColor(82,91,104)); setToolTip / accessibleName 'Lindahl higher by 3'.
 DIFFERENCE BARS
-  6 rows of 20 px: label 78 | track 8 px #343740 split at the centre (gap 2) | value 30 right aligned 11.  The winner's half is filled in its identity colour, length = |d| / 4 of the half (clamped); '=' under 0.05.
+  rows of 20 px: label 78 | track 8 px #343740 split at the centre (gap 2) | value 30 right aligned 11.  The winner's half is filled in its identity colour, length = |d| / 4 of the half (clamped); '=' under 0.05.
 KEY FACTS
-  6 columns, label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
+  6 columns (fractions .8 .95 1.3 .9 1 .8), label 10/700 caps tracking .08em, 2 value rows of 22 with the identity marker (circle / diamond 8 px), difference line 11 #8B96A8.
 
 =====================================================================================================================
-DATA THE WINDOW NEEDS FROM THE APP  (only what the player window already has, no new parsing)
+DATA THE PAGE NEEDS FROM THE APP  (only what the player window already has, no new parsing)
 =====================================================================================================================
-  Both players' 54 attributes (current and project_attrs for Full Potential), position, nation, club, age, CA / PA, contract end, value, wage, height, weight, trait count (all exist in player_extra_data / the
-  parsed person).  Face and club badge as in the player window.
-  New code is small: attributes won = count of attributes (Footedness excluded, a keeper's outfield Technical group excluded) where good(A) > good(B) / < / equal, good = 21-v for lower-is-better attributes.
+  Both players' 54 attributes (current and project_attrs for Full Potential), position, nation, club, age, CA / PA, contract end, value, wage, height, weight, trait count (all in player_extra_data / the parsed person).
+  Face and club badge as in the player window.  The popup rows need only name, position, nation, club, age, CA (all on the parsed person; no attributes are read until a player is picked).
+  Recents: ids of the last 8 player windows opened (service, see docs/plans/compare-players.md); Squad: the human club's squad (`squads` map); Shortlist: `_shortlist`.
 
 HONESTY NOTES
-  - Radar groups are OUR grouping of attributes (as the player window radar), not the game's.
+  - Radar groups / axes are OUR grouping of attributes, not the game's.
   - Value, wage and contract in the key facts are what the save stores (market value, wage); asking price, clauses and squad status are not in the save and are not shown.
+  - FM24's own comparison lets you pick the second player from your squad or from recently viewed profiles (FM26 narrowed it to squad + shortlist); sources in docs/plans/compare-players.md. We add search of the whole save.
 =====================================================================================================================
-
 -->
 <style>
 :root{
@@ -198,7 +243,18 @@ html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{hei
 .ach .m{margin-left:auto;display:flex;gap:6px;letter-spacing:0;text-transform:none;font-weight:700}
 .ar{height:22px;display:flex;align-items:center;gap:4px}
 .ar .an{flex:1;min-width:0;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ar .df{width:34px;text-align:center;font-size:11px;font-weight:700;flex:none;color:var(--tx3)}
+/* DIFF CELL (34 x 20, between the two 26 x 20 value tiles): a split bar.  Track = two 14 px halves with a 2 px gap (x 2..16 | 18..32) around a 2 px centre tick (x 16..18), 6 px high, r3, tier-3 tint (the tile language).
+   The winner's half is filled from the centre outwards in its identity colour, length = 3 + (min(|d|, 6) - 1) / 5 * 11 px (+1 = 3 px ... +6 or more = 14 px, the full half); a 1 x 10 px #8B96A8 centre tick anchors the zero line;
+   level = the track only (fainter), no fill.
+   Alternatives tried on paper and dropped: (B) 1-3 chevrons scaled to the difference (reads as text, three sizes of glyph, jittery in a column of 14 rows), (C) 3 pips that fill left or right
+   (only 4 magnitudes, the eye has to count), (D) outlining the winner's tile (strong, but 40 outlined tiles drown the tier colours).  The exact number stays in the row tooltip and in aria-label. */
+.ar .df{width:34px;height:20px;flex:none;position:relative;display:block}
+.ar .df .h{position:absolute;top:7px;height:6px;width:14px;background:rgba(139,150,168,.18)}
+.ar .df::after{content:"";position:absolute;left:16px;top:5px;width:2px;height:10px;border-radius:1px;background:var(--tx2)}   /* centre tick: 2 px wide, the gap between the halves */
+.ar .df .h.l{left:2px;border-radius:3px 0 0 3px}.ar .df .h.r{left:18px;border-radius:0 3px 3px 0}
+.ar .df .h i{position:absolute;top:0;bottom:0;display:block}
+.ar .df .h.l i{right:0;background:var(--a);border-radius:3px 0 0 3px}.ar .df .h.r i{left:0;background:var(--b);border-radius:0 3px 3px 0}
+.ar .df.eq .h{background:rgba(139,150,168,.08)}.ar .df.eq::after{background:var(--tx3)}
 .ar:hover{background:var(--alt)}
 .facts{display:grid;grid-template-columns:repeat(6,1fr);gap:0;padding:0 4px 8px}
 .fact{padding:2px 8px 0 10px;min-width:0;border-left:1px solid var(--border)}
@@ -226,20 +282,122 @@ html.min .frame{width:1064px}html.min.bare .frame{width:1062px}html.min .win{hei
 .dlg .hint{padding:2px 16px 4px;color:var(--tx2);font-size:11px}
 .toast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:12px;z-index:60}
 .won{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.won b{font-weight:700;margin-right:4px}.won .dot{margin-left:2px}
+
+/* =====================================================================================================================
+   PAGE MODE (main window 1200 x 780: sidebar | hero | page | status).  Rules below override the older window rules above.
+   ===================================================================================================================== */
+.viewport,.rv{max-width:1204px}.cap{max-width:1204px}
+.frame{width:1202px}
+html.bare .frame{width:1200px}
+html.min .frame{width:1002px}html.min.bare .frame{width:1000px}
+.win{height:780px;flex-direction:row}
+html.min .win{height:660px}
+/* sidebar (context only; metrics of gui/main_window.py _make_sidebar) */
+.sb{width:192px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb .br{padding:14px 15px 12px}
+.sb .br .r1{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.sb .logo{width:36px;height:36px;border-radius:6px;background:linear-gradient(135deg,#3C4A6B,#1B2338);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+.sb .wm{font-size:18px;font-weight:700;letter-spacing:.05em}
+.sb .st{display:flex;align-items:center;gap:7px;color:var(--tx2);font-size:11px}.sb .st i{width:7px;height:7px;border-radius:50%;background:#4CAF82;display:block}
+.sb hr{border:none;border-top:1px solid var(--border)}
+.sb .sec{color:var(--tx2);font-size:10px;font-weight:600;letter-spacing:1.2px;padding:10px 15px 3px}
+.nvb{display:flex;align-items:center;gap:9px;height:29px;padding:0 15px 0 12px;border-left:3px solid transparent;color:var(--tx2);font-size:12px;white-space:nowrap}
+.nvb svg{width:18px;height:18px;flex:none}
+.nvb.on{background:var(--sel);color:#fff;font-weight:700;border-left-color:var(--acc)}
+.nvb.off{color:var(--tx3)}
+.nvb .gi{width:15px;height:15px;border:1.5px solid currentColor;border-radius:3px;opacity:.55;flex:none;margin:0 1.5px}
+.nvb.new{position:relative}
+.nvb.new .tagn{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--pot);border:1px solid var(--acc);border-radius:8px;padding:0 6px;height:14px;line-height:12px}
+.mc{flex:1;min-width:0;display:flex;flex-direction:column}
+.hero{height:186px;flex:none;position:relative;background:radial-gradient(ellipse at 20% 0,#2B2F3E 0,#1A1D27 55%,#14151A 100%);border-bottom:1px solid var(--border)}
+.hero .navrow{height:38px;display:flex;align-items:center;gap:8px;padding:0 10px}
+.hero .navrow .nb{width:24px;height:24px;border-radius:3px;color:var(--tx2);display:flex;align-items:center;justify-content:center}
+.hero .navrow .sbx{flex:1;height:26px;border:1px solid var(--border2);border-radius:3px;background:rgba(20,21,26,.6);color:var(--tx3);font-size:12px;display:flex;align-items:center;padding:0 10px}
+.hero .navrow .hb{height:26px;padding:0 10px;border-radius:3px;font-size:11px;font-weight:700;display:flex;align-items:center;color:#fff;border:1px solid var(--border2);background:rgba(20,21,26,.6)}
+.hero .tb{position:absolute;left:16px;bottom:18px;display:flex;align-items:center;gap:14px}
+.hero .tb .ic{width:64px;height:64px;border-radius:50%;border:1px solid var(--border2);background:rgba(20,21,26,.55);display:flex;align-items:center;justify-content:center}
+.hero .tb .ic svg{width:40px;height:40px}
+.hero .tb h2{font-size:30px;line-height:34px;font-weight:700}
+.hero .tb p{color:var(--tx2);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-top:2px;white-space:nowrap}
+.status{height:22px;flex:none;border-top:1px solid var(--border);background:var(--surface);font-size:11px;color:var(--tx2);padding:0 12px;display:flex;align-items:center}
+.pg{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;container:pg/inline-size;background:var(--bg);position:relative}
+.pg::-webkit-scrollbar{width:6px}.pg::-webkit-scrollbar-track{background:var(--bg)}.pg::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.pgi{padding:12px;display:flex;flex-direction:column;gap:12px;position:relative;min-height:100%}
+.pgi .main{flex:none;align-items:stretch}
+.pgi .col{min-height:auto}
+.pgi .pn{min-height:auto}
+.pgi .scr{overflow:visible;flex:none}
+.pgi .a-cols{flex:none}
+.a-left{flex:0 0 36%;min-width:0}
+.facts{grid-template-columns:.8fr .95fr 1.3fr .9fr 1fr .8fr}   /* Key facts columns: 'Transfer value' needs the room at 630 px */
+/* selector bar */
+.pbar{display:flex;gap:8px;align-items:center;flex:none}
+.sel{flex:1;min-width:0;height:40px;border:1px solid var(--border2);border-radius:3px;background:var(--surface);display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;position:relative;cursor:text}
+.sel:hover{border-color:var(--tx3)}
+.sel.open{border-color:var(--acc2);background:var(--bg)}
+.sel .tag{display:inline-flex;align-items:center;gap:5px;font-weight:700;flex:none;font-size:12px}
+.sel .th{width:22px;height:28px;border-radius:2px;background:var(--elev);overflow:hidden;flex:none}.sel .th svg{width:100%;height:100%}
+.sel input{flex:1;min-width:0;background:none;border:none;outline:none;font-size:13px;font-weight:700;height:100%}
+.sel input::placeholder{color:var(--tx2);font-weight:400}
+.sel input::selection{background:var(--acc);color:#fff}
+.sel .ib{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--tx2);flex:none}
+.sel .ib:hover{background:var(--elev);color:#fff}
+.sel .ib svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sw{width:40px;height:40px;border-radius:3px;border:1px solid var(--border2);background:var(--surface);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.sw:hover{background:var(--elev)}.sw svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sw[disabled]{color:var(--tx3);background:var(--elev);border-color:var(--border)}
+.hp.empty{border:1px dashed var(--border2);border-top:3px solid var(--bk,var(--a));background:transparent;justify-content:center;color:var(--tx2);font-size:12px}
+.hp.empty.pb{--bk:var(--b)}
+/* popup */
+.pop{position:absolute;z-index:40;width:468px;background:var(--surface);border:1px solid var(--border2);border-radius:4px;box-shadow:0 12px 32px rgba(0,0,0,.5);overflow:hidden}
+.pop .tabs{display:flex;align-items:center;gap:8px;padding:8px 12px 6px}
+.pop .tabs .pnote{margin-left:auto}
+.pop .lbl{padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2)}
+.pop .ft{padding:6px 12px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;display:flex;gap:12px;align-items:center}
+.pop .ft kbd{font:700 10px "Noto Sans",sans-serif;border:1px solid var(--border2);border-radius:2px;padding:0 4px;color:#fff;background:var(--bg);margin-right:3px}
+.pop .none{padding:16px 12px;color:var(--tx2)}
+.pop .hid{padding:6px 12px;color:var(--tx2);font-size:11px;border-top:1px solid var(--border)}
+.opt{height:44px;padding:0 12px;gap:10px}
+.opt .av{width:24px;height:30px}
+.opt .tx b{font-size:13px}
+.opt .tx span{overflow:hidden;min-width:0}
+.opt{overflow:hidden}
+.empty-st .cols>div{min-width:0}
+/* empty state */
+.empty-st{background:var(--surface);border:1px solid var(--border);border-radius:3px;align-self:center;width:100%;max-width:640px;padding:22px 24px 14px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.empty-st h3{font-size:16px;font-weight:700;margin-top:4px}
+.empty-st p{color:var(--tx2);font-size:12px;text-align:center;max-width:460px}
+.empty-st .rl{align-self:stretch;margin-top:10px;border-top:1px solid var(--border)}
+.empty-st .rl .lbl{padding:8px 0 4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2)}
+.empty-st .cols{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.empty-st .opt{padding:0 8px}
+.seg-row{display:flex;align-items:center;gap:8px;padding:2px 12px 8px;color:var(--tx2);font-size:11px}
+@container pg (max-width:1099px){   /* header compaction: the page is narrower than the old 1122 window (page 1008 wide by default) */
+  .hid .nm{font-size:17px}
+  .avatar{width:46px;height:56px}
+  .cab{width:84px;padding:6px 6px 0 8px}.cab .stars svg{width:11px;height:11px}.cab .nv b{font-size:16px}
+  .hp{padding:0 10px;gap:8px}
+}
+@container pg (max-width:899px){   /* narrow page (minimum window): ONE column */
+  .pgi .main{flex-direction:column}
+  .a-left{flex:none;width:100%}
+  .empty-st .cols{grid-template-columns:1fr}
+  .hid .nm{font-size:16px}
+  .cab{width:72px;padding:6px 5px 0 7px}.cab .stars svg{width:9px;height:9px}.cab .nv b{font-size:14px}.cab .nv{gap:4px}
+}
 </style>
 </head>
 <body>
 <div class="rv">
   <h1>Compare players</h1>
   <span class="lab">pair</span><div class="rseg" id="pSeg" role="group" aria-label="Sample pair"></div>
+  <span class="lab">axes</span><div class="rseg" id="axSeg" role="group" aria-label="Radar axes"></div>
   <span class="lab">state</span><div id="tgs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
 </div>
 <div class="viewport"><div class="frame" id="frame"></div></div>
-<div class="cap"><p>All players are fictional (names, clubs, nations, shields and faces are synthetic placeholders; the app draws the facepack PNG and logo-pack PNG). Attributes and Full Potential values were produced by the app's own logic (potential.project_attrs) on those fictional attributes.</p></div>
+<div class="cap"><p>All players are fictional (names, clubs, nations, shields and faces are synthetic placeholders; the app draws the facepack PNG and logo-pack PNG). The first seven have attributes produced by the app's own logic (potential.project_attrs); the other eight are derived from them for the pickers. Sidebar and hero are context only.</p></div>
 <script>
-/* =====================================================================================================================
-   1. SAMPLE DATA (fictional). GENERATED by the app's own logic, see the notes at the top of this file. Do not hand edit.
-   ===================================================================================================================== */
+/* ===================================================================================================================== 1. SAMPLE DATA (fictional) ===================================================================================================================== */
 const PL={
  mferrer:{"id":"mferrer","name":"Mateo Ferrer","pos":"MC","nat":"Spain","age":25,"born":"14 Mar 2001","club":"Veridian United","ca":148,"pa":158,"until":"Jun 2030","yl":3.7,"start":"Jul 2024","wage":"£95K p/w","value":52000000,"height":"184 cm","weight":"77 kg","traits":["Gets Forward Whenever Possible","Plays One-Twos","Tries Killer Balls Often"],"posr":{"GK":1,"SW":3,"DL":5,"DC":7,"DR":5,"WBL":6,"WBR":6,"DM":15,"ML":11,"MC":19,"MR":11,"AML":7,"AMC":13,"AMR":7,"ST":6},"g":{"tech":[["Corners",8,8],["Crossing",9,10],["Dribbling",12,13],["Finishing",10,11],["First Touch",14,15],["Free Kick",9,10],["Heading",10,11],["Long Shots",12,13],["Long Throws",6,6],["Marking",11,12],["Passing",13,14],["Penalties",9,10],["Tackling",14,15],["Technique",13,14]],"ment":[["Aggression",13,13],["Anticipation",14,15],["Bravery",13,14],["Composure",13,14],["Concentration",13,14],["Decisions",14,15],["Determination",16,16],["Flair",10,10],["Leadership",11,12],["Off the Ball",13,14],["Positioning",12,13],["Teamwork",15,15],["Vision",12,13],["Work Rate",17,17]],"phys":[["Acceleration",15,15],["Agility",14,14],["Balance",14,14],["Jumping Reach",11,12],["Natural Fitness",15,15],["Pace",14,14],["Stamina",18,18],["Strength",14,14]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",13,13],["Dirtiness",9,9,1],["Important Matches",14,14],["Injury Prone",6,6,1],["Versatility",13,13]],"foot":[["Left Foot",11,11],["Right Foot",17,17]]}},
  jlindahl:{"id":"jlindahl","name":"Jonas Lindahl","pos":"MC","nat":"Sweden","age":28,"born":"2 Nov 1997","club":"FC Saltmere","ca":150,"pa":150,"until":"Jun 2028","yl":1.7,"start":"Aug 2022","wage":"£110K p/w","value":38000000,"height":"181 cm","weight":"74 kg","traits":["Tries Long Range Passes","Likes To Switch Ball To Other Flank","Dwells On Ball","Plays One-Twos"],"posr":{"GK":1,"SW":4,"DL":4,"DC":6,"DR":4,"WBL":5,"WBR":4,"DM":18,"ML":9,"MC":20,"MR":9,"AML":6,"AMC":15,"AMR":6,"ST":5},"g":{"tech":[["Corners",10,10],["Crossing",11,11],["Dribbling",13,13],["Finishing",10,10],["First Touch",16,16],["Free Kick",12,12],["Heading",9,9],["Long Shots",13,13],["Long Throws",7,7],["Marking",12,12],["Passing",17,17],["Penalties",10,10],["Tackling",12,12],["Technique",16,16]],"ment":[["Aggression",9,9],["Anticipation",15,15],["Bravery",10,10],["Composure",15,15],["Concentration",15,15],["Decisions",16,16],["Determination",13,13],["Flair",11,11],["Leadership",14,14],["Off the Ball",12,12],["Positioning",14,14],["Teamwork",15,15],["Vision",16,16],["Work Rate",12,12]],"phys":[["Acceleration",10,10],["Agility",12,12],["Balance",13,13],["Jumping Reach",9,9],["Natural Fitness",13,13],["Pace",10,10],["Stamina",12,12],["Strength",11,11]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",15,15],["Dirtiness",5,5,1],["Important Matches",14,14],["Injury Prone",7,7,1],["Versatility",12,12]],"foot":[["Left Foot",13,13],["Right Foot",18,18]]}},
@@ -250,6 +408,24 @@ const PL={
  ikessler:{"id":"ikessler","name":"Ivor Kessler","pos":"MC","nat":"Germany","age":34,"born":"17 Feb 1992","club":"Rheinau 04","ca":138,"pa":150,"until":"Jun 2027","yl":0.7,"start":"Jul 2024","wage":"£60K p/w","value":4500000,"height":"186 cm","weight":"82 kg","traits":["Tries Long Range Passes","Marks Opponent Tightly","Dwells On Ball"],"posr":{"GK":1,"SW":5,"DL":4,"DC":8,"DR":4,"WBL":5,"WBR":5,"DM":17,"ML":7,"MC":19,"MR":7,"AML":5,"AMC":11,"AMR":5,"ST":4},"g":{"tech":[["Corners",10,10],["Crossing",10,11],["Dribbling",11,12],["Finishing",9,10],["First Touch",15,16],["Free Kick",11,12],["Heading",11,12],["Long Shots",13,14],["Long Throws",8,8],["Marking",14,15],["Passing",16,16],["Penalties",10,11],["Tackling",15,16],["Technique",15,16]],"ment":[["Aggression",13,13],["Anticipation",16,16],["Bravery",13,14],["Composure",16,16],["Concentration",16,16],["Decisions",17,17],["Determination",16,16],["Flair",9,9],["Leadership",16,16],["Off the Ball",10,11],["Positioning",15,16],["Teamwork",16,16],["Vision",15,16],["Work Rate",12,13]],"phys":[["Acceleration",9,10],["Agility",11,12],["Balance",12,13],["Jumping Reach",11,12],["Natural Fitness",12,12],["Pace",9,10],["Stamina",10,11],["Strength",13,14]],"gk":[["Aerial Reach",2,2],["Command of Area",2,2],["Communication",6,6],["Eccentricity",3,3,1],["Handling",2,2],["Kicking",3,3],["One on Ones",2,2],["Punching",2,2],["Reflexes",2,2],["Rushing Out",2,2],["Throwing",3,3]],"hid":[["Consistency",16,16],["Dirtiness",8,8,1],["Important Matches",16,16],["Injury Prone",9,9,1],["Versatility",15,15]],"foot":[["Left Foot",13,13],["Right Foot",16,16]]}},
 };
 
+/* ---- the 8 extra players: attributes DERIVED from a template by a seeded random walk (only so every picker row opens a real comparison) ---- */
+const EXTRA=[
+ ['kmensah','Kofi Mensah','ST','Ghana',23,'Veridian United',141,160,'Jun 2029','£70K p/w',31000000,'mferrer'],
+ ['rduarte','Rafael Duarte','DC','Brazil',29,'Veridian United',144,146,'Jun 2027','£85K p/w',14000000,'mferrer'],
+ ['hlambert','Hugo Lambert','DM','France',22,'Veridian United',131,166,'Jun 2030','£40K p/w',26000000,'mferrer'],
+ ['lmarchetti','Luca Marchetti','DL','Italy',24,'FC Saltmere',136,149,'Jun 2028','£55K p/w',17000000,'mferrer'],
+ ['pvanrijn','Pieter van Rijn','AMC','Netherlands',31,'Ostmark SC',147,147,'Jun 2026','£120K p/w',12000000,'mferrer'],
+ ['ekaya','Emre Kaya','ML','Turkey',26,'Northgate Rovers',142,150,'Jun 2029','£90K p/w',28000000,'mferrer'],
+ ['nalmada','Nico Almada','MR','Argentina',20,'Corvale FC',118,170,'Jun 2031','£22K p/w',19000000,'mferrer'],
+ ['ydemir','Yusuf Demir','GK','Turkey',30,'Veridian United',138,140,'Jun 2028','£45K p/w',6000000,'astrand']];
+const rng=s=>()=>{s=(s+0x6D2B79F5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
+EXTRA.forEach(([id,name,pos,nat,age,club,ca,pa,until,wage,value,tpl])=>{
+  const T=PL[tpl],r=rng([...id].reduce((h,c)=>h*31+c.charCodeAt(0)|0,7)),sh=Math.round((ca-T.ca)/10),g={};
+  for(const k in T.g)g[k]=T.g[k].map(a=>{if(k==='gk'&&tpl==='mferrer'||k==='foot')return a.slice();const cur=Math.max(1,Math.min(20,a[1]+sh+Math.round((r()-.5)*5))),pot=Math.max(cur,Math.min(20,a[2]-a[1]+cur+(pa-ca>12?1:0)));return[a[0],cur,pot].concat(a.slice(3))});
+  const posr=Object.assign({},T.posr);posr[pos]=Math.max(posr[pos]||1,18);
+  PL[id]={id,name,pos,nat,age,born:'1 Jan '+(2026-age),club,ca,pa,until,yl:2.0,start:'Jul 2024',wage,value,height:'182 cm',weight:'76 kg',traits:T.traits.slice(0,2+Math.round(r()*2)),posr,g};
+});
+
 /* =====================================================================================================================
    2. SHARED CONSTANTS (copied from player-window.html so the two mockups stay one language)
    ===================================================================================================================== */
@@ -258,8 +434,10 @@ const BADGE={GK:'bGK',SW:'bD',DL:'bD',DC:'bD',DR:'bD',WBL:'bD',WBR:'bD',DM:'bDM'
 const tier=v=>v<=4?1:v<=8?2:v<=11?3:v<=13?4:v<=16?5:6;
 const fmtV=v=>v===3e8?'Not for sale':fmtM(v);
 const fmtM=v=>v>=1e7?'£'+Math.round(v/1e6)+'M':v>=1e6?'£'+(Math.round(v/1e5)/10)+'M':v>=1e3?'£'+Math.round(v/1e3)+'K':'£'+Math.round(v);
-const NATFLAG={Spain:'\u{1F1EA}\u{1F1F8}',Sweden:'\u{1F1F8}\u{1F1EA}',Norway:'\u{1F1F3}\u{1F1F4}',Czechia:'\u{1F1E8}\u{1F1FF}',Portugal:'\u{1F1F5}\u{1F1F9}',Germany:'\u{1F1E9}\u{1F1EA}',England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}'};
-/* 6-axis radar groups (gui/pw_widgets.py RADAR_OUT / RADAR_GK; own groups, not the game's) */
+const F=(a,b)=>String.fromCodePoint(0x1F1E6+a.charCodeAt(0)-65,0x1F1E6+b.charCodeAt(0)-65);
+const NATFLAG={Spain:F('E','S'),Sweden:F('S','E'),Norway:F('N','O'),Czechia:F('C','Z'),Portugal:F('P','T'),Germany:F('D','E'),England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',
+  Ghana:F('G','H'),Brazil:F('B','R'),France:F('F','R'),Italy:F('I','T'),Netherlands:F('N','L'),Turkey:F('T','R'),Argentina:F('A','R')};
+/* OVERVIEW: 6-axis radar groups (gui/pw_widgets.py RADAR_OUT / RADAR_GK; own groups, not the game's) */
 const RADAR_OUT=[['Attacking',['Finishing','Long Shots','Dribbling','Penalties','Free Kick','Off the Ball','Flair']],
  ['Creativity',['Passing','Vision','Technique','First Touch','Crossing','Corners','Long Throws']],
  ['Athleticism',['Pace','Acceleration','Agility','Balance','Stamina','Strength','Jumping Reach','Natural Fitness']],
@@ -269,6 +447,17 @@ const RADAR_OUT=[['Attacking',['Finishing','Long Shots','Dribbling','Penalties',
 const RADAR_GK=[['Shot-stopping',['Reflexes','Handling','One on Ones','Punching']],['Command',['Aerial Reach','Command of Area','Communication','Rushing Out']],
  ['Athleticism',RADAR_OUT[2][1]],['Distribution',['Kicking','Throwing','Passing','First Touch']],
  ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Eccentricity']],['Mentality',RADAR_OUT[5][1].concat(['Anticipation','Positioning','Bravery'])]];
+/* DETAILED: fm_editor/radar_axes.py in the app (tables are documented in the header comment). A partition of the 36 outfield attributes + 5 hidden ones. */
+const RADAR_OUT12=[['Shooting',['Finishing','Long Shots','Penalties']],['Ball control',['Dribbling','First Touch','Flair','Agility','Balance']],
+ ['Passing',['Passing','Vision','Technique']],['Delivery',['Crossing','Corners','Free Kick','Long Throws']],
+ ['Positioning',['Positioning','Off the Ball','Anticipation','Concentration']],['Tackling',['Tackling','Marking']],
+ ['Aerial',['Heading','Jumping Reach']],['Physicality',['Strength','Bravery','Aggression']],['Pace',['Pace','Acceleration']],
+ ['Endurance',['Stamina','Work Rate','Natural Fitness','Determination']],['Mentality',['Composure','Decisions','Teamwork','Leadership']],
+ ['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Versatility']]];
+const RADAR_GK11=[['Reflexes',['Reflexes','Agility','Balance']],['Handling',['Handling','Punching']],['One on Ones',['One on Ones','Rushing Out','Anticipation']],
+ ['Aerial',['Aerial Reach','Command of Area','Jumping Reach']],['Organisation',['Communication','Leadership','Teamwork']],['Positioning',['Positioning','Concentration','Decisions']],
+ ['Distribution',['Kicking','Throwing']],['Ball playing',['Passing','First Touch','Technique','Vision']],['Athleticism',['Acceleration','Pace','Strength','Stamina','Natural Fitness']],
+ ['Mentality',['Composure','Determination','Bravery','Aggression']],['Reliability',['Consistency','Important Matches','Injury Prone','Dirtiness','Eccentricity']]];
 
 /* =====================================================================================================================
    3. STATE + DATA ACCESS
@@ -277,12 +466,18 @@ const qs=new URLSearchParams(location.search),hq=new URLSearchParams(location.ha
 const has=k=>qs.has(k)||hq.has(k),getq=k=>qs.get(k)||hq.get(k);
 const PAIRS={out:['mferrer','jlindahl'],gk:['astrand','mhlavaty'],young:['tsalvador','cwhitby'],veteran:['ikessler','mferrer']};
 const PAIR_NAMES={out:'Two midfielders',gk:'Two goalkeepers',young:'Young high-PA vs prime',veteran:'Veteran vs prime'};
-const S={pair:getq('pair')||'out',nums:has('nums'),pot:has('pot'),pick:has('pick'),min:has('min'),noface:has('noface'),swap:has('swap'),q:getq('q')||'lind',pickSel:0,sameType:true};
+/* lists behind the popup (real app: recents service, human club squad, _shortlist).  Newest first. */
+const RECENTS=['jlindahl','kmensah','cwhitby','hlambert','tsalvador','astrand','pvanrijn','mhlavaty','ikessler','ekaya'];
+const SQUAD=['mferrer','kmensah','rduarte','hlambert','ydemir'],SHORT=['cwhitby','tsalvador','pvanrijn','ekaya','astrand'];
+const SRC_NAMES={recent:'Recent',squad:'Squad',short:'Shortlist'},SRC_LIST={recent:RECENTS,squad:SQUAD,short:SHORT};
+const S={pair:getq('pair')||'out',axes:getq('axes')==='detail'?'detail':'overview',nums:has('nums'),pot:has('pot'),min:has('min'),noface:has('noface'),swap:has('swap'),empty:has('empty'),one:has('one'),
+  open:['a','b'].includes(getq('open'))?getq('open'):null,q:getq('q')||'',src:SRC_LIST[getq('src')]?getq('src'):'recent',sel:0,ids:null};
 if(!PAIRS[S.pair])S.pair='out';
 if(has('bare'))document.documentElement.classList.add('bare');
 if(S.min)document.documentElement.classList.add('min');
-const ids=()=>{const p=S.ids||PAIRS[S.pair];return S.swap?[p[1],p[0]]:p.slice()};
-const A=()=>PL[ids()[0]],B=()=>PL[ids()[1]];
+const slots=()=>{if(S.ids)return S.ids.slice();if(S.empty)return[null,null];const p=PAIRS[S.pair],r=S.swap?[p[1],p[0]]:p.slice();if(S.one)r[1]=null;return r};
+const A=()=>PL[slots()[0]]||null,B=()=>PL[slots()[1]]||null;
+const touch=()=>{S.ids=slots();S.empty=S.one=S.swap=false};
 const isGK=p=>p.pos==='GK';
 const sn=p=>p.name.split(' ').slice(-1)[0];
 Object.values(PL).forEach(p=>{p._m={};Object.values(p.g).forEach(l=>l.forEach(a=>p._m[a[0]]=a))});
@@ -290,23 +485,24 @@ const gv=a=>S.pot?a[2]:a[1];                 // value shown: Current or Full Pot
 const good=a=>a[3]?21-gv(a):gv(a);           // lower-is-better attributes inverted for ranking / averages
 const AT=(p,n)=>p._m[n];
 const mean=(p,names)=>names.reduce((s,n)=>s+good(AT(p,n)),0)/names.length;
-const axes=p=>(isGK(p)?RADAR_GK:RADAR_OUT).map(([n,names])=>({n,names,v:mean(p,names)}));
+const AXSET=p=>S.axes==='detail'?(isGK(p)?RADAR_GK11:RADAR_OUT12):(isGK(p)?RADAR_GK:RADAR_OUT);
+const axes=p=>AXSET(p).map(([n,names])=>({n,names,v:mean(p,names)}));
 const tileV=(a)=>{const t=tier(good(a));return `<span class="tile k${t} c${t}">${gv(a)}</span>`};
 const badge=p=>`<span class="badge ${BADGE[p]}">${CODE[p]}</span>`;
 const dec=n=>n.toFixed(1);
-/* groups of the attribute table = the Profile's (Footedness is the feet panel in the player window; here its two rows close the table so every listed attribute is present).
-   Outfield: the 11 goalkeeping attributes are not listed (as the Profile).  Keeper: the outfield Technical group is HIDDEN (decision 3 in the header comment). */
 const GRPN={tech:'Technical',ment:'Mental',phys:'Physical',hid:'Hidden',gk:'Goalkeeping',foot:'Footedness'};
 const grpKeys=p=>isGK(p)?['gk','ment','phys','hid','foot']:['tech','ment','phys','hid','foot'];
+const DF_CAP=6;   // table diff bar: differences of 6 or more fill the whole half (one place to change)
 const counted=k=>k!=='foot';   // attributes won: every attribute counts equally; Footedness is not 'better or worse'
 function tally(a,b){let wa=0,wb=0,lv=0;grpKeys(a).filter(counted).forEach(k=>a.g[k].forEach((t,i)=>{const d=good(t)-good(b.g[k][i]);d>0?wa++:d<0?wb++:lv++}));return{wa,wb,lv}}
-const gmean=(p,k)=>p.g[k].reduce((s,t)=>s+good(t),0)/p.g[k].length;
 
 /* ---- synthetic faces, club shields (the app draws the facepack PNG / logo pack PNG here) ---- */
 const FACE={mferrer:['#C9A58A','#2A2018','#6B2A33'],jlindahl:['#E7C3A5','#C9A860','#2B3A55'],astrand:['#E2BFA0','#8A5A32','#3D5A3A'],mhlavaty:['#D2AD8E','#3A2C20','#5A4A8A'],
- tsalvador:['#B88A68','#1D1712','#8A2A2A'],cwhitby:['#E5C3A8','#6A4A2A','#2A4A7A'],ikessler:['#DDB899','#9A9A9A','#2A2A30']};
+ tsalvador:['#B88A68','#1D1712','#8A2A2A'],cwhitby:['#E5C3A8','#6A4A2A','#2A4A7A'],ikessler:['#DDB899','#9A9A9A','#2A2A30'],
+ kmensah:['#8A5A3C','#14100C','#2A5A8A'],rduarte:['#B98B66','#2A1C12','#3A6A3A'],hlambert:['#E2BC9C','#5A3A22','#2A3A6A'],lmarchetti:['#D9B08E','#1E1812','#7A2A2A'],
+ pvanrijn:['#E8C8AA','#B88A3A','#C07B2A'],ekaya:['#CFA27C','#1A1410','#8A2A3A'],nalmada:['#C79A74','#241810','#3A7AA8'],ydemir:['#D3A982','#1E1812','#5A5A66']};
 const faceSvg=id=>{const [s,h,k]=FACE[id];return `<svg viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice" aria-hidden="true"><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="${k}"/><rect x="108" y="150" width="44" height="60" rx="14" fill="${s}"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="${s}"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="${h}"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/><path d="M112 150Q130 162 148 150" stroke="#6E4A3A" stroke-width="4" fill="none" stroke-linecap="round"/></svg>`};
-const sil='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6" style="width:30px;height:30px;margin:17px 12px" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+const sil='<svg viewBox="0 0 24 24" fill="none" stroke="#525B68" stroke-width="1.6" style="width:70%;height:70%;margin:15% 15%" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
 const avatar=id=>S.noface?sil:faceSvg(id);
 const CLUBC={'Veridian United':['#7A1F2B','#F2F4F7'],'FC Saltmere':['#1D5FA8','#F2F4F7'],'Ostmark SC':['#1F6B3A','#F2F4F7'],'Corvale FC':['#2A2A30','#E0973C'],'Atlético Brava':['#B02A2A','#F2F4F7'],'Northgate Rovers':['#132B5E','#F2F4F7'],'Rheinau 04':['#E0C03C','#2A2A30']};
 const clubBadge=c=>{const [f,g]=CLUBC[c]||['#454A58','#fff'];return `<svg class="bdg" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 14.2 2.6V8.2C14.2 11.4 11.6 13.9 8 15.2 4.4 13.9 1.8 11.4 1.8 8.2V2.6Z" fill="${g}"/><path d="M8 2.2 12.8 3.6V8.1C12.8 10.7 10.8 12.7 8 13.8 5.2 12.7 3.2 10.7 3.2 8.1V3.6Z" fill="${f}"/><path d="M5.6 6.2H10.4M5.6 8.6H10.4" stroke="${g}" stroke-width="1.3"/></svg>`};
@@ -320,39 +516,37 @@ const potSeg=()=>segc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'
 const ph=(t,r='')=>`<div class="ph"><span>${t}</span>${r?`<span class="r">${r}</span>`:''}</div>`;
 const mk=(c,sq)=>`<i class="dot${sq?' sq':''}" style="background:var(--${c})"></i>`;   // identity marker: A circle, B diamond
 
-/* ---- persistent header + action strip ---- */
+/* ---- header (two player panels + VS; an unpicked side is a dashed placeholder) ---- */
 function pblock(p,cls){
+  if(!p)return `<div class="pn hp empty ${cls}">Player ${cls==='pb'?'B':'A'}: not picked yet</div>`;
   const fl=`<span class="fl" title="${p.nat}">${NATFLAG[p.nat]||''}</span>`,dot='<span class="sep">·</span>';
   return `<div class="pn hp ${cls}" role="group" aria-label="${cls==='pb'?'Player B':'Player A'}: ${p.name}"><div class="avatar">${avatar(p.id)}</div>
     <div class="hid"><div class="r1"><span class="nm" title="${p.name}">${p.name}</span>${badge(p.pos)}</div><div class="r2">${fl}<span class="club">${clubBadge(p.club)}<span>${p.club}</span></span>${dot}<span title="Born ${p.born}">${p.age} years</span></div></div>
     ${abil('Current','CA',p.ca,'#735CE4')}${abil('Potential','PA',p.pa,'#9A8AF5')}</div>`;
 }
 const header=()=>`<div class="hdr">${pblock(A(),'pa')}<div class="vs" aria-hidden="true">VS</div>${pblock(B(),'pb')}</div>`;
-function actionStrip(){
-  return `<div class="strip"><button class="btn b2" data-act="swap" title="Swap sides: A becomes B and B becomes A">Swap sides</button><button class="btn b2" data-act="pick" title="Choose another player to compare with ${sn(A())}">Change player B…</button>
-    <span class="sp"></span><button class="btn b2" data-act="short" title="Add both players to the Player Shortlist">Add both to Shortlist</button><button class="btn b2" data-act="close">Close</button></div>`;
-}
 
 /* =====================================================================================================================
    4. MAIN AREA (overlaid radars + attribute table)
    ===================================================================================================================== */
 function radarAB(ax,bx){
-  const W=358,H=336,cx=179,cy=170,R=106,f1=x=>x.toFixed(1),pt=(i,k)=>{const t=(-90+i*60)*Math.PI/180;return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=(arr,k)=>arr.map((v,i)=>pt(i,k(v)).map(f1).join(',')).join(' ');
+  const n=ax.length,W=358,H=336,cx=179,cy=170,R=106,f1=x=>x.toFixed(1),ang=i=>(-90+i*360/n)*Math.PI/180,pt=(i,k)=>{const t=ang(i);return[cx+Math.cos(t)*R*k,cy+Math.sin(t)*R*k]},poly=(arr,k)=>arr.map((v,i)=>pt(i,k(v)).map(f1).join(',')).join(' ');
   let s=[.25,.5,.75,1].map(k=>`<polygon points="${ax.map((_,i)=>pt(i,k).map(f1).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,${k===1?.22:.10})"/>`).join('');
   s+=ax.map((_,i)=>{const p=pt(i,1);return `<line x1="${cx}" y1="${cy}" x2="${f1(p[0])}" y2="${f1(p[1])}" stroke="rgba(255,255,255,.10)"/>`}).join('');
-  [10,20].forEach(v=>{const x=cx+Math.cos(-60*Math.PI/180)*R*v/20,y=cy+Math.sin(-60*Math.PI/180)*R*v/20;s+=`<text x="${f1(x-3)}" y="${f1(y-2)}" text-anchor="end" font-size="9" fill="#8B96A8">${v}</text>`});   // ring scale
+  [10,20].forEach(v=>{const sa=(-90+(n>8?1.5:.5)*360/n)*Math.PI/180,x=cx+Math.cos(sa)*R*v/20,y=cy+Math.sin(sa)*R*v/20;s+=`<text x="${f1(x-3)}" y="${f1(y-2)}" text-anchor="end" font-size="9" fill="#8B96A8">${v}</text>`});   // ring scale
   s+=`<polygon points="${poly(bx,a=>a.v/20)}" fill="rgba(215,124,255,.18)" stroke="#D77CFF" stroke-width="1.75" stroke-dasharray="6 3" stroke-linejoin="round"/>`;
   s+=`<polygon points="${poly(ax,a=>a.v/20)}" fill="rgba(82,176,255,.22)" stroke="#52B0FF" stroke-width="1.75" stroke-linejoin="round"/>`;
-  s+=ax.map((a,i)=>{const b=bx[i],pa=pt(i,a.v/20),pb=pt(i,b.v/20),q=pt(i,1),side=i%3?(i<3?'start':'end'):'middle',x=side==='middle'?q[0]:q[0]+(side==='start'?7:-7),y1=i===0?q[1]-24:i===3?q[1]+14:q[1]-2;
+  s+=ax.map((a,i)=>{const b=bx[i],pa=pt(i,a.v/20),pb=pt(i,b.v/20),q=pt(i,1),c=Math.cos(ang(i)),sn_=Math.sin(ang(i)),side=Math.abs(c)<.25?'middle':c>0?'start':'end',x=side==='middle'?q[0]:q[0]+(side==='start'?7:-7),y1=sn_<-.9?q[1]-24:sn_>.9?q[1]+14:q[1]-2;
     const tip=`${a.n} (mean of ${a.names.length} attributes): ${sn(A())} ${dec(a.v)}, ${sn(B())} ${dec(b.v)}. ${a.names.join(', ')}`;
     return `<g><title>${tip}</title><circle cx="${f1(pa[0])}" cy="${f1(pa[1])}" r="4" fill="#52B0FF" stroke="#14151A" stroke-width="1.5"/><rect x="${f1(pb[0]-3.6)}" y="${f1(pb[1]-3.6)}" width="7.2" height="7.2" fill="#D77CFF" stroke="#14151A" stroke-width="1.5" transform="rotate(45 ${f1(pb[0])} ${f1(pb[1])})"/>
       <text x="${f1(x)}" y="${f1(y1)}" text-anchor="${side}" font-size="9" font-weight="700" fill="#8B96A8">${a.n.toUpperCase()}</text>
       <text x="${f1(x)}" y="${f1(y1+14)}" text-anchor="${side}" font-size="12" font-weight="700"><tspan fill="#52B0FF">${dec(a.v)}</tspan><tspan fill="#8B96A8" font-weight="400"> / </tspan><tspan fill="#D77CFF">${dec(b.v)}</tspan></text></g>`}).join('');
-  return `<svg class="rd" style="margin:0 auto" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Overlaid radar of six attribute groups for ${A().name} and ${B().name}">${s}</svg>`;
+  return `<svg class="rd" style="margin:0 auto" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Overlaid radar of ${n} attribute axes for ${A().name} and ${B().name}">${s}</svg>`;
 }
 function attrCol(p,q,key){
   return `<div class="ach"><span>${GRPN[key]}</span></div>`+p.g[key].map((a,i)=>{const b=q.g[key][i],d=good(a)-good(b),ad=Math.abs(d);
-    const df=d===0?`<span class="df" title="Level">=</span>`:d>0?`<span class="df ca" title="${sn(p)} higher by ${ad}">‹ ${ad}</span>`:`<span class="df cb" title="${sn(q)} higher by ${ad}">${ad} ›</span>`;
+    const w=ad?3+(Math.min(ad,DF_CAP)-1)/(DF_CAP-1)*11:0,who=d>0?sn(p):sn(q),lab=d===0?'Level':`${who} higher by ${ad}`;
+    const df=`<span class="df${d===0?' eq':''}" role="img" aria-label="${lab}" title="${lab}"><span class="h l">${d>0?`<i style="width:${w.toFixed(1)}px"></i>`:''}</span><span class="h r">${d<0?`<i style="width:${w.toFixed(1)}px"></i>`:''}</span></span>`;
     return `<div class="ar" title="${a[0]}: ${sn(p)} ${gv(a)}, ${sn(q)} ${gv(b)}${a[3]?' (lower is better)':''}"><span class="an">${a[0]}</span>${tileV(a)}${df}${tileV(b)}</div>`}).join('');
 }
 /* tally in the header of the Attributes panel: markers + counts, 'level' last */
@@ -367,89 +561,159 @@ function factsAB(){
   const p=A(),q=B();
   const row=(a,b,d,tip)=>`<div title="${tip||''}">${mk('a')}<span>${a}</span></div><div title="${tip||''}">${mk('b',1)}<span>${b}</span></div><div class="d">${d||'&nbsp;'}</div>`;
   const dv=Math.abs(p.value-q.value),dy=Math.abs(p.age-q.age),dc=Math.abs(p.yl-q.yl),num=s=>s.replace(/ \D+$/,'');
-  const F=[['Age',row(`${p.age}`,`${q.age}`,dy?`${dy} yr${dy>1?'s':''} apart`:'same age')],
+  const FT=[['Age',row(`${p.age}`,`${q.age}`,dy?`${dy} yr${dy>1?'s':''} apart`:'same age')],
    ['Contract',row(`${p.until}`,`${q.until}`,dc>=.05?`${dc.toFixed(1)} yrs apart`:'same length')],
    ['Transfer value',row(fmtV(p.value),fmtV(q.value),(p.value===3e8||q.value===3e8)?'':(dv?`${fmtM(dv)} apart`:'equal'),'Market value as stored in the save; a value of exactly £300M is the game\'s "Not for sale" marker. The asking price is not in the save.')],
    ['Wage p/w',row(p.wage.replace(' p/w',''),q.wage.replace(' p/w',''),'')],
    ['cm / kg',row(`${num(p.height)} · ${num(p.weight)}`,`${num(q.height)} · ${num(q.weight)}`,'',`Height / weight: ${p.name} ${p.height}, ${p.weight}; ${q.name} ${q.height}, ${q.weight}`)],
    ['Traits',row(`${p.traits.length}`,`${q.traits.length}`,p.traits.length===q.traits.length?'same count':'')]];
-  return `<div class="pn" style="flex:none">${ph('Key facts','<span class="pnote">Transfer value (market value) and wage as stored in the save</span>')}<div class="facts">${F.map(([l,h])=>`<div class="fact"><small>${l}</small>${h}</div>`).join('')}</div></div>`;
+  return `<div class="pn" style="flex:none">${ph('Key facts','<span class="pnote">Transfer value (market value) and wage as stored in the save</span>')}<div class="facts">${FT.map(([l,h])=>`<div class="fact"><small>${l}</small>${h}</div>`).join('')}</div></div>`;
 }
 function edges(ax,bx){
   const rows=ax.map((a,i)=>{const d=a.v-bx[i].v,ad=Math.abs(d),w=Math.min(100,ad/4*100),c=d>.05?'ca':d<-.05?'cb':'';
     return `<div class="dvr" title="${a.n}: ${sn(A())} ${dec(a.v)}, ${sn(B())} ${dec(bx[i].v)}"><span class="nm">${a.n}</span><span class="dv"><span class="h l"><i style="width:${d>0?w:0}%;background:var(--a)"></i></span><span class="h r"><i style="width:${d<0?w:0}%;background:var(--b)"></i></span></span><b class="${c}">${ad<.05?'=':ad.toFixed(1)}</b></div>`}).join('');
-  return `<div class="a-edge"><div class="eh">Difference by group (mean of 1 to 20)</div>${rows}</div>`;
+  return `<div class="a-edge"><div class="eh">Difference by ${S.axes==='detail'?'axis':'group'} (mean of 1 to 20)</div>${rows}</div>`;
 }
 function overlayView(){
-  const ax=axes(A()),bx=axes(B());
-  return `<div class="main"><div class="col a-left"><div class="pn" style="flex:1">${ph('Compare',potSeg())}<div class="scr"><div style="padding:0 0 4px">${radarAB(ax,bx)}</div>
-    <div class="a-leg"><span>${mk('a')}${A().name}</span><span>${mk('b',1)}${B().name}</span><span style="color:var(--tx2);font-weight:400;font-size:10px">solid / dashed outline · ring 10 and 20</span></div>${edges(ax,bx)}</div></div></div>
+  const ax=axes(A()),bx=axes(B()),nD=AXSET(A()).length;
+  const axSeg=`<div class="seg-row"><span>Radar axes</span>${segc('axes',[['overview',`Overview (${isGK(A())?6:6})`],['detail',`Detailed (${(isGK(A())?RADAR_GK11:RADAR_OUT12).length})`]],S.axes,'Radar axes')}</div>`;
+  return `<div class="main"><div class="col a-left"><div class="pn" style="flex:1">${ph('Compare',potSeg())}${axSeg}<div class="scr"><div style="padding:0 0 4px">${radarAB(ax,bx)}</div>
+    <div class="a-leg"><span>${mk('a')}${A().name}</span><span>${mk('b',1)}${B().name}</span><span style="color:var(--tx2);font-weight:400;font-size:10px">solid / dashed outline · ring 10 and 20${S.axes==='detail'?' · hover a label for its attributes':''}</span></div>${edges(ax,bx)}</div></div></div>
     <div class="col" style="flex:1">${attrPanelAB()}${factsAB()}</div></div>`;
 }
 
 /* =====================================================================================================================
-   6. PICKER ('Compare with...' / 'Change player B...'): search box + suggestions. State ?pick (and ?q=text). Real app: QDialog 540 wide, QLineEdit + QListView
-      fed by the same index as the main search box (search_suggest.py), restricted to players of the same kind (goalkeepers only with goalkeepers).
+   5. SELECTORS + POPUP + EMPTY STATE.  Search = the main search's ranking (prefix, word start, substring; then name), >= 2 characters, max 8 rows.
    ===================================================================================================================== */
 const hl=(t,q)=>{const i=q?t.toLowerCase().indexOf(q.toLowerCase()):-1;return i<0?t:t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length)};
-function pickList(){
-  const a=A(),q=S.q.trim().toLowerCase();
-  const all=Object.values(PL).filter(p=>p.id!==a.id&&(!S.sameType||isGK(p)===isGK(a))&&(!q||p.name.toLowerCase().includes(q)));
-  const same=all.filter(p=>p.pos===a.pos||(a.posr[p.pos]>=15&&p.posr[a.pos]>=15)),oth=all.filter(p=>!same.includes(p));
-  return {same,oth,flat:[...same,...oth]};
+const rankOf=(name,q)=>{const n=name.toLowerCase();return n.startsWith(q)?0:n.includes(' '+q)?1:n.includes(q)?2:9};
+function cands(slot,src,q){   // -> {rows, hidden, mode}
+  const other=slot==='a'?B():A(),query=q.trim().toLowerCase(),search=query.length>=2;
+  let rows=search?Object.values(PL).map(p=>[rankOf(p.name,query),p]).filter(r=>r[0]<9).sort((x,y)=>x[0]-y[0]||x[1].name.localeCompare(y[1].name)).map(r=>r[1])
+    :SRC_LIST[src].map(i=>PL[i]);
+  rows=rows.filter(p=>!other||p.id!==other.id);
+  const ok=rows.filter(p=>!other||isGK(p)===isGK(other));
+  return{rows:ok.slice(0,8),hidden:rows.length-ok.length,mode:search?'search':'list',other};
 }
-function optHTML(p,i){
-  return `<button class="opt${i===S.pickSel?' on':''}" role="option" aria-selected="${i===S.pickSel}" data-pid="${p.id}" data-i="${i}"><div class="av">${avatar(p.id)}</div><div class="tx"><b>${hl(p.name,S.q.trim())}</b><span>${badge(p.pos)} <span>${NATFLAG[p.nat]||''}</span> ${clubBadge(p.club)} <span>${p.club}</span> <span style="color:var(--tx3)">·</span> <span>${p.age} years</span></span></div>${S.nums?`<b style="font-size:14px;color:#735CE4">${p.ca}</b>`:`<span style="display:flex;gap:1px" title="CA ${p.ca}">${star(p.ca,40,11)}</span>`}</button>`;
+function optHTML(p,i,slot,q){
+  return `<button class="opt${i===S.sel?' on':''}" role="option" aria-selected="${i===S.sel}" data-pid="${p.id}" data-i="${i}" data-slot="${slot}"><div class="av">${avatar(p.id)}</div><div class="tx"><b>${hl(p.name,q.trim())}</b><span>${badge(p.pos)} <span>${NATFLAG[p.nat]||''}</span> ${clubBadge(p.club)} <span>${p.club}</span> <span style="color:var(--tx3)">·</span> <span>${p.age} years</span></span></div>${S.nums?`<b style="font-size:14px;color:#735CE4" title="CA ${p.ca}">${p.ca}</b>`:`<span style="display:flex;gap:1px" title="CA ${p.ca}">${star(p.ca,40,11)}</span>`}</button>`;
 }
-function pickerHTML(){
-  const L=pickList(),a=A();let i=0;
-  const sec=(t,l)=>l.length?`<div class="lbl">${t}</div>`+l.map(p=>optHTML(p,i++)).join(''):'';
-  return `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true" aria-label="Compare with"><div class="th"><b>Compare with…</b><span>Compare ${a.name} with another player. Type a name, or pick from the lists.</span></div>
-    <div class="srch"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6L14 14"/></svg><input id="pq" type="text" value="${S.q}" placeholder="Search players by name" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="plist"></div>
-    <div class="flt"><button class="pchip${S.sameType?' on':''}" data-act="sametype" aria-pressed="${S.sameType}" title="${isGK(a)?'Goalkeepers can only be compared with goalkeepers':'Goalkeepers are not offered: their attributes are not comparable'}">${isGK(a)?'Goalkeepers only':'Outfield players only'}</button><span class="chip soon" style="height:26px" title="Select exactly two rows in a player list and press Compare to skip this dialog">From list selection (0)</span><span class="chip soon" style="height:26px">Shortlist</span></div>
-    <div id="plist" role="listbox" aria-label="Suggestions" style="min-height:${Math.max(150,L.flat.length*50+60)}px">${L.flat.length?sec('Same position as '+sn(a),L.same)+sec('Other players',L.oth):'<div class="hint" style="padding:18px 16px">No player matches “'+S.q+'”.</div>'}</div>
-    <div class="ft"><button class="btn b1" data-act="go"${L.flat.length?'':' disabled style="opacity:.5"'}>Compare</button><button class="btn b2" data-act="cancel">Cancel</button></div></div></div>`;
+function popupHTML(slot){
+  const c=cands(slot,S.src,S.q),q=S.q;
+  const tabs=c.mode==='list'?`<div class="tabs">${segc('src',Object.entries(SRC_NAMES).map(([k,l])=>[k,l]),S.src,'List')}<span class="pnote">${S.src==='recent'?'last opened first':S.src==='squad'?'Veridian United':'Player Shortlist'}</span></div>`
+    :`<div class="lbl" style="padding-top:8px">Players matching “${q.trim()}” · whole save</div>`;
+  const body=c.rows.length?c.rows.map((p,i)=>optHTML(p,i,slot,q)).join(''):`<div class="none">No ${c.other&&isGK(c.other)?'goalkeeper':'player'} matches “${q.trim()}”.</div>`;
+  const hid=c.hidden?`<div class="hid">${c.hidden} ${c.hidden>1?'players':'player'} not shown: goalkeepers are only compared with goalkeepers.</div>`:'';
+  const left=slot==='a'?'left:12px':'right:12px';
+  return `<div class="pop" role="listbox" aria-label="Player suggestions" style="top:58px;${left}">${tabs}<div id="plist">${body}</div>${hid}<div class="ft"><span><kbd>↑</kbd><kbd>↓</kbd>move</span><span><kbd>Enter</kbd>pick</span><span><kbd>Esc</kbd>close</span></div></div>`;
 }
-function wirePicker(){
-  const inp=document.getElementById('pq');if(!inp)return;
-  const refresh=()=>{const keep=inp.selectionStart;const w=document.querySelector('.scrim');w.outerHTML=pickerHTML();const n=document.getElementById('pq');n.focus();n.setSelectionRange(keep,keep);wirePicker()};
-  inp.oninput=()=>{S.q=inp.value;S.pickSel=0;refresh()};
-  inp.onkeydown=e=>{const n=pickList().flat.length;if(e.key==='ArrowDown'){S.pickSel=Math.min(n-1,S.pickSel+1);refresh();e.preventDefault()}else if(e.key==='ArrowUp'){S.pickSel=Math.max(0,S.pickSel-1);refresh();e.preventDefault()}
-    else if(e.key==='Enter'){commit();e.preventDefault()}else if(e.key==='Escape'){S.pick=false;render()}};
-  inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+const CHEV='<svg viewBox="0 0 12 12"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>',XI='<svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>';
+function selector(slot){
+  const p=slot==='a'?A():B(),open=S.open===slot,L=slot.toUpperCase(),mkr=slot==='a'?mk('a'):mk('b',1),col=slot==='a'?'ca':'cb';
+  const val=open?S.q:(p?p.name:'');
+  return `<div class="sel${open?' open':''}" data-act="focus" data-slot="${slot}" role="combobox" aria-expanded="${open}" aria-label="Player ${L}"><span class="tag ${col}">${mkr}${L}</span>${p&&!open?`<span class="th">${avatar(p.id)}</span>`:''}
+    <input id="in_${slot}" type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="${open&&p?p.name:'Search any player in the save…'}" autocomplete="off" spellcheck="false">${p&&!open?badge(p.pos):''}
+    ${p?`<button class="ib" data-act="clear" data-slot="${slot}" title="Clear player ${L}" aria-label="Clear player ${L}">${XI}</button>`:''}<button class="ib" data-act="chev" data-slot="${slot}" title="Show lists" aria-label="Show lists">${CHEV}</button></div>`;
 }
-function commit(){const p=pickList().flat[S.pickSel];if(!p)return;S.ids=[A().id,p.id];S.swap=false;S.pair='custom';S.pick=false;render()}
+const SWAPI='<svg viewBox="0 0 18 18"><path d="M3 6.5h11M11 3.5l3 3-3 3M15 11.5H4M7 8.5l-3 3 3 3"/></svg>';
+function selectorBar(){
+  const both=A()&&B();
+  return `<div class="pbar">${selector('a')}<button class="sw" data-act="swap" title="Swap sides: A becomes B and B becomes A" aria-label="Swap sides"${both?'':' disabled'}>${SWAPI}</button>${selector('b')}
+    ${both?`<button class="btn b2 sh" data-act="short" title="Add both players to the Player Shortlist">Add both to Shortlist</button>`:''}</div>`;
+}
+function emptyState(){
+  const slot=!A()?'a':'b',c=cands(slot,'recent',''),one=A()||B(),ghost='<svg width="180" height="168" viewBox="0 0 180 168" aria-hidden="true"><g fill="none" stroke="rgba(255,255,255,.10)"><polygon points="90,14 154,51 154,117 90,154 26,117 26,51"/><polygon points="90,49 122,67.5 122,100.5 90,119 58,100.5 58,67.5"/></g><polygon points="90,30 138,60 140,108 90,138 40,104 44,62" fill="rgba(82,176,255,.10)" stroke="rgba(82,176,255,.35)" stroke-width="1.5"/><polygon points="90,24 148,56 132,112 90,144 48,112 36,60" fill="rgba(215,124,255,.08)" stroke="rgba(215,124,255,.35)" stroke-width="1.5" stroke-dasharray="5 3"/></svg>';
+  const half=Math.ceil(c.rows.length/2);
+  return `<div class="empty-st">${ghost}<h3>${one?'Now pick the second player':'Pick two players to compare'}</h3><p>${one?'Search any player in the save above. Goalkeepers can only be compared with goalkeepers.':'Search any player in the save above, or start from a player you looked at recently.'}</p>
+    <div class="rl"><div class="lbl">Recently viewed</div><div class="cols"><div>${c.rows.slice(0,half).map((p,i)=>optHTML(p,-1,slot,'')).join('')}</div><div>${c.rows.slice(half).map(p=>optHTML(p,-1,slot,'')).join('')}</div></div></div></div>`;
+}
+function pageBody(){
+  const a=A(),b=B();
+  return `<div class="pgi">${selectorBar()}${a||b?header():''}${a&&b?overlayView():emptyState()}${S.open?popupHTML(S.open):''}</div>`;
+}
+/* choose a player for a slot; picking a keeper next to an outfield player (or the reverse) clears the other side */
+function choose(slot,id){
+  touch();const k=slot==='a'?0:1,o=1-k;S.ids[k]=id;
+  if(S.ids[o]&&isGK(PL[S.ids[o]])!==isGK(PL[id])){toast('Player '+(o?'B':'A')+' cleared: goalkeepers are only compared with goalkeepers (mockup).');S.ids[o]=null}
+  S.open=null;S.q='';S.sel=0;
+}
+
+/* ---- sidebar + hero (context only) ---- */
+const GI='<span class="gi"></span>';
+const CMPI='<svg viewBox="0 0 20 20" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3 4 5 2 8.2l2.2 1.4V17h11.6V9.6L18 8.2 16 5l-3-2c-.4 1.3-1.5 2.2-3 2.2S7.4 4.3 7 3z" stroke="#E6EAF0" stroke-width="1.1" opacity=".85"/><g stroke="#735CE4" stroke-width="1.6"><path d="M7.5 11.5h6.5M12 9.5l2 2-2 2"/><path d="M13.5 15.5H7M8.5 13.5l-2 2 2 2"/></g></svg>';
+const sidebar=()=>`<div class="sb"><div class="br"><div class="r1"><span class="logo">FMBR24</span><span class="wm">FMBR24</span></div><div class="st"><i></i>Save loaded · 8 Aug 2026</div></div><hr>
+  <div class="sec">MAIN</div><div class="nvb">${GI}Save Info</div><div class="nvb">${GI}Club</div><div class="nvb">${GI}Squads</div><div class="nvb">${GI}Club Staff</div><div class="nvb">${GI}Player Shortlist</div><div class="nvb">${GI}Staff Shortlist</div>
+  <div class="nvb on" title="New: last item of MAIN">${CMPI}Compare Players</div><hr style="margin-top:6px">
+  <div class="sec">SCOUTING</div><div class="nvb">${GI}Players</div><div class="nvb">${GI}Staff</div>
+  <div class="sec">PLAYER REPORTS</div><div class="nvb">${GI}Best Prospects</div><div class="nvb">${GI}Wonderkids</div><div class="nvb">${GI}Best in Position</div><div class="nvb">${GI}Best by Role</div><hr style="margin-top:6px">
+  <div class="sec">STAFF REPORTS</div><div class="nvb off">${GI}Coming Soon</div></div>`;
+const hero=()=>{const a=A(),b=B();return `<div class="hero"><div class="navrow"><span class="nb">◀</span><span class="nb">▶</span><span class="sbx">Search clubs, players or staff…</span><span class="hb">Save Changes</span><span class="hb">Load</span><span class="hb">Reload</span></div>
+  <div class="tb"><span class="ic">${CMPI}</span><div><h2>Compare Players</h2><p>${a&&b?`${a.name} vs ${b.name}`:'Pick two players'}</p></div></div></div>`};
 
 /* =====================================================================================================================
-   7. PAGE WIRING (review bar, events) - not part of the window
+   6. PAGE WIRING (review bar, events) - not part of the window
    ===================================================================================================================== */
 let toastT=0;
-function toast(m){const w=document.querySelector('.win');if(!w)return;let t=w.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';w.appendChild(t)}t.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>t.remove(),2200)}
+function toast(m){const w=document.querySelector('.win');if(!w)return;let t=w.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';w.appendChild(t)}t.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>t.remove(),2800)}
 function seg(id,items,cur,pick){const e=document.getElementById(id);e.innerHTML='';items.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.setAttribute('aria-pressed',cur===k);if(cur===k)b.className='on';b.onclick=()=>{pick(k);render()};e.appendChild(b)})}
 function render(){
-  _sid=0;
-  document.getElementById('frame').innerHTML=`<div class="os"><span>Compare players: ${A().name} and ${B().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}${overlayView()}</div>${actionStrip()}${S.pick?pickerHTML():''}</div>`;
-  seg('pSeg',Object.entries(PAIR_NAMES),S.pair,k=>{S.pair=k;S.ids=null;S.swap=false});
+  _sid=0;const keepTop=(document.querySelector('.pg')||{}).scrollTop||0;
+  const a=A(),b=B();
+  document.getElementById('frame').innerHTML=`<div class="os"><span>FM Backroom 24</span><i></i><i></i><i></i></div><div class="win">${sidebar()}<div class="mc">${hero()}<div class="pg">${pageBody()}</div><div class="status">${a&&b?'Comparing '+a.name+' and '+b.name:'Ready'}</div></div></div>`;
+  const pg=document.querySelector('.pg');if(pg)pg.scrollTop=keepTop;
+  if(getq('h'))document.querySelector('.win').style.height=getq('h')+'px';   // review aid: ?h=1400 shows the whole page without scrolling
+  seg('pSeg',Object.entries(PAIR_NAMES),S.ids?'':S.pair,k=>{S.pair=k;S.ids=null;S.swap=S.empty=S.one=false});
   const tg=document.getElementById('tgs');tg.innerHTML='';
-  [['nums','Ability as numbers'],['pot','Full Potential'],['pick','Picker open'],['swap','Swapped'],['noface','No face pictures'],['min','Min size 1062 x 640']].forEach(([k,l])=>{const b=document.createElement('button');b.className='tg'+(S[k]?' on':'');b.textContent=l;b.setAttribute('aria-pressed',!!S[k]);b.onclick=()=>{S[k]=!S[k];if(k==='min')document.documentElement.classList.toggle('min',S.min);render()};tg.appendChild(b)});
-  const q=new URLSearchParams();if(S.pair!=='out'&&S.pair!=='custom')q.set('pair',S.pair);['nums','pot','pick','swap','noface','min'].forEach(k=>{if(S[k])q.set(k,'')});if(S.pick&&S.q)q.set('q',S.q);if(document.documentElement.classList.contains('bare'))q.set('bare','1');
+  [['nums','Ability as numbers'],['pot','Full Potential'],['swap','Swapped'],['noface','No face pictures'],['min','Min size 1000 x 660']].forEach(([k,l])=>{const bt=document.createElement('button');bt.className='tg'+(S[k]?' on':'');bt.textContent=l;bt.setAttribute('aria-pressed',!!S[k]);bt.onclick=()=>{S[k]=!S[k];if(k==='min')document.documentElement.classList.toggle('min',S.min);render()};tg.appendChild(bt)});
+  [['empty','No player (empty state)'],['one','Only A picked']].forEach(([k,l])=>{const bt=document.createElement('button');bt.className='tg'+((k==='empty'?!a&&!b:a&&!b)?' on':'');bt.textContent=l;bt.onclick=()=>{S.ids=null;S.empty=k==='empty';S.one=k==='one';S.swap=false;S.open=null;render()};tg.appendChild(bt)});
+  [['a','Selector A open'],['b','Selector B open']].forEach(([k,l])=>{const bt=document.createElement('button');bt.className='tg'+(S.open===k?' on':'');bt.textContent=l;bt.onclick=()=>{S.open=S.open===k?null:k;S.q='';S.sel=0;render()};tg.appendChild(bt)});
+  const ax=document.getElementById('axSeg');ax.innerHTML='';
+  [['overview','Radar: Overview (6)'],['detail','Radar: Detailed (12)']].forEach(([k,l])=>{const bt=document.createElement('button');bt.textContent=l;bt.setAttribute('aria-pressed',S.axes===k);if(S.axes===k)bt.className='on';bt.onclick=()=>{S.axes=k;render()};ax.appendChild(bt)});
+  const q=new URLSearchParams();if(!S.ids&&S.pair!=='out')q.set('pair',S.pair);if(S.axes==='detail')q.set('axes','detail');['nums','pot','swap','noface','min'].forEach(k=>{if(S[k])q.set(k,'')});
+  if(!S.ids){if(S.empty)q.set('empty','');if(S.one)q.set('one','')}
+  if(S.open){q.set('open',S.open);if(S.q)q.set('q',S.q);if(S.src!=='recent')q.set('src',S.src)}
+  if(document.documentElement.classList.contains('bare'))q.set('bare','1');
   history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString().replace(/=(&|$)/g,'$1'):''));
-  document.title='Compare players';
-  if(S.pick)wirePicker();
+  document.title='Compare Players';
+  if(S.open)wireInput();
+}
+function wireInput(){
+  const inp=document.getElementById('in_'+S.open);if(!inp)return;
+  const keep=S.q.length,refresh=()=>{const pos=inp.selectionStart;render();const n=document.getElementById('in_'+S.open);if(n){n.focus();n.setSelectionRange(pos,pos)}};
+  inp.oninput=()=>{S.q=inp.value;S.sel=0;refresh()};
+  inp.onkeydown=e=>{const n=cands(S.open,S.src,S.q).rows.length;
+    if(e.key==='ArrowDown'){S.sel=Math.min(n-1,S.sel+1);refresh();e.preventDefault()}else if(e.key==='ArrowUp'){S.sel=Math.max(0,S.sel-1);refresh();e.preventDefault()}
+    else if(e.key==='Enter'){const p=cands(S.open,S.src,S.q).rows[S.sel];if(p){choose(S.open,p.id);render()}e.preventDefault()}else if(e.key==='Escape'){S.open=null;S.q='';render()}};
+  inp.focus();inp.setSelectionRange(keep,keep);
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act],[data-pid]');if(!t||t.disabled)return;
-  if(t.dataset.pid){S.pickSel=+t.dataset.i;commit();return}
-  const a=t.dataset.act,v=t.dataset.v;
+  if(t.dataset.pid){const slot=t.dataset.slot||(S.open)||(!A()?'a':'b');choose(slot,t.dataset.pid);render();return}
+  const a=t.dataset.act,v=t.dataset.v,slot=t.dataset.slot;
   if(a==='pot')S.pot=v==='pot';
-  else if(a==='swap'){S.swap=!S.swap}else if(a==='pick'){S.pick=true;S.pickSel=0}else if(a==='cancel'){S.pick=false}else if(a==='go'){commit();return}
-  else if(a==='sametype'){S.sameType=!S.sameType;S.pickSel=0}
+  else if(a==='axes')S.axes=v;
+  else if(a==='src'){S.src=v;S.sel=0}
+  else if(a==='swap'){touch();S.ids.reverse()}
+  else if(a==='focus'){if(S.open===slot)return;S.open=slot;S.q='';S.sel=0}
+  else if(a==='chev'){e.stopPropagation();if(S.open===slot){S.open=null}else{S.open=slot;S.q='';S.sel=0}}
+  else if(a==='clear'){e.stopPropagation();touch();S.ids[slot==='a'?0:1]=null;S.open=slot;S.q='';S.sel=0}
   else if(a==='short'){S.short=!S.short;toast(S.short?'Both players added to the Player Shortlist (mockup).':'Removed from the Player Shortlist (mockup).')}
-  else if(a==='close'){toast('Close: the window closes (mockup).');return}else return;
+  else return;
   render();
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.pick&&document.activeElement.id!=='pq'){S.pick=false;render()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.open&&!document.activeElement.id.startsWith('in_')){S.open=null;render()}});
+/* click outside the popup / selector closes it (Qt.Popup behaviour) */
+document.addEventListener('mousedown',e=>{if(S.open&&!e.target.closest('.pop,.sel')){S.open=null;S.q='';render()}});
 render();
+
+/* ?selftest: every radar axis set must be a partition (each attribute exactly once) of its universe */
+if(has('selftest')){
+  const U=(p)=>{const r=[];['tech','ment','phys','hid','gk'].forEach(k=>PL.mferrer.g[k].forEach(a=>r.push(a[0])));return r};
+  const all=U(),out=all.filter(n=>!PL.mferrer.g.gk.some(a=>a[0]===n)),gk=all;
+  const chk=(name,set,uni,exact)=>{const seen={},dup=[];set.forEach(([n,l])=>l.forEach(a=>{seen[a]=(seen[a]||0)+1;if(seen[a]>1)dup.push(a)}));const miss=uni.filter(a=>!seen[a]),extra=Object.keys(seen).filter(a=>!uni.includes(a));
+    return `${name}: axes ${set.length}, attrs ${Object.keys(seen).length}, dup [${dup}], missing [${exact?miss:'n/a'}], outside [${extra}]`};
+  document.title=[chk('OUT6',RADAR_OUT,out,1),chk('OUT12',RADAR_OUT12,out,1),chk('GK6',RADAR_GK,gk,0),chk('GK11',RADAR_GK11,gk,0)].join(' | ');
+}
 
 </script>
 </body>

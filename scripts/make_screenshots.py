@@ -122,6 +122,17 @@ def settings(c):
     return c['w']
 
 
+def compare(c):
+    """Compare Players: the two best outfield players of the manager's club, Detailed radar."""
+    from fm_editor.player_search import is_keeper
+    w = c['w']
+    a, b = [p for p in c['squad'] if not is_keeper(p)][:2]
+    w._open_compare(a, b)
+    w._compare_page.set_mode('detailed')
+    pump()
+    return w
+
+
 def _player(c, tab):
     w = c['w']
     p = c['squad'][0]
@@ -148,6 +159,7 @@ SHOTS = {
     'player-contract': pw('contract'),
     'player-positions': pw('positions'),
     'player-role-rating': pw('role'),
+    'compare': compare,
     'scouting-players': players,
     'player-report': report,
     'settings': settings,

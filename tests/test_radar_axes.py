@@ -87,3 +87,22 @@ assert QToolTip.text().startswith('Attacking = mean of 7:'), QToolTip.text()
 from PyQt6.QtWidgets import QWidget  # noqa: E402
 assert 'own' in w.findChildren(QWidget, 'pwHead')[-1].toolTip() or any('own' in h.toolTip() for h in w.findChildren(QWidget, 'pwHead'))
 print('radar tooltips OK')
+
+# -- Compare page 'Detailed' axes (fm_editor/radar_axes.py) -------------------------------------------------------
+from fm_editor.radar_axes import DETAILED_GK, DETAILED_OUT, OVERVIEW_GK, OVERVIEW_OUT, axis_table, axis_values  # noqa: E402
+
+assert OVERVIEW_OUT is RADAR_OUT and OVERVIEW_GK is RADAR_GK
+d_out = names(DETAILED_OUT)
+assert len(DETAILED_OUT) == 12 and len(d_out) == len(set(d_out)) == 41
+assert set(d_out) == {n for n, _ in TECH + MENT + PHYS + HIDD}, 'detailed outfield: every attribute exactly once'
+d_gk = names(DETAILED_GK)
+assert len(DETAILED_GK) == 11 and len(d_gk) == len(set(d_gk)), 'detailed GK: 11 axes, no attribute twice'
+assert {n for n, _ in GKA} <= set(d_gk) and 'Finishing' not in d_gk
+for tbl in (DETAILED_OUT, DETAILED_GK):
+    assert all(a in IDX for a in names(tbl)), 'unknown attribute name'
+    assert {a for _n, _t, inv in tbl for a in inv} == {a for a in names(tbl) if a in LOWER}, 'inverted set == LOWER_BETTER'
+assert axis_table(False, 'detailed') is DETAILED_OUT and axis_table(True, 'overview') is OVERVIEW_GK
+dv = {n: m for n, m, _t in axis_values(v, False, 'detailed')}
+assert abs(dv['Shooting'] - (20 + 14 + 5) / 3) < 1e-9 and abs(dv['Reliability'] - ax['Reliability']) < 1e-9
+assert len(dv) == 12 and len(axis_values(v, True, 'detailed')) == 11
+print('detailed radar axes OK')

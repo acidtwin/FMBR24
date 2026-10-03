@@ -23,6 +23,10 @@ from fm_editor.abilitystars import ability_stars, dev_stars
 from fm_editor.nations import nation_name as _nation_name_long, nation_flag as _nation_flag
 from fm_editor.cache import clear_cache
 from gui.workers import ParseWorker, SaveWorker
+from fm_editor.player_search import rank_hits
+from fm_editor.recents import RecentPlayers
+from gui.compare_page import ComparePage
+from gui.player_picker import PickerContext
 from gui.search_suggest import _SearchSuggest, _SuggestDelegate, _SG_MAX  # noqa: F401 (re-exported)
 from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
@@ -112,6 +116,11 @@ _SVG_SHORTLIST = (
     ' stroke="{c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M8 2l1.6 3.2 3.5.5-2.5 2.5.6 3.5L8 10 4.8 11.7l.6-3.5L3 5.7l3.5-.5z"/>'
     '</svg>'
+)
+_SVG_COMPARE = (   # fallback nav icon while resources/icons/pages/compare.png is missing: two overlapped circles
+    '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"'
+    ' stroke="{c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+    '<circle cx="5.8" cy="8" r="4"/><circle cx="10.2" cy="8" r="4"/></svg>'
 )
 _SVG_REPORT = (
     '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"'
@@ -1798,6 +1807,7 @@ class _HeaderHeroWidget(QWidget):
         'players':    'players.webp',
         'club_staff': 'club_staff.webp',
         'settings':   'settings.webp',
+        'compare':    'players.webp',
         'save_info':  'save_info.webp',
         'prospects':  'prospects.webp',
         'wonderkids': 'wonderkids.webp',
@@ -2043,6 +2053,7 @@ class MainWindow(QMainWindow):
         self._pending = []  # human-readable list of unsaved edits (for the Save / discard prompts)
         self._queue = {}  # queued homegrown changes: (person id, 'hgp'|'hgc') -> person dict; NEVER touches game_db bytes
         self._pw_open = None  # the open player window (told when the queue changes)
+        self._recents = RecentPlayers()  # last 8 player windows opened, persisted per save (fm_editor/recents.py)
         self._last_applied = (0, 0)  # (HGP, HGC) edits the last Save Changes actually wrote
         self._after_save = None  # callback run once Save Changes succeeds (load-another / close)
         self._after_reload_status = None  # one-shot status text shown once the post-save reload finishes
@@ -2237,6 +2248,11 @@ class MainWindow(QMainWindow):
         self._settings_page.saved.connect(self._on_settings_saved)
         self._settings_page.message.connect(lambda m: self._status.showMessage(m, 4000))
         self._main_stack.addWidget(self._settings_page)           # 10
+        self._compare_page = ComparePage()
+        self._compare_page.shortlistBoth.connect(self._compare_shortlist_both)
+        self._compare_page.message.connect(lambda m: self._status.showMessage(m, 4000))
+        self._compare_page.playersChanged.connect(self._compare_changed)
+        self._main_stack.addWidget(self._compare_page)            # 11
         right_vbox.addWidget(self._main_stack)
         self._busy_veil = _BusyVeil(self._main_stack)
 
@@ -2748,6 +2764,8 @@ class MainWindow(QMainWindow):
             self._set_header('FM Backroom 24', 'Load a save to begin')
         elif key == 'settings':
             self._set_header('Settings', 'Preferences & paths', icon='settings')
+        elif key == 'compare':
+            self._set_header('Compare Players', self._compare_page.subtitle(), icon='compare')
 
     def _make_sidebar(self):
         sidebar = _SidebarFrame()
@@ -2817,7 +2835,7 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self._make_section_label('MAIN'))
         self._nav_btns = {}
         _nav_icon_names = {'save_info': 'save_info', 'club': 'club', 'squad': 'squads', 'club_staff': 'club_staff',
-                           'shortlist': 'player_shortlist', 'staff_shortlist': 'staff_shortlist'}
+                           'shortlist': 'player_shortlist', 'staff_shortlist': 'staff_shortlist', 'compare': 'compare'}
         for key, svg, label in [
             ('save_info',  _SVG_INFO,      'Save Info'),
             ('club',       _SVG_CLUB,      'Club'),
@@ -2825,6 +2843,7 @@ class MainWindow(QMainWindow):
             ('club_staff', _SVG_STAFF,     'Club Staff'),
             ('shortlist',  _SVG_SHORTLIST, 'Player Shortlist'),
             ('staff_shortlist', _SVG_SHORTLIST, 'Staff Shortlist'),
+            ('compare',    _SVG_COMPARE,   'Compare Players'),
         ]:
             if key == 'squad':
                 btn = self._make_nav_btn(svg, label, self._nav_to_squad_view, _nav_icon_names[key])
@@ -5239,7 +5258,7 @@ class MainWindow(QMainWindow):
     # -- Navigation -----------------------------------------------------------
 
     _VIEW_INDEX = {'club': 0, 'squad': 1, 'staff': 2, 'shortlist': 3, 'reports': 4, 'players': 5, 'club_staff': 6, 'welcome': 7,
-                   'save_info': 8, 'staff_shortlist': 9, 'settings': 10}
+                   'save_info': 8, 'staff_shortlist': 9, 'settings': 10, 'compare': 11}
 
     def _nav_to(self, key: str):
         if key == 'club' and not self._current_club:
@@ -5254,7 +5273,7 @@ class MainWindow(QMainWindow):
             self._apply_staff_shortlist_filter()
         if key == 'settings':
             self._settings_page.on_shown()
-        if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info', 'settings'):
+        if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info', 'settings', 'compare'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
         # Push to history for non-club views (club is pushed by _show_squad)
@@ -5445,6 +5464,7 @@ class MainWindow(QMainWindow):
         self._nav_btns['club_staff'].setEnabled(idle and has_data and self._current_club is not None)
         self._nav_btns['shortlist'].setEnabled(idle)
         self._nav_btns['staff_shortlist'].setEnabled(idle)
+        self._nav_btns['compare'].setEnabled(idle and has_data)
         self._scouting_staff_nav_btn.setEnabled(idle and has_data)
         self._table.setEnabled(has_data)
         self._update_patch_btns()
@@ -5650,6 +5670,8 @@ class MainWindow(QMainWindow):
         _faces_service().start(self._save_path)  # background facepack / logo index (fm_editor/faces.py)
         self._save_data['disk_sig'] = result.get('disk_sig')  # taken by the ParseWorker of THIS parse
         self._sg_idx = None  # search index is rebuilt lazily
+        self._recents.set_save(self._save_path)
+        self._compare_page.set_context(self._picker_context())
         # fresh lists: reset filters/search subset without re-running them
         self._players_subset = None
         self._clear_players_filter(silent=True)
@@ -5674,6 +5696,7 @@ class MainWindow(QMainWindow):
         self._club_top_frame.setVisible(False)
         self._update_ui_state()
         snap, self._ui_snap = self._ui_snap, None
+        self._restore_compare(snap)
         if not self._apply_ui_state(snap):  # reload of the same save: back where the user was
             self._land_after_load()  # else Settings > Landing page (default Save Info)
         msg, self._after_reload_status = self._after_reload_status, None
@@ -5764,15 +5787,11 @@ class MainWindow(QMainWindow):
             self._sg_refresh()
 
     def _sg_refresh(self):
-        import heapq
         q = self._search_box.text().strip().lower()
         if len(q) < 3 or not self._save_data:
             self._sg_popup.close_popup()
             return
-        sp = ' ' + q
-        hits = [((0 if e[0].startswith(q) else 1 if sp in e[0] else 2), e[2], e[1], e[3])
-                for e in self._sg_index() if q in e[0]]
-        top = heapq.nsmallest(_SG_MAX, hits, key=lambda h: h[:3])  # rank, type, name
+        top = rank_hits(self._sg_index(), q, _SG_MAX)  # rank, type, name (fm_editor/player_search.py, shared with the pickers)
         squads = self._save_data.get('squads', {})
         club_name = {c['id']: c['name'] for c in self._save_data.get('clubs', [])} \
             if any(h[1] for h in top) else {}
@@ -6039,9 +6058,10 @@ class MainWindow(QMainWindow):
         if club_id is not None:
             club_entity_id = club_id + 1  # club entity id = club id + 1 (memory fm24-binary-format)
         why = 'Open from Squads to patch' if club_id is None else 'Not your club'
+        self._recents.push(pid)   # every player window goes through here: feeds 'Recent' in the Compare pickers
         dlg = PlayerWindow(person, sd, club_entity_id, self,
                            shortlisted=any(p.get('id') == pid for p in self._shortlist),
-                           can_patch=can_patch and 'b' in sd, queue=self, patch_tip=why)
+                           can_patch=can_patch and 'b' in sd, queue=self, patch_tip=why, picker=self._picker_context())
         self._pw_open = dlg
         try:
             dlg.exec()
@@ -6049,6 +6069,36 @@ class MainWindow(QMainWindow):
             self._pw_open = None
         if dlg._shortlist_added:
             self._add_to_shortlist(person)
+        if dlg._compare_with is not None:
+            self._open_compare(person, dlg._compare_with)
+
+    # -- Compare Players page --------------------------------------------------
+    def _picker_context(self):
+        """Search index, recents, human squad and Player Shortlist for the Compare pickers (gui/player_picker.py)."""
+        return PickerContext(self._save_data, self._sg_index, self._recents, lambda: self._shortlist)
+
+    def _open_compare(self, a, b=None):
+        """Show the Compare page with `a` as player A and `b` (or nobody) as player B."""
+        self._compare_page.set_players(a, b)
+        self._nav_to('compare')
+
+    def _compare_changed(self):
+        if getattr(self, '_hdr_key', None) == 'compare':
+            self._update_header_for_view('compare')
+
+    def _compare_shortlist_both(self, a, b):
+        for p in (a, b):
+            self._add_to_shortlist(p)
+        self._status.showMessage(f"Added {a['name']} and {b['name']} to the Player Shortlist.", 4000)
+
+    def _restore_compare(self, snap):
+        """After a reload of the same save: both Compare players again (resolved by id against the re-parsed people)."""
+        if not snap or snap.get('path') != self._save_path or not self._save_data:
+            return
+        by_id = {p.get('id'): p for p in self._save_data.get('people', [])}
+        ids = snap.get('compare') or (None, None)
+        self._compare_page.set_mode(snap.get('axes') or 'overview')
+        self._compare_page.set_players(by_id.get(ids[0]), by_id.get(ids[1]))
 
     def _open_player_detail_by_pid(self, pid, person=None):
         """Open the player window for any player by ID (reports/players views)."""
@@ -6107,6 +6157,8 @@ class MainWindow(QMainWindow):
         if stars != StarsDelegate.stars_on:   # Ability display changed: new CA/PA column width + repaint, no reload
             StarsDelegate.stars_on = stars
             self._refresh_ability_cols()
+            if hasattr(self, '_compare_page'):
+                self._compare_page.refresh()
         show = bool(vals.get('show_pending', True))
         if show != _SHOW_PENDING:
             _SHOW_PENDING = show
@@ -6195,7 +6247,8 @@ class MainWindow(QMainWindow):
                 'subset': None if self._players_subset is None else [p.get('id') for p in self._players_subset],
                 'filters': {},
                 'history': [(i, c['club'].get('id') if 'club' in c else None) for i, c in self._nav_history],
-                'pos': self._nav_pos}
+                'pos': self._nav_pos,
+                'compare': tuple((p or {}).get('id') for p in self._compare_page.players()), 'axes': self._compare_page.mode()}
         for v, names in self._SNAP_FILTERS.items():
             snap['filters'][v] = {n: (w.text() if isinstance(w, QLineEdit) else w.currentText()
                                       if isinstance(w, QComboBox) else w.value())

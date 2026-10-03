@@ -36,6 +36,21 @@ HOW TO USE
   e.g.  #profile+pot  #positions+gk   #positions+low   #profile+scout   #positions+future   #contract+data+hgp
   The review bar above the window (sample / state toggles) is NOT part of the window.
 
+COMPARE TO...  (action strip, flag +cmp or ?cmp: the popup open; ?cq=text types a query, ?csrc=recent|squad|short picks the list tab)
+  Action strip ORDER (all right-aligned, unchanged position of the old two): [Compare to...] [Add to Shortlist] [Close]  - Close is ALWAYS last.  'Compare to...' = b2 (secondary) 132 min wide, label + a 11 px chevron-up (the popup opens UPWARDS: the strip is at
+  the window's bottom).  While the popup is open the button shows the .on state (accent border, selection_bg).  Qt: QPushButton + a Qt.Popup QFrame#comparePopup placed with mapToGlobal(button top-left) - height, right edge aligned to the strip's right padding.
+  POPUP  (420 wide, r4, 1 px #454A58, bottom 58 px above the window bottom = 6 px above the strip; QSS has no shadow: 1 px #14151A frame):
+    1. context line 11 px #8B96A8 'Compare <current player> with...' (name 700 white)
+    2. search box (h 36, margin 8 12, 1 px #735CE4 focus ring, magnifier 15 px): placeholder 'Search any player in the save...'.  Focused on open.  >= 2 characters = SEARCH the whole save (the main search's index and
+       ranking: name starts with the query, then a word starts with it, then substring; players only, max 8 rows); fewer = the LISTS.
+    3. tabs (.sg segmented, 24 high): Recent | Squad | Shortlist, default Recent.  Recent = the last 8 players whose player window the user opened (most recent first, the current player excluded, no duplicates);
+       Squad = the human club's squad; Shortlist = the Player Shortlist.  (FM24 itself offers squad and recently viewed profiles, see docs/plans/compare-players.md.)
+    4. rows h 44 (3 px left edge, selected = accent edge + selection_bg): face 24 x 30 | name 13/700 over [position badge, flag, club badge 16, club, age] 11 #8B96A8 | CA stars 11 px (numbers mode: number 14/700).
+       The first row is preselected: Enter picks it (= the most recent player), Up / Down move, a click picks at once, Esc closes (and returns focus to the button), Tab leaves the popup.
+    5. keepers are only compared with keepers: the other kind is not listed, a 11 px footnote says how many were hidden; footer hint row (arrows, Enter, Esc).
+  Picking a player closes the player window and opens the Compare page with this player as A and the picked one as B (modal window: `accept()` with `_compare_with = pid`, as `_shortlist_added`; the main window navigates after exec()).
+  Review bar: toggle 'Compare popup'.
+
 WHERE TO EDIT (every tab is ONE function in section 4; the header is the same on every tab - there are NO per-tab header slots any more)
   tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
   Role Rating = section 4.7 (POS_ROLES table, roleList, rolePitch) + generated data section 1b (ROLE_RATINGS) + the ROLE RATING TAB block below.
@@ -505,6 +520,28 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 .rlg i.ring{width:12px;height:12px;border-radius:6px;border:2px solid #fff;background:transparent}
 .rdg{outline:none}
 .rtip{position:absolute;display:none;white-space:pre;text-align:left;line-height:15px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:4px 8px;font-size:11px;color:#fff;z-index:20;pointer-events:none}
+/* ---- 'Compare to...' popup (action strip button).  Flag +cmp (or ?cmp).  Spec in the header comment, section COMPARE TO. ---- */
+.strip .cmpbtn{min-width:132px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.strip .cmpbtn svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cpop{position:absolute;right:12px;bottom:58px;z-index:60;width:420px;background:var(--surface);border:1px solid var(--border2);border-radius:4px;box-shadow:0 -10px 32px rgba(0,0,0,.5);overflow:hidden}
+.cpop .ct{padding:10px 12px 0;font-size:11px;color:var(--tx2)}.cpop .ct b{color:#fff;font-weight:700}
+.cpop .cs{margin:8px 12px;display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--acc2);border-radius:3px;background:var(--bg);padding:0 10px}
+.cpop .cs svg{width:15px;height:15px;stroke:var(--tx2);fill:none;stroke-width:1.6;stroke-linecap:round;flex:none}
+.cpop .cs input{flex:1;min-width:0;background:none;border:none;outline:none;font:inherit;font-size:13px;color:#fff}
+.cpop .cs input::placeholder{color:var(--tx2)}
+.cpop .cs input::selection{background:var(--acc);color:#fff}
+.cpop .ctabs{display:flex;align-items:center;gap:8px;padding:0 12px 6px}
+.cpop .clbl{padding:2px 12px 4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2)}
+.cpop .copt{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;border-left:3px solid transparent;cursor:pointer;width:100%;text-align:left;overflow:hidden}
+.cpop .copt:hover,.cpop .copt.on{background:var(--sel);border-left-color:var(--acc)}
+.cpop .copt .av{width:24px;height:30px;border-radius:2px;background:var(--elev);overflow:hidden;flex:none}.cpop .copt .av svg{width:100%;height:100%}
+.cpop .copt .tx{flex:1;min-width:0}.cpop .copt .tx b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cpop .copt .tx b mark{background:none;color:var(--acc2);font-weight:700;text-decoration:underline}
+.cpop .copt .tx span{display:flex;align-items:center;gap:5px;color:var(--tx2);font-size:11px;height:16px;white-space:nowrap;overflow:hidden}
+.cpop .copt .bdg{width:16px;height:16px;flex:none}
+.cpop .cnone,.cpop .chid{padding:14px 12px;color:var(--tx2)}.cpop .chid{padding:6px 12px;font-size:11px;border-top:1px solid var(--border)}
+.cpop .cft{padding:6px 12px;border-top:1px solid var(--border);color:var(--tx2);font-size:11px;display:flex;gap:12px}
+.cpop .cft kbd{font:700 10px "Noto Sans",sans-serif;border:1px solid var(--border2);border-radius:2px;padding:0 4px;color:#fff;background:var(--bg);margin-right:3px}
+.ctoast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:var(--elev);border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:12px;z-index:70;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -682,7 +719,7 @@ const ROLE_RATINGS={
 /* =====================================================================================================================
    2. STATE + HELPERS
    ===================================================================================================================== */
-const S={nobadge:false,face:false,nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
+const S={cmp:false,cq:'',csrc:'recent',csel:0,nobadge:false,face:false,nums:false,tab:'profile',smp:'out',rp:null,weq:false,wpos:false,wdir:false,pot:false,future:false,scout:false,short:false,inj:false,hgp:false,hgc:false,qhgp:false,qhgc:false,qx:0,unk:false,nopend:false,data:false,tips:false,other:false,nov:false,vs:null};
 const D=()=>SAMPLES[S.smp];
 if(new URLSearchParams(location.search).has('full'))document.documentElement.classList.add('full');
 if(new URLSearchParams(location.search).has('bare'))document.documentElement.classList.add('bare');
@@ -825,6 +862,7 @@ function tabStrip(){
 function actionStrip(){
   /* No Make buttons: the header HGP / HGC pills queue those changes. Close is ALWAYS last (far right), also in the 'other' state. */
   return `<div class="strip"><span class="sp"></span>
+    <button class="btn b2 cmpbtn${S.cmp?' on':''}" data-act="cmp" aria-haspopup="listbox" aria-expanded="${!!S.cmp}" title="Compare ${D().name} with another player">Compare to…<svg viewBox="0 0 12 12"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg></button>
     <button class="btn ${S.short?'b2 on':'b1'}" data-act="short" style="min-width:164px">${S.short?'&#10003; On Player Shortlist':'Add to Shortlist'}</button><button class="btn b2" data-act="close">Close</button></div>`;
 }
 
@@ -1164,13 +1202,13 @@ const TABS=[
 /* =====================================================================================================================
    5. PAGE WIRING (review bar, events, deep links) - not part of the window
    ===================================================================================================================== */
-const FLAGS=['nobadge','face','nov','nfs','loan','loanx','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
-const TOGGLES=[['face','Face picture'],['nobadge','No club badge'],['nov','No market value'],['nfs','Not for sale'],['loan','On loan'],['loanx','On loan, parent unknown'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
+const FLAGS=['cmp','nobadge','face','nov','nfs','loan','loanx','nofam','weq','wpos','wdir','other','nums','pot','future','scout','short','inj','hgp','hgc','qhgp','qhgc','unk','nopend','data','tips'];
+const TOGGLES=[['cmp','Compare popup'],['face','Face picture'],['nobadge','No club badge'],['nov','No market value'],['nfs','Not for sale'],['loan','On loan'],['loanx','On loan, parent unknown'],['nofam','Do not dim unfamiliar positions'],['other','Not your club'],['scout','Opened from Scouting'],['short','Shortlisted'],['inj','Injured'],['unk','HGC unknown'],['data','Real data'],['nopend','Hide PENDING'],['tips','Pin tooltips'],['nums','Ability as numbers']];
 function render(){
   const t=TABS.find(x=>x.key===S.tab),ct=document.querySelector('.content'),st=ct?ct.scrollTop:0;
   document.getElementById('frame').dataset.tex=S.tex;
   document.getElementById('frame').innerHTML=`<div class="os"><span>${D().name}</span><i></i><i></i><i></i></div><div class="win"><div class="body">${header()}
-    <div class="main">${tabStrip()}<div class="content">${t.page()}</div></div></div>${actionStrip()}</div>`;
+    <div class="main">${tabStrip()}<div class="content">${t.page()}</div></div></div>${actionStrip()}${S.cmp?cmpPopup():''}</div>`;
   const c2=document.querySelector('.content');if(c2)c2.scrollTop=st;
   const sm=document.getElementById('smpSeg');sm.innerHTML='';
   Object.entries(SAMPLE_NAMES).forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;if(S.smp===k)b.className='on';b.onclick=()=>{S.smp=k;S.rp=null;render()};sm.appendChild(b)});
@@ -1190,6 +1228,7 @@ function render(){
   const fl=[S.smp!=='out'?S.smp:null,S.vs?VSF[S.vs]:null,...FLAGS.filter(f=>S[f]),S.qx?'qx'+S.qx:null,S.tab==='role'&&S.rp?'rp'+S.rp:null].filter(Boolean);
   const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
+  if(S.cmp)cmpWire();
   // Role Rating: dot tooltip bubble (review aid; real app QToolTip). +tips pins the selected dot's tip.
   const rpn=document.querySelector('.rpn');
   if(rpn){const tip=document.createElement('div');tip.className='rtip';rpn.appendChild(tip);
@@ -1229,7 +1268,64 @@ function fromHash(){
   render();
 }
 window.addEventListener('hashchange',()=>{const cur=location.hash;fromHash()});
+
+/* =====================================================================================================================
+   COMPARE TO... popup (fictional players; real app: recents service + human squad + _shortlist, ranking of the main search)
+   ===================================================================================================================== */
+const CMPP=[['jlindahl','Jonas Lindahl','MC','Sweden','FC Saltmere',28,150,'#1D5FA8'],['kmensah','Kofi Mensah','ST','Ghana','Veridian United',23,141,'#7A1F2B'],['cwhitby','Callum Whitby','AMR','England','Northgate Rovers',27,156,'#132B5E'],
+ ['hlambert','Hugo Lambert','DM','France','Veridian United',22,131,'#7A1F2B'],['tsalvador','Tiago Salvador','AMR','Portugal','Atlético Brava',19,121,'#B02A2A'],['astrand','Anders Strand','GK','Norway','Ostmark SC',27,143,'#1F6B3A'],
+ ['pvanrijn','Pieter van Rijn','AMC','Netherlands','Ostmark SC',31,147,'#1F6B3A'],['mhlavaty','Marek Hlavatý','GK','Czechia','Corvale FC',31,146,'#2A2A30'],['ikessler','Ivor Kessler','MC','Germany','Rheinau 04',34,138,'#E0C03C'],
+ ['ekaya','Emre Kaya','ML','Turkey','Northgate Rovers',26,142,'#132B5E'],['rduarte','Rafael Duarte','DC','Brazil','Veridian United',29,144,'#7A1F2B'],['lmarchetti','Luca Marchetti','DL','Italy','FC Saltmere',24,136,'#1D5FA8'],
+ ['nalmada','Nico Almada','MR','Argentina','Corvale FC',20,118,'#2A2A30'],['ydemir','Yusuf Demir','GK','Turkey','Veridian United',30,138,'#7A1F2B'],['mferrer','Mateo Ferrer','MC','Spain','Veridian United',25,148,'#7A1F2B']]
+ .map(([id,name,pos,nat,club,age,ca,col])=>({id,name,pos,nat,club,age,ca,col}));
+const CPFL=(a,b)=>String.fromCodePoint(0x1F1E6+a.charCodeAt(0)-65,0x1F1E6+b.charCodeAt(0)-65);
+const CPNAT={Sweden:CPFL('S','E'),Ghana:CPFL('G','H'),England:'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',France:CPFL('F','R'),Portugal:CPFL('P','T'),Norway:CPFL('N','O'),Netherlands:CPFL('N','L'),Czechia:CPFL('C','Z'),Germany:CPFL('D','E'),Turkey:CPFL('T','R'),Brazil:CPFL('B','R'),Italy:CPFL('I','T'),Argentina:CPFL('A','R'),Spain:CPFL('E','S')};
+const CP_RECENT=['jlindahl','kmensah','cwhitby','hlambert','tsalvador','astrand','pvanrijn','mhlavaty','ikessler','ekaya'],CP_SQUAD=['kmensah','rduarte','hlambert','ydemir','mferrer'],CP_SHORT=['cwhitby','tsalvador','pvanrijn','ekaya','astrand'];
+const CP_SRC={recent:CP_RECENT,squad:CP_SQUAD,short:CP_SHORT},CP_NAMES={recent:'Recent',squad:'Squad',short:'Shortlist'};
+const cpById=Object.fromEntries(CMPP.map(p=>[p.id,p]));
+const cpHue=id=>[...id].reduce((h,c)=>(h*31+c.charCodeAt(0))%360,7);
+const cpFace=id=>{const h=cpHue(id),sk=`hsl(${20+h%14} ${34+h%20}% ${52+h%22}%)`,hr=`hsl(${h%40+10} 30% ${14+h%30}%)`,k=`hsl(${h} 38% 34%)`;return `<svg viewBox="0 0 260 310" preserveAspectRatio="xMidYMin slice" aria-hidden="true"><path d="M0 310V270C0 235 50 220 95 212L130 200 165 212C210 220 260 235 260 270V310Z" fill="${k}"/><rect x="108" y="150" width="44" height="60" rx="14" fill="${sk}"/><ellipse cx="130" cy="108" rx="62" ry="78" fill="${sk}"/><path d="M68 100C64 40 100 22 132 22S198 40 192 100C180 70 160 56 130 56S80 70 68 100Z" fill="${hr}"/><circle cx="108" cy="112" r="5" fill="#2A2018"/><circle cx="152" cy="112" r="5" fill="#2A2018"/></svg>`};
+const cpShield=c=>`<svg class="bdg" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 14.2 2.6V8.2C14.2 11.4 11.6 13.9 8 15.2 4.4 13.9 1.8 11.4 1.8 8.2V2.6Z" fill="#F2F4F7"/><path d="M8 2.2 12.8 3.6V8.1C12.8 10.7 10.8 12.7 8 13.8 5.2 12.7 3.2 10.7 3.2 8.1V3.6Z" fill="${c}"/><path d="M5.6 6.2H10.4M5.6 8.6H10.4" stroke="#F2F4F7" stroke-width="1.3"/></svg>`;
+let _cps=0;
+const cpStar=(v,sz=11)=>{const n=Math.max(.5,Math.min(5,Math.floor(v/40*2+.5)/2));let o='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,n-i)),id='cs'+(_cps++);o+=`<svg width="${sz}" height="${sz}" viewBox="0 0 15 15" aria-hidden="true"><defs><clipPath id="${id}"><rect width="${15*f}" height="15"/></clipPath></defs><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#3A4050"/><path d="M7.5 .4L9.5 5.2 14.7 5.4 10.6 8.7 12 13.7 7.5 10.9 3 13.7 4.4 8.7 .3 5.4 5.5 5.2Z" fill="#F5C518" clip-path="url(#${id})"/></svg>`}return o};
+const cpHl=(t,q)=>{const i=q?t.toLowerCase().indexOf(q.toLowerCase()):-1;return i<0?t:t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length)};
+function cpCands(){
+  const me=D(),meGK=me.pos==='GK',q=S.cq.trim().toLowerCase(),search=q.length>=2,rank=n=>{n=n.toLowerCase();return n.startsWith(q)?0:n.includes(' '+q)?1:n.includes(q)?2:9};
+  let rows=search?CMPP.map(p=>[rank(p.name),p]).filter(r=>r[0]<9).sort((a,b)=>a[0]-b[0]||a[1].name.localeCompare(b[1].name)).map(r=>r[1]):CP_SRC[S.csrc].map(i=>cpById[i]);
+  rows=rows.filter(p=>p.name!==me.name);
+  const ok=rows.filter(p=>(p.pos==='GK')===meGK);
+  return{rows:ok.slice(0,8),hidden:rows.length-ok.length,search};
+}
+function cmpPopup(){
+  _cps=0;const c=cpCands(),q=S.cq.trim();
+  const tabs=c.search?`<div class="clbl">Players matching “${q}” · whole save</div>`:`<div class="ctabs"><span class="sg" role="group" aria-label="List">${Object.entries(CP_NAMES).map(([k,l])=>`<button data-act="csrc" data-v="${k}" class="${k===S.csrc?'on':''}" aria-pressed="${k===S.csrc}">${l}</button>`).join('')}</span><span class="pnote" style="margin-left:auto">${S.csrc==='recent'?'last opened first':S.csrc==='squad'?'Veridian United':'Player Shortlist'}</span></div>`;
+  const rows=c.rows.length?c.rows.map((p,i)=>`<button class="copt${i===S.csel?' on':''}" role="option" aria-selected="${i===S.csel}" data-act="cpick" data-v="${p.id}"><div class="av">${cpFace(p.id)}</div><div class="tx"><b>${cpHl(p.name,q)}</b><span>${badge(p.pos)} <span>${CPNAT[p.nat]||''}</span> ${cpShield(p.col)} <span>${p.club}</span> <span style="color:var(--tx3)">·</span> <span>${p.age} years</span></span></div>${S.nums?`<b style="font-size:14px;color:#735CE4" title="CA ${p.ca}">${p.ca}</b>`:`<span style="display:flex;gap:1px" title="CA ${p.ca}">${cpStar(p.ca)}</span>`}</button>`).join(''):`<div class="cnone">No ${D().pos==='GK'?'goalkeeper':'player'} matches “${q}”.</div>`;
+  const hid=c.hidden?`<div class="chid">${c.hidden} ${c.hidden>1?'players':'player'} not shown: goalkeepers are only compared with goalkeepers.</div>`:'';
+  return `<div class="cpop" role="dialog" aria-label="Compare to"><div class="ct">Compare <b>${D().name}</b> with…</div><div class="cs"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.6 10.6L14 14"/></svg><input id="cq" type="text" value="${S.cq.replace(/"/g,'&quot;')}" placeholder="Search any player in the save…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true"></div>${tabs}<div role="listbox" aria-label="Players">${rows}</div>${hid}<div class="cft"><span><kbd>↑</kbd><kbd>↓</kbd>move</span><span><kbd>Enter</kbd>compare</span><span><kbd>Esc</kbd>close</span></div></div>`;
+}
+let _ctT=0;
+function cpToast(m){const w=document.querySelector('.win');if(!w)return;let t=w.querySelector('.ctoast');if(!t){t=document.createElement('div');t.className='ctoast';w.appendChild(t)}t.textContent=m;clearTimeout(_ctT);_ctT=setTimeout(()=>t.remove(),3200)}
+function cmpWire(){
+  const inp=document.getElementById('cq');if(!inp)return;
+  const again=()=>{const pos=inp.selectionStart;render();const n=document.getElementById('cq');if(n){n.focus();n.setSelectionRange(pos,pos)}};
+  inp.oninput=()=>{S.cq=inp.value;S.csel=0;again()};
+  inp.onkeydown=e=>{const rows=cpCands().rows;
+    if(e.key==='ArrowDown'){S.csel=Math.min(rows.length-1,S.csel+1);again();e.preventDefault()}else if(e.key==='ArrowUp'){S.csel=Math.max(0,S.csel-1);again();e.preventDefault()}
+    else if(e.key==='Enter'){const p=rows[S.csel];if(p)cpPick(p.id);e.preventDefault()}else if(e.key==='Escape'){S.cmp=false;S.cq='';render()}};
+  inp.focus();inp.setSelectionRange(S.cq.length,S.cq.length);
+}
+function cpPick(id){S.cmp=false;S.cq='';S.csel=0;render();cpToast('Compare '+D().name+' with '+cpById[id].name+': the player window closes and the Compare page opens (mockup).')}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act="cmp"],[data-act="csrc"],[data-act="cpick"]');
+  if(!t){if(S.cmp&&!e.target.closest('.cpop,.rv')){S.cmp=false;S.cq='';render()}return}
+  const a=t.dataset.act;e.stopPropagation();
+  if(a==='cmp'){S.cmp=!S.cmp;S.cq='';S.csel=0}else if(a==='csrc'){S.csrc=t.dataset.v;S.csel=0}else if(a==='cpick'){cpPick(t.dataset.v);return}
+  render();
+},true);
+(function(){const q=new URLSearchParams(location.search);if(q.has('cq'))S.cq=q.get('cq');if(['recent','squad','short'].includes(q.get('csrc')))S.csrc=q.get('csrc');window.__cmpq=q.has('cmp')})();
+
 fromHash();
+if(window.__cmpq){S.cmp=true;render()}
 </script>
 </body>
 </html>
