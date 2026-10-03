@@ -225,7 +225,7 @@ QDialog#playerWindow QScrollBar:vertical {{ background:{c['surface']}; width:6px
 QDialog#playerWindow QScrollBar::handle:vertical {{ background:{c['border_bright']}; border-radius:3px; min-height:20px; }}
 QDialog#playerWindow QScrollBar::add-line:vertical, QDialog#playerWindow QScrollBar::sub-line:vertical {{ height:0; }}
 QDialog#playerWindow QScrollBar::add-page:vertical, QDialog#playerWindow QScrollBar::sub-page:vertical {{ background:transparent; }}
-QDialog#playerWindow QWidget#pwBody {{ background:{c['window_bg']}; }}
+QDialog#playerWindow QWidget#pwBody {{ background:transparent; }}   /* the faint background photo shows between the panels */
 QDialog#playerWindow QLabel {{ background:transparent; color:{c['text_primary']}; font-size:12px; }}
 QDialog#playerWindow QFrame#pwPanel {{ background:{c['surface']}; border:1px solid {c['border']}; border-radius:3px; }}
 QDialog#playerWindow QFrame#pwHeader {{ background:transparent; border:1px solid {c['border']}; border-radius:3px; }}
@@ -514,6 +514,28 @@ class _PitchBig(QWidget):
             p.drawText(QRectF(x - 30, y - 34, 60, 12), Qt.AlignmentFlag.AlignCenter, POS_CODE[pos])
 
 
+class _DevPips(QWidget):
+    """Development rate as five pips (the list style B at header size: 5 blocks 14x14 radius 2, gap 3, ceil(v/4) lit in the
+    tier colour, unlit #3A4050). Used in the header DEVELOPMENT RATE box when Settings > Development rate display = Graphic."""
+    SZ, GAP, R = 14, 3, 2.0
+
+    def __init__(self, v, parent=None):
+        super().__init__(parent)
+        self._v = v
+        self.setFixedSize(5 * self.SZ + 4 * self.GAP, 24)
+
+    def paintEvent(self, _e):
+        n, col = -(-self._v // 4), QColor(TIER_HEX[tier(self._v)])
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        y = (self.height() - self.SZ) / 2
+        for i in range(5):
+            p.setBrush(col if i < n else QColor('#3A4050'))
+            p.drawRoundedRect(QRectF(i * (self.SZ + self.GAP), y, self.SZ, self.SZ), self.R, self.R)
+        p.end()
+
+
 class PlayerWindow(QDialog):
     """Modal player window. Result for the caller: `_shortlist_added` (closes via accept(), the caller adds the player).
     HGP / HGC pills queue changes through `queue` (host with queue_has / queue_toggle / queue_count); can_patch False or
@@ -530,6 +552,7 @@ class PlayerWindow(QDialog):
         # faint random stadium photo behind the panels (gui/pw_background.py; user-folder images, Settings on/off)
         self._bg = _pwbg.BgPainter(_settings.load().get('player_background', True))
         self._ability_stars = _settings.ability_as_stars()  # read once when the window opens
+        self._dev_display = _settings.load().get('dev_display', 'graphic')   # 'graphic' (five pips) | 'stars' | 'numbers'
         self._person = person
         self._save_data = save_data
         self._club_entity_id = club_entity_id
@@ -888,7 +911,7 @@ class PlayerWindow(QDialog):
         sh.addStretch()
         return sw
 
-    def _cab(self, title, tip, val, color, stars=None, frac=0.0):
+    def _cab(self, title, tip, val, color, stars=None, frac=0.0, dev=None):
         """CA / PA / DEV RATE box 136x56 on the shared header grid: title (10/700 caps), then 5 stars (stars mode, `stars` =
         star count) or the number + a 6px bar (`frac` = fill 0..1) on the 24px value row. Tooltip keeps the raw value."""
         f = QFrame()
@@ -900,7 +923,14 @@ class PlayerWindow(QDialog):
         v.addWidget(_spaced(_lab(title, 'pwBigLab', None, self._HG_LAB), 0.8))
         if tip:
             f.setToolTip(tip)
-        if self._ability_stars and stars is not None:
+        mode = ('stars' if self._ability_stars else 'numbers') if dev is None else self._dev_display   # Dev has its own setting
+        if mode == 'graphic' and dev is not None and val is not None:
+            vw = QWidget()
+            vh = QHBoxLayout(vw)
+            vh.setContentsMargins(0, 0, 0, 0)
+            vh.addWidget(_DevPips(val), 0, Qt.AlignmentFlag.AlignVCenter)
+            vh.addStretch()
+        elif mode == 'stars' and stars is not None:
             vw = self._star_row(stars)
         else:
             vw = QWidget()
@@ -1060,7 +1090,7 @@ class PlayerWindow(QDialog):
         dev = mw._progress_rate(p)
         hl.addWidget(self._cab('DEVELOPMENT RATE', f'Dev Rate {dev} out of 20' if dev is not None else None, dev,
                                TIER_HEX[tier(dev)] if dev is not None else COLORS['text_secondary'],
-                               dev_stars(dev) if dev is not None else None, (dev or 0) / 20))
+                               dev_stars(dev) if dev is not None else None, (dev or 0) / 20, dev=dev if dev is not None else -1))
         # 'Changes queued' widget (mockup .slot): 160x56, hairline on the left, 15 left pad
         self._q_w = QWidget()
         self._q_w.setObjectName('pwSlot')
