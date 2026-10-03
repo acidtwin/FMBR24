@@ -355,6 +355,27 @@ def club_for(raw, uids):
     return uids[i - 1]
 
 
+# Competition id (pl_hist row +19 / club['league']['comp_uid']) -> in-game division name. ONLY names verified against
+# the in-game Career Stats screen (Nico Paz, 9 Feb 2028) are listed: the save/install DB carry no competition names
+# (comp_<id>.dat holds editor file names such as eng_prem, names live in the language DB), so unknown ids give None
+# ('-' in the table). Extend here when a screenshot confirms another id.
+COMP_NAMES = {11: 'Premier Division', 32: 'Serie A', 67: 'First Division',
+              2000048844: 'Spanish Federation 1A', 2000048846: 'Spanish Federation 1B'}
+
+
+def career_totals(rows):
+    """Total row of the in-game Career Stats screen over `rows`: fee (sum), apps, goals, assists, pom (sums of the
+    recorded values only, None when no row has one) and avg = rating weighted by rated apps (None without a rated
+    row). The game does the same: '-' cells (not recorded) are skipped."""
+    def tot(k):
+        v = [r[k] for r in rows if r.get(k) is not None]
+        return sum(v) if v else None
+    rr = [(r['rating'], r.get('rated') or r.get('apps') or 0) for r in rows if r.get('rating') is not None]
+    w = sum(n for _x, n in rr)
+    return {'fee': tot('fee'), 'apps': tot('apps'), 'goals': tot('goals'), 'assists': tot('assists'),
+            'pom': tot('pom'), 'avg': round(sum(x * n for x, n in rr) / w, 2) if w else None}
+
+
 def season_label(row, calendar_year=False):
     """'2014/15' (or '2014' for calendar-year leagues; see CALENDAR_NATIONS)."""
     y = row['year']
@@ -445,14 +466,17 @@ def _add_current(out, person, sd):
     rows = out['rows']
     st = person.get('stats') or {}
 
-    def row(c, kind, apps, goals):
+    def row(c, kind, apps, goals, full=False):
         nat = c.get('nation')
         y = current_season_year(get_ref(), nat in CALENDAR_NATIONS)
-        return y, {'year': y, 'year_end': None, 'kind': kind, 'apps': apps, 'goals': goals, 'fee': None,
+        det = {'assists': st.get('assists'), 'pom': st.get('pom'), 'rating': st.get('rating'),
+               'rated': st.get('rated')} if full else {'assists': None, 'pom': None, 'rating': None, 'rated': None}
+        return y, {**det, 'division': COMP_NAMES.get((c.get('league') or {}).get('comp_uid')),
+                   'year': y, 'year_end': None, 'kind': kind, 'apps': apps, 'goals': goals, 'fee': None,
                    'club_raw': None, 'comp': None, 'order': 0, 'start': None, 'end': None, 'club': c['name'],
                    'club_uid': c['uid'], 'nation': nat, 'from_save': True, 'current': True}
 
-    y, r = row(cur, 'loan' if par else None, st.get('apps'), st.get('goals'))
+    y, r = row(cur, 'loan' if par else None, st.get('apps'), st.get('goals'), True)
     if any(x['club_uid'] == cur['uid'] and x['year'] >= y for x in rows):
         return
     if par is not None and not any(x['club_uid'] == par['uid'] and x['year'] >= y for x in rows):
@@ -506,6 +530,8 @@ def _career_stored(person, save_data, uid=None):
     for i, r in enumerate(h['rows']):
         cuid, name, nat = cl.lookup(r['club_raw'])
         out['rows'].append({**r, 'club': name, 'club_uid': cuid, 'nation': nat, 'from_save': i >= h['n_install'],
+                            'assists': None, 'pom': None, 'rating': None, 'rated': None,
+                            'division': COMP_NAMES.get(r['comp']),
                             'season': season_label(r, nat in CALENDAR_NATIONS), 'current': False})
     out['status'] = 'ok'
     return out
