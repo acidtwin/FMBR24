@@ -16,6 +16,7 @@ LEGAL_LINE = ('Unofficial tool for Football Manager 24 — not affiliated with o
 
 LANDING_PAGES = ('save_info', 'club', 'players')
 ABILITY_DISPLAYS = ('stars', 'numbers')
+DEV_DISPLAYS = ('graphic', 'stars', 'numbers')   # Dev column of the player lists: five pips / stars / raw
 PLAYER_THEMES = ('steel', 'pitch', 'floodlit', 'plain')  # = ids of gui/pw_themes.THEMES (tests/test_themes.py checks)
 
 HEADER_TEXTURES = ('diamond', 'squareknot', 'perspective', 'honeycomb', 'pitch')  # = gui/header_net.TEXTURES (tests/test_header_texture.py checks)
@@ -27,6 +28,7 @@ DEFAULTS = {
     'show_pending': True,              # show PENDING chips on the Club page
     'use_cache': True,                 # reuse the parse cache on Load (Reload always re-parses)
     'ability_display': 'stars',        # CA/PA shown as 'stars' or raw 'numbers'
+    'dev_display': 'graphic',          # Dev column of the player lists: 'graphic' (five pips), 'stars' or raw 'numbers'
     'player_theme': 'steel',           # player window texture (gui/pw_themes.py registry id)
     'header_texture': 'diamond',       # page header bar pattern + loading-glow mask (gui/header_net.py)
     'faces_enabled': True,             # show facepack pictures (player window header, staff dialog)
@@ -72,6 +74,8 @@ def _clean(raw):
         out['landing_page'] = DEFAULTS['landing_page']
     if out['ability_display'] not in ABILITY_DISPLAYS:
         out['ability_display'] = DEFAULTS['ability_display']
+    if out['dev_display'] not in DEV_DISPLAYS:
+        out['dev_display'] = DEFAULTS['dev_display']
     out['faces_pack_order'] = list(out['faces_pack_order'])
     if not all(isinstance(n, str) for n in out['faces_pack_order']):
         out['faces_pack_order'] = list(DEFAULTS['faces_pack_order'])

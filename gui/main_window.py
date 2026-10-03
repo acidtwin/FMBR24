@@ -35,7 +35,7 @@ from gui.settings_page import SettingsPage
 from gui import header_net as _header_net
 from gui.people_model import (PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT,
                               MEDIA_UID_ROLE, CLUB_UID_ROLE, NATION_ROLE, nation_label)
-from gui.player_window import PlayerWindow
+from gui.player_window import PlayerWindow, TIER_HEX, tier
 from gui.faces import get_service as _faces_service
 from fm_editor.agecalc import person_age as _age, set_ref as _set_age_ref, get_ref as _get_age_ref
 
@@ -893,10 +893,12 @@ class StarsDelegate(_RowMarkDelegate):
         super().__init__(parent)
         self._label = label
         self._stars_fn = stars_fn   # raw value -> stars: ability_stars (CA/PA) or dev_stars (Dev Rate)
-        self.enabled = True         # False: the column holds something else right now (Best by Role's Rating) = plain text cell
+
+    def _on(self):
+        return StarsDelegate.stars_on
 
     def _raw(self, index):
-        if not StarsDelegate.stars_on or not self.enabled:
+        if not self._on():
             return None
         t = index.data(Qt.ItemDataRole.DisplayRole)
         return int(t) if isinstance(t, str) and t.isdigit() else None
@@ -934,13 +936,112 @@ def _ability_w():
     return _AB_W_STARS if StarsDelegate.stars_on else _AB_W_NUM
 
 
+_RING_W = 56   # Best by Role Rating column: 10 inset + ring 14 + number (mockups/player-lists.html)
+_TIER_QC = [QColor(h) for h in TIER_HEX]   # tier() colours as QColor, built once (index 0 unused)
+_EMPTY_QC, _DIM_QC = QColor('#3A4050'), QColor('#8B96A8')
+_RING_FONT = []   # one lazily built 10px font (QFont needs the app; never allocate per paint)
+
+
+class DevDelegate(StarsDelegate):
+    """Dev Rate cell of the player lists, Settings > Development rate display (`mode`, set by MainWindow._apply_ui_prefs):
+    'graphic' = style B five pips (mockups/player-lists.html: 5 blocks 8x8 radius 1.5 gap 2, ceil(v/4) lit in the tier colour,
+    unlit #3A4050), 'stars' = the dev_stars row, 'numbers' = the plain text cell. Graphic and stars add the tooltip 'Dev 14 of 20'.
+    Sorting always uses the raw 1-20 value (item sort key / PeopleModel key), never the graphic."""
+    mode = 'graphic'
+    PIP, PGAP = 8, 2
+
+    def __init__(self, parent=None):
+        super().__init__('Dev', parent, dev_stars)
+
+    def _on(self):
+        return DevDelegate.mode != 'numbers'
+
+    def paint(self, painter, option, index):
+        v = self._raw(index)
+        if v is None or DevDelegate.mode == 'stars':
+            return super().paint(painter, option, index)
+        _RowMarkDelegate.paint(self, painter, option, index)
+        r, n, lit = option.rect, -(-v // 4), _TIER_QC[tier(v)]
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        y = r.y() + (r.height() - self.PIP) / 2
+        for i in range(5):
+            painter.setBrush(lit if i < n else _EMPTY_QC)
+            painter.drawRoundedRect(QRectF(r.x() + self.INSET + i * (self.PIP + self.PGAP), y, self.PIP, self.PIP), 1.5, 1.5)
+        painter.restore()
+
+    def tip(self, index):
+        v = self._raw(index)
+        return None if v is None else f'Dev {v} of 20'
+
+
+class RoleRingDelegate(_RowMarkDelegate):
+    """Best by Role 'Rating' cell (1-20, rolepos.score_to_rating): style D ring gauge + the number beside it
+    (mockups/player-lists.html). Ring box QRectF(x+1, cy-6, 12, 12), 2px pen, track #3A4050, arc clockwise from 12 o'clock
+    covering v/20 of the circle in the tier(v) colour, number 10px at x+19. Sort = the item's raw value. Tooltip 'Role rating 14 of 20'."""
+    INSET = 10
+
+    def _raw(self, index):
+        t = index.data(Qt.ItemDataRole.DisplayRole)
+        return int(t) if isinstance(t, str) and t.isdigit() else None
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if self._raw(index) is not None:
+            option.text = ''
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        v = self._raw(index)
+        if v is None:
+            return
+        r = option.rect
+        x, cy = r.x() + self.INSET, r.y() + r.height() / 2
+        box = QRectF(x + 1, cy - 6, 12, 12)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(_EMPTY_QC, 2)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(box)
+        pen.setColor(_TIER_QC[tier(v)])
+        painter.setPen(pen)
+        painter.drawArc(box, 90 * 16, -round(360 * 16 * min(v, 20) / 20))
+        if not _RING_FONT:
+            f = QFont()
+            f.setPixelSize(10)
+            _RING_FONT.append(f)
+        painter.setFont(_RING_FONT[0])
+        painter.setPen(_DIM_QC)
+        painter.drawText(QRectF(x + 19, r.y(), r.width() - self.INSET - 19, r.height()),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, str(v))
+        painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        v = self._raw(index)
+        if event.type() == QEvent.Type.ToolTip and v is not None:
+            QToolTip.showText(event.globalPos(), f'Role rating {v} of 20', view)
+            return True
+        return super().helpEvent(event, view, option, index)
+
+    def sizeHint(self, option, index):
+        sh = super().sizeHint(option, index)
+        return QSize(_RING_W, sh.height()) if self._raw(index) is not None else sh
+
+
+def _dev_w():
+    return _AB_W_NUM if DevDelegate.mode == 'numbers' else _AB_W_STARS
+
+
 def _set_star_delegates(table, ca_col, pa_col, dev_col=None):
     """CA / PA (and Dev Rate when the list has the column) as stars; returns the Dev delegate (or None) for its on/off switch."""
     table.setItemDelegateForColumn(ca_col, StarsDelegate('CA', table))
     table.setItemDelegateForColumn(pa_col, StarsDelegate('PA', table))
     if dev_col is None:
         return None
-    dev = StarsDelegate('Dev', table, dev_stars)
+    dev = DevDelegate(table)
     table.setItemDelegateForColumn(dev_col, dev)
     return dev
 
@@ -4308,7 +4409,7 @@ class MainWindow(QMainWindow):
         self._shortlist_table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             shdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        for i, cw in {0: _name_w(), 1: _club_w(), 2: 55, 3: 55, 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50}.items():
+        for i, cw in {0: _name_w(), 1: _club_w(), 2: 55, 3: 55, 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50}.items():
             self._shortlist_table.setColumnWidth(i, cw)
         self._note_media('_shortlist_table')
         self._shortlist_table.setItemDelegate(_RowMarkDelegate(self._shortlist_table))
@@ -4718,7 +4819,8 @@ class MainWindow(QMainWindow):
         self._reports_table.setItemDelegateForColumn(2, self._reports_pos_delegate)
         self._reports_table.setItemDelegate(_RowMarkDelegate(self._reports_table))
         self._reports_table.setItemDelegateForColumn(8, _HGBadgeDelegate('hgp', self._reports_table))
-        self._reports_dev_delegate = _set_star_delegates(self._reports_table, 3, 4, 5)   # off while the column is Best by Role's Rating
+        self._reports_dev_delegate = _set_star_delegates(self._reports_table, 3, 4, 5)   # swapped for the ring while the column is Best by Role's Rating
+        self._reports_ring_delegate = RoleRingDelegate(self._reports_table)
         _set_media_delegates(self._reports_table, 0, 9, 7)
 
         rhdr = self._reports_table.horizontalHeader()
@@ -4732,7 +4834,7 @@ class MainWindow(QMainWindow):
                 self._reports_table.horizontalHeaderItem(i).setToolTip(_COL_TT[col])
         for i in range(len(cols)):
             rhdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62,
+        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
                         9: _club_w(), 10: 65}
         for i, cw in fixed_widths.items():
             self._reports_table.setColumnWidth(i, cw)
@@ -4824,8 +4926,8 @@ class MainWindow(QMainWindow):
         ratings = getattr(self, '_report_ratings', {})
         rhdr = self._reports_table.horizontalHeader()
         col4_label = 'Rating' if is_role else 'Dev'
-        self._reports_dev_delegate.enabled = not is_role   # Rating (0-100 role score) stays a number
-        self._reports_table.setColumnWidth(5, 45 if is_role else _ability_w())
+        self._reports_table.setItemDelegateForColumn(5, self._reports_ring_delegate if is_role else self._reports_dev_delegate)
+        self._reports_table.setColumnWidth(5, _RING_W if is_role else _dev_w())
         self._reports_table.setHorizontalHeaderItem(5, _SortItem(col4_label))
         self._reports_table.horizontalHeaderItem(5).setToolTip(_COL_TT.get(col4_label, ''))
         rhdr.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -5087,7 +5189,7 @@ class MainWindow(QMainWindow):
         # Players table: virtualised QTableView + PeopleModel (all players, no cap)
         self._players_model, self._players_table = self._make_scouting_view(
             self._make_players_model(), _COL_TT,
-            {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62, 9: _club_w(),
+            {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62, 9: _club_w(),
              10: 65}, 35, sort=(2, Qt.SortOrder.AscendingOrder))
         self._players_inj_delegate = _PosBadgeDelegate(self._players_table)
         self._players_pos_delegate = _PosBadgeDelegate(self._players_table)
@@ -5377,7 +5479,7 @@ class MainWindow(QMainWindow):
         self._table.setHorizontalHeaderLabels(cols)
         for i in range(len(cols)):
             hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
-        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _ability_w(), 6: 40, 7: 50, 8: 62,
+        fixed_widths = {0: _name_w(), 1: 35, 2: 55, 3: _ability_w(), 4: _ability_w(), 5: _dev_w(), 6: 40, 7: 50, 8: 62,
                         9: 62, 10: 65}  # 1=INJ, 8/9=HGP/HGC badges ('+ HGP' fits), 10=CtrE
         for i, cw in fixed_widths.items():
             self._table.setColumnWidth(i, cw)
@@ -6151,6 +6253,10 @@ class MainWindow(QMainWindow):
             self._refresh_ability_cols()
             if hasattr(self, '_compare_page'):
                 self._compare_page.refresh()
+        dm = vals.get('dev_display', 'graphic')
+        if dm != DevDelegate.mode:   # Development rate display changed: Dev column width + repaint, no reload
+            DevDelegate.mode = dm
+            self._refresh_ability_cols()
         show = bool(vals.get('show_pending', True))
         if show != _SHOW_PENDING:
             _SHOW_PENDING = show
@@ -6159,13 +6265,15 @@ class MainWindow(QMainWindow):
 
     def _refresh_ability_cols(self):
         """CA / PA columns of the player lists after the Ability display setting changed (tables may not exist yet)."""
-        is_role = getattr(self, '_current_report_key', None) == 'best_role'   # Reports col 5 is Rating then: not stars
-        for name, cols in (('_table', (3, 4, 5)), ('_reports_table', (3, 4) if is_role else (3, 4, 5)),
-                           ('_players_table', (3, 4, 5)), ('_shortlist_table', (4, 5))):
+        is_role = getattr(self, '_current_report_key', None) == 'best_role'   # Reports col 5 is the Rating ring then: not Dev
+        for name, cols, dev in (('_table', (3, 4), 5), ('_reports_table', (3, 4), None if is_role else 5),
+                                ('_players_table', (3, 4), 5), ('_shortlist_table', (4, 5), None)):
             t = getattr(self, name, None)
             if t is not None:
                 for c in cols:
                     t.setColumnWidth(c, _ability_w())
+                if dev is not None:
+                    t.setColumnWidth(dev, _dev_w())
                 t.viewport().update()
 
     def _land_after_load(self):

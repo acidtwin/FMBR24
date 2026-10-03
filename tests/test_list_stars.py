@@ -58,7 +58,7 @@ for t, ca, pa in TABLES:
     assert isinstance(t.itemDelegateForColumn(ca), M._RowMarkDelegate)   # composes with the row tint / queued bar
 # Dev Rate is stars too (tests/test_list_media.py covers it in detail); the Player Shortlist has no Dev column
 for t in (w._table, w._reports_table, w._players_table):
-    assert isinstance(t.itemDelegateForColumn(5), D) and t.itemDelegateForColumn(5)._label == 'Dev'
+    assert isinstance(t.itemDelegateForColumn(5), M.DevDelegate) and t.itemDelegateForColumn(5)._label == 'Dev'
 
 
 def gold(img, x0=0, x1=None):

@@ -38,7 +38,14 @@ Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is a
 - **Image prompt** (already given to the user): ONE 18-icon sheet, 6 columns x 4 rows of 256 px cells on a flat `#14151A` background, 1536x1024 image.
 - **What the build needs:** `scripts/cut_icon_sheet.py` today cuts a 3x2 sheet of 512 px cells with TWO ink colours (off-white or purple) by colour un-mix. A v2 cutter must take the 6x4 / 256 px grid and handle several ink colours with edge decontamination (nearest-core-colour un-mix per pixel, so anti-aliased edges keep their true colour and get a smooth alpha, no dark halo). Then: write the 18 PNGs over `resources/icons/pages/` (keep file names; `_nav_page_icon` fits the glyph to `_NAV_ICON_PX` 20, opacities normal .85 / hover+checked 1 / disabled .32), re-run `scripts/make_screenshots.py`, look at the sidebar and header offscreen. Mockup first if the header badge is to change too.
 
-## 4. Other ideas (not designed)
+## 4. Reserved Dev/ability graphic E: growth stairs
+
+Designed in `mockups/player-lists.html` (`?dev=e`), NOT used now (the Dev column uses style B five pips, the Best by Role Rating uses style D ring). Keep for a future use.
+Paint recipe (QPainter, antialiasing on, no pixmaps): 5 ascending bars, width 3, gap 1.5 (5*3 + 4*1.5 = 21 wide), heights 5, 7.5, 10, 12.5, 15, bottom aligned at cy+7.5
+(cy = cell.top + h/2, x = cell.left + 10), corner radius 0.8. Bar i is lit when `i < ceil(v/4)` (v = 1-20), lit colour = tier(v) (red <=4, orange <=8, grey <=11, white <=13, yellow <=16, green),
+unlit #3A4050. Reads as a rising curve in greyscale. Tooltip 'Dev 14 of 20', sort by the raw value. Styles A (slim meter), C (chevrons) are also kept in the mockup as alternatives.
+
+## 5. Other ideas (not designed)
 
 - Next / previous player in the player window; drag-and-drop to load a save; reopen the last save on start; keyboard shortcuts; CSV export of a list; saved filter sets.
 - Staff window redesign (`StaffDetailDialog` is the old layout, no mockup).

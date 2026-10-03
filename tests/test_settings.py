@@ -46,6 +46,17 @@ json.dump({'ability_display': 'numbers'}, open(settings.settings_path(), 'w'))
 assert settings.load()['ability_display'] == 'numbers' and not settings.ability_as_stars()
 assert settings.save(vals) and settings.load() == vals
 
+# dev_display: default graphic, bad value / wrong type -> default, valid kept, merge-save keeps other keys, reset = DEFAULTS
+assert settings.DEFAULTS['dev_display'] == 'graphic'
+for bad in ('nope', 5, None):
+    json.dump({'dev_display': bad}, open(settings.settings_path(), 'w'))
+    assert settings.load()['dev_display'] == 'graphic'
+for dv in settings.DEV_DISPLAYS:
+    assert settings.save({'dev_display': dv}) and settings.load()['dev_display'] == dv
+json.dump({'other_key': 7}, open(settings.settings_path(), 'w'))
+assert settings.save({'dev_display': 'stars'}) and json.load(open(settings.settings_path()))['other_key'] == 7
+assert settings.save(vals) and settings.load() == vals
+
 # player_theme: default steel, bad value / wrong type -> default, valid ids kept, merge-save keeps other keys
 assert settings.DEFAULTS['player_theme'] == 'steel'
 for bad in ('nope', 5, None):
