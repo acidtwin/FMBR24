@@ -45,6 +45,11 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Pictures in the lists: Squads, Player Reports, Players, Player Shortlist and the staff lists show the person's face before the name, the club as its badge (hover for the club name, sorting stays by name) and the nation as the nation's picture from your logo pack (hover for the name); anything the packs do not have falls back to the plain text, so no information is lost. The Club page shows the league's competition logo. All of it is read-only, built from your own installed packs, off-thread and lazily decoded for the visible rows only, and switchable in Settings (Show face pictures / club badges / nation flags)
 - Kit lookup from your installed kit packs (`graphics/kits/<pack>`, home / away / third): available to the code, no screen uses it yet
 
+**Compare players**
+- A Compare Players page (sidebar, last item of MAIN): pick two players from searchable selectors (type any name in the save, or choose from your recently viewed players, your squad or your shortlist) and see them on one overlaid radar with an attribute table that shows who is ahead and by how much, the number of attributes each one wins, and key facts (age, contract, transfer value or Not for sale, wage, size, traits). Goalkeepers are only compared with goalkeepers
+- The radar has an Overview (6 axes) and a Detailed mode (12 outfield / 11 goalkeeper axes such as shooting, ball control, passing, aerial, pace), Current or Full Potential, stars or raw numbers like everywhere else (Settings)
+- `Compare to...` in the player window opens the page with that player as player A; the last 8 players whose window you opened are remembered per save
+
 **Editing**
 - Homegrown flags (HGP / HGC) for the players of your own club: queue them from the player window or the Squads toolbar, then press Save Changes
 - Save writes a verified temp file, keeps two rolling backups (`.bk1`, `.bk2`), replaces the save atomically and reloads it
@@ -80,6 +85,10 @@ Click a picture for the full size. They are generated from a real save with `scr
     <td><a href="docs/screenshots/player-positions.png"><img src="docs/screenshots/player-positions.png" alt="Player window: Positions"></a><br><sub>Player window: Positions</sub></td>
     <td><a href="docs/screenshots/player-role-rating.png"><img src="docs/screenshots/player-role-rating.png" alt="Player window: Role Rating"></a><br><sub>Player window: Role Rating</sub></td>
   </tr>
+  <tr>
+    <td><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare players"></a><br><sub>Compare players (Detailed radar)</sub></td>
+    <td></td>
+  </tr>
 </table>
 
 ## Status and roadmap
@@ -88,7 +97,6 @@ FMBR24 is **alpha** and supports **FM24 saves only**. It is built and tested on 
 
 - Transfer data (asking price, transfer-listed and loan-listed status; loan end dates) is still being reverse-engineered, so those fields show as PENDING
 - A General Rating tab is planned for the player window
-- A Compare players window (two players side by side on one radar) is designed and planned
 - The staff window is due a redesign
 - At 1.0: a Flatpak package and a Windows `.exe`
 

@@ -27,7 +27,7 @@ The free, open, Linux-native FM24 save browser: look first, then decide. No need
 - FM24 runs via Steam/Proton on Linux; saves are large binary archives (~180-220 MB), zstd members
 - A full parse takes roughly 15 s (reported, not re-timed); the parse cache (path + mtime + size) makes a normal Load about 2 s, Reload always re-parses
 - Flow: load a save, land on Save Info, search a club/player/staff name, review, optionally queue HGP/HGC, then Save Changes (two rolling backups, verified temp file, atomic replace), after which the save reloads and the view is restored
-- Roadmap: 1.0 polish, then a Flatpak build and a Windows .exe (1.0). Designed but not built yet: Compare players, a goal-net header texture, a solid sidebar icon set (`docs/DESIGN-BACKLOG.md`)
+- Roadmap: 1.0 polish, then a Flatpak build and a Windows .exe (1.0). Designed but not built yet: a goal-net header texture, a solid sidebar icon set (`docs/DESIGN-BACKLOG.md`)
 - Distribution: public repo `acidtwin/FMBR24` on GitHub (alpha, source only, run with `python main.py`)
 
 ## What exists now
@@ -40,6 +40,7 @@ The free, open, Linux-native FM24 save browser: look first, then decide. No need
 - CA / PA / Dev Rate as stars or raw numbers (Settings > Ability display) in the player window and in the Squads, Reports, Players and Player Shortlist lists
 - Player reports: Best Prospects, Wonderkids, Best in Position, Best by Role (weight presets; a minimum position-familiarity filter, default 14). Staff Reports is a stub
 - Player window: header with CA/PA/Dev Rate (stars or numbers, Settings), tabs Profile, Contract & Transfer (with a value-by-age trend chart: an estimate anchored on the stored value, not a price), Positions, Role Rating (role percentages per position, pitch view; the role lists are not yet verified in game), Training (recommended traits), History; six-axis radar, Current | Full Potential projection (display only), season stats, traits and personality, texture themes. General Rating is a placeholder; clicking the player name copies it. Familiarity and foot words use the app's own wording (e.g. 'Ineffective'), not the game's
+- Compare Players page (sidebar): two searchable selectors (whole save, Recent / Squad / Shortlist lists), overlaid radar (Overview 6 axes | Detailed 12 / 11 axes), attribute table with who is ahead, key facts incl. transfer value; `Compare to...` in the player window
 - HGP (secondary-nation record) and HGC (training record) patching: pills in the player window, Make HGP / Make HGC in Squads, queued then written by Save Changes; only for human-managed clubs
 - Search routes club -> Club page, player -> Players, staff -> Staff; Back/Forward history; Settings page; page icons in each header and in the sidebar; a vector app logo; busy veil ('Saving' / 'Reloading') during Save/Reload; a Welcome-header glow during a first load
 - Not stored in the save: player pictures (they come from the user's own packs), staff reputation, club facilities/region/founded, contract bonuses/clauses, hidden player reputation. Transfer data: 'Not for Sale' (value 300,000,000) and 'On loan from <club>' are shown in the Transfer panel; asking price/listing status/contract type are not found yet (next: controlled experiment saves)
