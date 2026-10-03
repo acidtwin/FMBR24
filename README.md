@@ -38,8 +38,9 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Value-by-age trend chart (an estimate anchored on the stored market value, not a price)
 - Positions: a rating for every position, shown as a list and on a pitch
 - Contract & Transfer: contract dates and wage, market value, Not for sale / On loan from (parent club) status
-- Career history, recommended traits, and a Current / Full Potential projection (display only)
-- CA, PA and Development Rate as stars or raw numbers (Settings), in the player window and in every player list (the raw value is the tooltip in stars mode, sorting is always by the number)
+- Career history in the game's Career Stats layout (club, fee, nation, division, apps, goals, assists, player of the match, average rating, totals), recommended traits, and a Current / Full Potential projection (display only)
+- CA and PA as stars or raw numbers, Development Rate as five pips, stars or raw numbers (Settings), in the player window and in every player list; Best by Role shows a rating ring. The raw value is always the tooltip and sorting is always by the number
+- Selectable player window theme (Steel, Pitch lines, Floodlit, Plain) and a faint random stadium photo behind the player and staff windows
 - Face pictures from your own installed facepack (for example DF11): the player window header and the staff window show the same face the game does, looked up by the person's UniqueID from the pack's `config.xml`. Auto-detects your FM24 folder, reads it read-only, builds its index in the background (about half a second for 200,000 pictures), and can be switched off in Settings. Nothing is bundled: bring your own pack. Generated players (newgens) only show a face when your facepack tool has written a config for them, the same as in the game
 - Club badges from your own installed logo pack (for example FMG Standard Logos): shown before the club name in the player window, on Save Info and in the Club, Squads and Club Staff headers. Same read-only lookup as the face pictures, switch off in Settings; the club badge is found through the club's UniqueID, using the game's install database when available. Nothing is bundled: bring your own pack
 - Pictures in the lists: Squads, Player Reports, Players, Player Shortlist and the staff lists show the person's face before the name, the club as its badge (hover for the club name, sorting stays by name) and the nation as the nation's picture from your logo pack (hover for the name); anything the packs do not have falls back to the plain text, so no information is lost. The Club page shows the league's competition logo. All of it is read-only, built from your own installed packs, off-thread and lazily decoded for the visible rows only, and switchable in Settings (Show face pictures / club badges / nation flags)
@@ -119,20 +120,6 @@ python main.py
 ```
 
 Python 3.12 on Linux. Click Load and pick your FM24 save (`.fm`). Saves made by Football Manager 2024 under Steam and Proton are the tested case.
-
-## Test
-
-The tests are plain scripts, no pytest. Use a temporary config directory so your real settings stay untouched:
-
-```bash
-FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<name>.py
-```
-
-Tests that need a real save skip themselves when it is not found. To rebuild the screenshots above:
-
-```bash
-python3 scripts/make_screenshots.py /path/to/your/save.fm
-```
 
 ## Safety
 
