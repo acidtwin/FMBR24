@@ -22,7 +22,8 @@ h = w._hero
 assert h._page == 'welcome'
 assert not h.glow_active() and not h._g_timer.isActive() and h.glow_intensity() == 0.0
 
-# mask = the hero's grid lines in the tint, nothing between them
+# mask = the hero's strands in the tint, nothing between them (pitch texture = the old grid; the nets: test_header_texture.py)
+h.set_texture('pitch')
 core, halo = h._glow_layers()
 img = core.toImage()
 assert img.pixelColor(38, 100).alpha() > 200, 'vertical grid line (x=38) must be in the mask'

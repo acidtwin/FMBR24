@@ -32,6 +32,7 @@ from fm_editor import weights as _weights_mod
 from fm_editor import settings as _settings_mod
 from gui.about_dialog import AboutDialog
 from gui.settings_page import SettingsPage
+from gui import header_net as _header_net
 from gui.people_model import (PeopleModel, num_key, HG_ROLE, ROWQ_ROLE, HG_BASE_ROLE, ROW_TINT,
                               MEDIA_UID_ROLE, CLUB_UID_ROLE, NATION_ROLE, nation_label)
 from gui.player_window import PlayerWindow
@@ -1778,7 +1779,7 @@ HERO_GLOW = dict(
     peak_alpha=0.10,        # painter opacity of the glow layers at full intensity: subtle
     tint=(150, 130, 255),   # lilac, between COLORS['accent_hover'] and the progress-bar shimmer peak
     halo_gain=0.40,         # wide soft halo strength relative to the core line
-    halo_widths=(14, 7),    # halo stroke widths (px); the core line is the grid's own 2 px
+    halo_widths=(14, 7),    # halo stroke widths (px) for the 'pitch' texture (the nets carry their own (8, 4) in gui/header_net.SPEC)
     floor=0.35,             # intensity at the bottom of the pulse (the glow never fully dies while loading)
     depth=0.65,             # intensity added at the top of each pulse (floor + depth = 1.0)
     fade_in_ms=900,         # ease in from 0 when the load starts
@@ -1794,7 +1795,7 @@ def _smooth(x):
 
 
 class _HeaderHeroWidget(QWidget):
-    """140px header bar painted with dark base + stadium image + gradient + pitch-line texture."""
+    """186px header bar painted with dark base + stadium image + gradient + net texture (Settings > Header texture)."""
 
     _PAGE_IMAGE = {
         'welcome':    'welcome.webp',
@@ -1825,7 +1826,9 @@ class _HeaderHeroWidget(QWidget):
         self._g_t = 0.0          # ms since the glow started
         self._g_end_t = 0.0      # ms since the finish began
         self._g_from = 0.0       # intensity when the finish began (the fade eases from here: no jump)
-        self._g_cache = None     # ((w, h, dpr), core, halo)
+        self._texture = _settings_mod.load()['header_texture']   # gui/header_net.TEXTURES
+        self._t_cache = None     # ((w, h, dpr, texture), pixmap)
+        self._g_cache = None     # ((w, h, dpr, texture), core, halo)
         self._g_clock = QElapsedTimer()
         self._g_timer = QTimer(self)
         self._g_timer.setInterval(HERO_GLOW['fps_ms'])
@@ -1864,10 +1867,21 @@ class _HeaderHeroWidget(QWidget):
         self._bg_pixmap = pixmap
         self.update()
 
-    @staticmethod
-    def _grid_lines(w, h):
-        """The pitch-texture grid (mockup ::before): single source for the faint texture AND the glow mask."""
-        return ([(x, 0, x, h) for x in range(38, w, 40)] + [(0, y, w, y) for y in range(58, h, 60)])
+    def set_texture(self, tex):
+        """Settings > Header texture: switch live (drops both pixmap caches, repaints)."""
+        if tex not in _header_net.TEXTURES:
+            tex = _header_net.DEFAULT_TEXTURE
+        if tex != self._texture:
+            self._texture = tex
+            self._t_cache = self._g_cache = None
+            self.update()
+
+    def _texture_pixmap(self):
+        """The faint texture, one cached pixmap per (w, h, dpr, texture)."""
+        key = (self.width(), self.height(), self.devicePixelRatioF(), self._texture)
+        if not self._t_cache or self._t_cache[0] != key:
+            self._t_cache = (key, _header_net.texture_pixmap(self._texture, *key[:3]))
+        return self._t_cache[1]
 
     # -- loading glow (Welcome page, first load only) ----------------------------
 
@@ -1949,31 +1963,12 @@ class _HeaderHeroWidget(QWidget):
         self._g_timer.stop()
 
     def _glow_layers(self):
-        """Core + halo pixmaps: the grid itself drawn in the tint (cached per size). This IS the line mask."""
-        w, h, dpr = self.width(), self.height(), self.devicePixelRatioF()
-        if self._g_cache and self._g_cache[0] == (w, h, dpr):
-            return self._g_cache[1], self._g_cache[2]
-        g = HERO_GLOW
-        lines = self._grid_lines(w, h)
-
-        def layer(strokes):
-            px = QPixmap(round(w * dpr), round(h * dpr))
-            px.setDevicePixelRatio(dpr)
-            px.fill(Qt.GlobalColor.transparent)
-            q = QPainter(px)
-            for width, a in strokes:
-                c = QColor(*g['tint'], round(255 * a))
-                q.setPen(QPen(c, width))
-                for ln in lines:
-                    q.drawLine(*ln)
-            q.end()
-            return px
-
-        core = layer([(2, 1.0)])
-        n = len(g['halo_widths'])
-        halo = layer([(wd, 0.35 * (i + 1) / n) for i, wd in enumerate(g['halo_widths'])])
-        self._g_cache = ((w, h, dpr), core, halo)
-        return core, halo
+        """Core + halo pixmaps: the texture's own strands drawn in the tint with the same mask (cached per size/texture)."""
+        key = (self.width(), self.height(), self.devicePixelRatioF(), self._texture)
+        if not self._g_cache or self._g_cache[0] != key:
+            g = HERO_GLOW
+            self._g_cache = (key,) + _header_net.glow_pixmaps(self._texture, *key[:3], g['tint'], g['halo_widths'])
+        return self._g_cache[1], self._g_cache[2]
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -2008,16 +2003,10 @@ class _HeaderHeroWidget(QWidget):
         overlay.setColorAt(1.00, QColor(8, 12, 18, 230))
         p.fillRect(0, 0, w, h, QBrush(overlay))
 
-        # 4. Pitch texture — from mockup ::before:
-        # Vertical lines: repeating every 40px, 2px wide, alpha ~4 (0.016*255)
-        # Horizontal lines: repeating every 60px, 2px wide, alpha ~4
-        pen = QPen(QColor(255, 255, 255, 4))
-        pen.setWidth(2)
-        p.setPen(pen)
-        for ln in self._grid_lines(w, h):
-            p.drawLine(*ln)
+        # 4. Texture (Settings > Header texture; mockups/header-net.html): one cached pixmap, one draw per frame
+        p.drawPixmap(0, 0, self._texture_pixmap())
 
-        # 4b. Loading glow on those same grid lines (additive, behind the title labels)
+        # 4b. Loading glow on those same strands (additive, behind the title labels)
         if self._g_state != 'off':
             v = self.glow_intensity()
             if v > 0.001:
@@ -6148,6 +6137,7 @@ class MainWindow(QMainWindow):
                 players = self._get_report_players('best_role', role_name=role)
                 self._populate_reports_table(players)
         self._apply_ui_prefs(vals)
+        self._hero.set_texture(vals.get('header_texture'))
         _faces_service().start(self._save_path)  # faces_enabled / faces_dir may have changed
 
     def _apply_ui_prefs(self, vals=None):

@@ -12,7 +12,7 @@ FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_<nam
 
 - Always set `FMBR24_CONFIG_DIR` (temp dir) for tests and verification: the real `~/.config/fm24_editor/settings.json` must stay untouched.
 - **Tests never read the live save** (the user keeps playing it, values drift). Real-save tests read frozen copies in `~/.local/share/fmbr24/test-saves/` (`tests/snapshot.py`), print `SKIPPED` and exit 0 when a copy is absent. Never point a test at the live save, never modify or delete the copies. Paths, sizes, sha256, recreate steps: `HANDOVER.md` section 1.
-- Docs map: `HANDOVER.md` (state, architecture/UI map, TODOs; read before big work), `PRODUCT.md` (scope), `docs/DESIGN-BACKLOG.md` (mockups to come back to: goal-net header, solid sidebar icons; Compare players is built), `README.md` (public face), `docs/HANDOVER-archive.md` (old diary, partly stale). FM24 binary format: memory `fm24-binary-format.md`, check it before touching a parser.
+- Docs map: `HANDOVER.md` (state, architecture/UI map, TODOs; read before big work), `PRODUCT.md` (scope), `docs/DESIGN-BACKLOG.md` (mockups to come back to: goal-net header (built), solid sidebar icons; Compare players is built), `README.md` (public face), `docs/HANDOVER-archive.md` (old diary, partly stale). FM24 binary format: memory `fm24-binary-format.md`, check it before touching a parser.
 - Bump `_CACHE_VERSION` (`fm_editor/cache.py`) when a parsed field is added or changes.
 
 ## Workflow rules

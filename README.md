@@ -58,7 +58,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Search box with autocomplete for clubs, players and staff, Back / Forward history
 - After a Save or Reload you land back on the same page, filters, sort and selection
 - A parse cache makes loading the same save again quick
-- Player window texture themes, landing page and other options in Settings
+- Player window texture themes, header texture (diamond net by default, or square-knot, perspective, honeycomb or the old pitch lines), landing page and other options in Settings
 
 ## Screenshots
 
