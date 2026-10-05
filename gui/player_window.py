@@ -491,6 +491,8 @@ class _PitchBig(QWidget):
         for pos in sorted(POS_DISPLAY, key=lambda q: (self._r.get(q, 1), -POS_DISPLAY.index(q))):
             x, y = self._pt(pos)
             v = self._r.get(pos, 1)
+            if v <= 1:       # rated 0 or 1: no dot at all (mockup: positions tab pitch)
+                continue
             t = tier(v)
             col = QColor(TIER_HEX[t])
             if v >= 20:
@@ -1364,32 +1366,7 @@ class PlayerWindow(QDialog):
                 h.addWidget(w)
                 v.addWidget(row)
         v.addStretch()
-        v.addWidget(self._positions_key())
         return panel
-
-    def _positions_key(self):
-        key = QWidget()
-        kv = QVBoxLayout(key)
-        kv.setContentsMargins(12, 6, 12, 8)      # bottom 8 (was 12): the list panel then fits the 592 px viewport, no 4 px scrollbar
-        kv.setSpacing(4)
-        lg = QHBoxLayout()
-        lg.setSpacing(12)
-        for lab, t in (('1–4', 1), ('5–8', 2), ('9–11', 3), ('12–13', 4), ('14–16', 5), ('17–20', 6)):
-            sw = QLabel()
-            sw.setFixedSize(10, 10)
-            sw.setStyleSheet(f'QLabel {{ background:{TIER_HEX[t]}; border-radius:2px; }}')
-            lg.addWidget(sw)
-            lg.addSpacing(-7)
-            lg.addWidget(_lab(lab, 'pwNote'))
-        lg.addStretch()
-        kv.addLayout(lg)
-        ws = position_legend()    # best first: Natural | Accomplished | Competent / Unconvincing | Awkward | Ineffective
-        txt = _lab('White ring = Natural (20) · bold = listed position<br>'
-                   f'<span style="color:#FFFFFF">{ws[0]}</span> · {ws[1]} · {ws[2]}<br>'
-                   f'{ws[3]} · {ws[4]} · {ws[5]}', 'pwNote')
-        txt.setTextFormat(Qt.TextFormat.RichText)
-        kv.addWidget(txt)
-        return key
 
     def _positions_pitch(self):
         f = QFrame()

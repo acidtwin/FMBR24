@@ -1,4 +1,4 @@
-"""Rating words (fm_editor/words.py): every value maps to one word, boundaries, order, old outputs unchanged, mockup legend in sync."""
+"""Rating words (fm_editor/words.py): every value maps to one word, boundaries, order, old outputs unchanged, legend text generator."""
 import os
 import re
 import sys
@@ -45,9 +45,5 @@ for table, fn in ((POSITION_WORDS, position_word), (FOOT_WORDS, foot_word)):
 # Positions legend (generated) matches the mockup text and the app: best first
 assert position_legend() == ['Natural 20', 'Accomplished 15–19', 'Competent 10–14', 'Unconvincing 5–9',
                              'Awkward 2–4', 'Ineffective 1']
-html = open(os.path.join(os.path.dirname(__file__), '..', 'mockups', 'player-window.html'), encoding='utf-8').read()
-leg = re.search(r'White ring = Natural \(20\)[^`]*', html).group(0)
-leg = re.sub(r'<br>', ' · ', leg)
-leg = re.sub(r'<[^>]+>', '', leg)
-assert ' · '.join(position_legend()[:3] + position_legend()[3:]) in leg, leg   # mockup legend text mirrors the table
+# (the colour/word key under Feet was removed from the Positions tab and the mockup: nothing to mirror there any more)
 print('OK')

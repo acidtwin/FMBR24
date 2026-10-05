@@ -1083,8 +1083,8 @@ function pitchSVG(R,W,H,M,dots){   // dots (optional) = fn(pt) -> svg of the dot
     const spotY=bot?y1-g.spotD:y0+g.spotD,edgeY=bot?y1-g.boxD:y0+g.boxD,dy=Math.abs(g.boxD-g.spotD),dx=Math.sqrt(g.circR**2-dy**2);
     s+=`<circle cx="${cx}" cy="${spotY}" r="2" fill="${LN}"/><path d="M${cx-dx},${edgeY} A${g.circR} ${g.circR} 0 0 ${bot?1:0} ${cx+dx},${edgeY}" ${st}/>`;
   });
-  // dots: lowest first so the best sit on top. d28 solid tier fill, number 12/700 ink; 1-4 = ghost; 20 = white ring r18
-  s+=dots?dots(p=>[M+SLOTS[p][0]*w,M+SLOTS[p][1]*h]):POS.slice().sort((a,b)=>R[a]-R[b]).map(p=>{
+  // dots: positions rated 0 or 1 get NO dot; lowest first so the best sit on top. d28 solid tier fill, number 12/700 ink; 1-4 = ghost; 20 = white ring r18
+  s+=dots?dots(p=>[M+SLOTS[p][0]*w,M+SLOTS[p][1]*h]):POS.slice().filter(p=>R[p]>1).sort((a,b)=>R[a]-R[b]).map(p=>{
     const x=M+SLOTS[p][0]*w,y=M+SLOTS[p][1]*h,v=R[p],t=tier(v),c=HEX[t],ghost=t===1;
     return `<g class="dg" data-p="${p}">`+(v>=20?`<circle cx="${x}" cy="${y}" r="18" fill="none" stroke="#FFFFFF" stroke-width="2"/>`:'')
       +(ghost?`<circle cx="${x}" cy="${y}" r="13.5" fill="rgba(20,21,26,0.55)" stroke="${c}" stroke-width="1"/>`:`<circle cx="${x}" cy="${y}" r="14" fill="${c}"/>`)
@@ -1101,8 +1101,7 @@ function tabPositions(){
   /* Future is DISABLED in the real app (tooltip: position ratings are stored in the save, not calculated from attributes); '+future' only previews the design */
   const hd=ph('Positions',(S.future?'<span class="pnote">Estimate at full potential</span>':'')+`<span class="sg"><button data-act="future" data-v="cur" class="${S.future?'':'on'}">Current</button><button data-act="future" data-v="future" class="${S.future?'on':''}"${S.future?'':` disabled data-tip="Not available yet: position ratings are stored in the save, not calculated from attributes, so they cannot be recomputed from projected attributes."`}>Future</button></span>`);
   const list=`<div class="pn o1list">${hd}${rows}<div class="sub"><span>Feet</span><em>${footed}</em></div>${feet}
-    <div class="key"><div class="lg">${tierKey().map(([l,t])=>`<span><i class="f${t}"></i>${l}</span>`).join('')}</div>
-      White ring = Natural (20) · bold = listed position<br><span style="color:#fff">Natural</span> 20 · Accomplished 15–19 · Competent 10–14<br>Unconvincing 5–9 · Awkward 2–4 · Ineffective 1</div></div>`;
+</div>`;
   return `<div class="pg">${list}<div class="pn o1pitch">${pitchSVG(R,430,592,22)}</div></div>`;
 }
 
