@@ -85,7 +85,7 @@ Click a picture for the full size. They are generated from a real save with `scr
   </tr>
   <tr>
     <td><a href="docs/screenshots/player-positions.png"><img src="docs/screenshots/player-positions.png" alt="Player window: Positions"></a><br><sub>Player window: Positions</sub></td>
-    <td><a href="docs/screenshots/player-role-rating.png"><img src="docs/screenshots/player-role-rating.png" alt="Player window: Role Rating"></a><br><sub>Player window: Role Rating</sub></td>
+    <td><a href="docs/screenshots/player-role-rating.png"><img src="docs/screenshots/player-role-rating.png" alt="Player window: Player Role Rating"></a><br><sub>Player window: Player Role Rating</sub></td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/compare.png"><img src="docs/screenshots/compare.png" alt="Compare players"></a><br><sub>Compare players (Detailed radar)</sub></td>

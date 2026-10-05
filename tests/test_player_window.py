@@ -67,6 +67,27 @@ bare = PlayerWindow({'id': 1, 'name': 'Bare', 'nation': 0}, {'squads': {}, 'club
 bare._set_pot(True)
 assert bare._projection().target == 0
 bare.close()
+
+
+def listed_positions(pos):
+    q = person()
+    q['positions'] = pos
+    w = PlayerWindow(q, {'squads': {}, 'clubs': []}, 0, None)
+    w.show()
+    w._select_tab('positions')
+    app.processEvents()
+    page = w._stack.currentWidget()
+    codes = [lb.text() for lb in page.findChildren(QLabel, 'pwBadge')]
+    assert page.verticalScrollBar().maximum() == 0, 'Positions scrolls'
+    w.close()
+    return codes
+
+
+from gui.player_window import POS_ORDER  # noqa: E402
+few = [1] * 15
+few[POS_ORDER.index('DC')], few[POS_ORDER.index('DM')], few[POS_ORDER.index('SW')], few[POS_ORDER.index('ST')] = 20, 14, 17, 0
+assert listed_positions(few) == ['SW', 'D(C)', 'DM'], 'rows rated 0 or 1 are not listed, order kept'
+assert len(listed_positions([1] * 15)) == 1, 'all <= 1: the single best row stays'
 print('OK: player window tabs, Close last, no foot words in Profile, Positions fits, History kind column')
 
 # click on the player's name copies it to the clipboard (header)
