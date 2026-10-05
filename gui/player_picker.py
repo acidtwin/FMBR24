@@ -395,9 +395,8 @@ class PlayerPicker(QFrame):
         if search:
             persons, hidden = self._ctx.search(self._query, self._exclude, self._keeper)
         else:
-            persons = [p for p in self._ctx.lists()[self._src] if p.get('id') not in self._exclude
-                       and (self._keeper is None or is_keeper(p) == self._keeper)]
-            full = [p for p in self._ctx.lists()[self._src] if p.get('id') not in self._exclude]
+            full = [p for p in self._ctx.lists()[self._src] if p.get('id') not in self._exclude]   # live read on every fill
+            persons = [p for p in full if self._keeper is None or is_keeper(p) == self._keeper]
             hidden = len(full) - len(persons)
         persons = persons[:MAX_ROWS]
         self._tabs.setVisible(not search)
