@@ -1,10 +1,10 @@
 # Design backlog: mockups to come back to
 
-Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is approved by the user BEFORE any app code (`CLAUDE.md`, mockup first; translate mechanically, never by eye). Open the mockups straight from disk (`file:///.../mockups/<name>.html`); no web server; the user tests them at http://localhost:8792 by refreshing. State of the app: `HANDOVER.md`.
+Designed surfaces that are not (fully) built or decided yet. Rule: a mockup is approved by the user BEFORE any app code (`CLAUDE.md`, mockup first; translate mechanically, never by eye). Open the mockups straight from disk in the user's own Chrome (`xdg-open file://<repo>/mockups/<name>.html`; the Claude browser pane shows file:// pages as a static snapshot, scripts do not run); NO web server. State of the app: `HANDOVER.md`.
 
 ## 1. Compare players
 
-- **Status:** BUILT (branch `feat/compare-players`): sidebar page 'Compare Players' (`gui/compare_page.py`), pickers (`gui/player_picker.py`), `Compare to...` popup in the player window, Detailed radar (`fm_editor/radar_axes.py`), recents (`fm_editor/recents.py`). Plan and decisions: `docs/plans/compare-players.md`. The window / picker-dialog flow and the list-row launch described below were superseded (no Compare from list rows for now).
+- **Status:** BUILT and merged to `main`: sidebar page 'Compare Players' (`gui/compare_page.py`), pickers (`gui/player_picker.py`), `Compare to...` popup in the player window, Detailed radar (`fm_editor/radar_axes.py`), recents (`fm_editor/recents.py`). Plan and decisions: `docs/plans/compare-players.md` (marked BUILT). Everything below is the ORIGINAL design: the window / picker-dialog flow, the 'Compare with...' button name and the list-row launch were superseded (no Compare from list rows for now; a context-menu entry is cheap if wanted).
 - **Mockup:** `mockups/compare-players.html` (sample players are fictional). Views via URL: `?pair=out|gk|young|veteran`, `?nums`, `?pot`, `?pick`, `?swap`, `?noface`, `?min`, `?bare=1`. The header comment of the file is the spec (launch flows, geometry, QPainter porting notes, data needs).
 - **Direction:** variant A = overlaid radars of both players plus the full attribute table; ONE layout. A percentile "fingerprint pizza" view was tried and REMOVED by user decision (so were duels, similarity and peer data).
 - **Decisions recorded:**
@@ -49,7 +49,8 @@ unlit #3A4050. Reads as a rising curve in greyscale. Tooltip 'Dev 14 of 20', sor
 
 - Next / previous player in the player window; drag-and-drop to load a save; reopen the last save on start; keyboard shortcuts; CSV export of a list; saved filter sets.
 - Staff window redesign (`StaffDetailDialog` is the old layout, no mockup).
-- General Rating tab of the player window (needs in-game screens first); fill the Training tab.
+- General Rating tab of the player window (still a 'coming soon' placeholder; the user said just rename Role Rating, so this stays open). Reference the user showed (FM Genie Scout's General Rating screen): a list of GENERIC role categories (Goalkeeper, Sweeper, Centre Back, Full Back, Wing Back, Defensive Midfielder, Midfielder, Attacking Midfielder, Winger, Fast Striker, Target Striker), each with a percentage, plus coloured dots on a pitch. Build only after the user asks (mockup first). Also fill the Training tab beyond Recommended traits.
+- Contract & Transfer page rows like FM Genie Scout's Transfer screen: Type, Value, Sale Value (not in the save), Wage, Started, Expires, Availability, Squad Status, Perceived Squad Status, Interested (clubs; not found in the save). Waiting for the user's Spurs squad Contract-view screenshot (Squad Status + Contract Type columns) to decode both (candidate record `0x04 0x43`, nibbles).
 - Asking price / transfer-listed status: needs the user's controlled experiment saves T0..T6 (see `HANDOVER.md` section 7).
 - Packaging at 1.0: Flatpak (`io.github.acidtwin.FMBR24`) and a Windows .exe.
 - README credit for the earlier Linux FM save-editing project (its name is a TODO comment in `README.md`, 'Inspired by').

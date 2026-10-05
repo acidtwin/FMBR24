@@ -34,11 +34,11 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 
 **Player window**
 - Profile: attributes by group, an attribute radar, footedness, personality, traits, season stats and fitness
-- Role ratings as a percentage per position, with a pitch view
+- Player Role Rating: role ratings as a percentage per position, with a 14-dot pitch view
 - Value-by-age trend chart (an estimate anchored on the stored market value, not a price)
-- Positions: a rating for every position, shown as a list and on a pitch
+- Positions: a rating for every position, shown as a list and on a pitch (positions rated 0 or 1 are hidden)
 - Contract & Transfer: contract dates and wage, market value, Not for sale / On loan from (parent club) status
-- Career history in the game's Career Stats layout (club, fee, nation, division, apps, goals, assists, player of the match, average rating, totals), recommended traits, and a Current / Full Potential projection (display only)
+- Career history in the game's Career Stats layout (always includes the current club; club, fee, nation, division, apps, goals, assists, player of the match, average rating, totals), recommended traits, and a Current / Full Potential projection (display only)
 - CA and PA as stars or raw numbers, Development Rate as five pips, stars or raw numbers (Settings), in the player window and in every player list; Best by Role shows a rating ring. The raw value is always the tooltip and sorting is always by the number
 - Selectable player window theme (Steel, Pitch lines, Floodlit, Plain) and a faint random stadium photo behind the player and staff windows
 - Face pictures from your own installed facepack (for example DF11): the player window header and the staff window show the same face the game does, looked up by the person's UniqueID from the pack's `config.xml`. Auto-detects your FM24 folder, reads it read-only, builds its index in the background (about half a second for 200,000 pictures), and can be switched off in Settings. Nothing is bundled: bring your own pack. Generated players (newgens) only show a face when your facepack tool has written a config for them, the same as in the game
@@ -60,7 +60,7 @@ You open a save, and the app reads it directly. No game running, no paid tool, n
 - Search box with autocomplete for clubs, players and staff, Back / Forward history
 - After a Save or Reload you land back on the same page, filters, sort and selection
 - A parse cache makes loading the same save again quick
-- Player window texture themes, header texture (diamond net by default, or square-knot, perspective, honeycomb or the old pitch lines), landing page and other options in Settings
+- Player window texture themes, header texture (diamond net by default, or square-knot, perspective, honeycomb or the old pitch lines; the strands glow while a save loads), landing page and other options in Settings
 
 ## Screenshots
 

@@ -1,5 +1,7 @@
 # Compare Players: build plan (stage 2, after the mockups are approved)
 
+**STATUS: BUILT and merged to `main`** (modules below all exist: `fm_editor/radar_axes.py`, `player_search.py`, `recents.py`, `gui/player_picker.py`, `gui/compare_page.py`; tests `test_compare_page.py`, `test_recents.py`, `test_player_search.py`, `test_radar_axes.py`). Kept as the design record; the live state is `HANDOVER.md` section 9. Changes after this plan: the picker popup decides clicks by geometry at window level (a click inside no longer closes it), the Recent tab is fed by ONE `MainWindow._note_player_viewed` from every path that shows a player (not only `_run_player_window`), the difference cell is a split bar, the 'fingerprint' view was removed, sidebar placement is SCOUTING after Staff (not MAIN).
+
 Mockups: `mockups/compare-players.html` (the page; states `?empty ?one ?open=a|b&q= ?axes=detail ?pair=gk ?nums ?pot ?min`) and `mockups/player-window.html#profile+cmp` (the `Compare to...` popup). Their header comments are the spec; this file is only the code plan.
 FM24 reference: its Comparison tab lets you pick the second player from your squad or from recently visited profiles (Passion4FM squad-analysis guide; the 'no recently viewed options' bug report and a Passion4FM post say FM26 regressed to squad + shortlist, sortitoutsi 'FM26: How to Compare Two Players'). We add whole-save search.
 
