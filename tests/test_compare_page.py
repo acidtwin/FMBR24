@@ -287,4 +287,76 @@ a, b = win._compare_page.players()
 assert a is sd2['people'][1] and b is sd2['people'][2], 'new objects, same ids'
 assert win._compare_page.mode() == 'detailed'
 assert win._main_stack.currentIndex() == win._VIEW_INDEX['compare']
+# -- recents: every path that shows a player feeds ONE function; open pickers / the empty state read live ---------------------
+def rids():
+    return win._recents.ids()
+
+
+def by(i):
+    return next(q for q in win._save_data['people'] if q['id'] == i)
+
+
+pg = win._compare_page
+win._recents.set_save(win._save_path + '.recents-test')   # clean list
+assert rids() == []
+win._note_player_viewed(by(10))
+win._note_player_viewed(None)                                 # tolerated
+win._note_player_viewed(by(11))
+assert rids() == [11, 10]
+win._recents.push(type('N', (int,), {})(12))                  # int subclasses accepted (numpy ints: numbers.Integral)
+assert rids()[0] == 12
+# 1) player window path (all of _open_player_detail / _by_pid / shortlist / reports funnel into _run_player_window)
+M.PlayerWindow.exec = lambda self: 0                          # do not block
+win._run_player_window(by(13))
+win._open_player_detail_by_pid(14)
+assert rids()[:2] == [14, 13], rids()
+win._run_player_window(by(10))
+assert rids()[:3] == [10, 14, 13], 'an existing id moves to the front, no duplicate'
+assert len(set(rids())) == len(rids())
+# 2) Compare page picks (picker + empty-state list) are recorded
+win._open_compare(by(20), None)
+assert rids()[0] == 20, rids()
+pg._chosen('b', by(21))
+assert rids()[:2] == [21, 20], rids()
+pg._empty_pick(by(22)) if pg.players()[0] is None or pg.players()[1] is None else None
+# 3) Compare from a player window: both players recorded, A newest
+win._open_compare(by(23), by(24))
+assert rids()[:2] == [23, 24], rids()
+# 4) search pick of a player
+win._sg_pick(2, by(25), by(25)['name'])
+assert rids()[0] == 25
+# 5) the empty state's RECENTLY VIEWED list is re-read on navigation (not only at the last rebuild)
+pg.set_players(None, None)
+shown = lambda: [it.data(PlayerRowDelegate.PERSON)['id'] for lw in pg.findChildren(type(make_row_list()))
+                 for it in (lw.item(i) for i in range(lw.count()))]
+from gui.player_picker import make_row_list  # noqa: E402
+assert shown()[:1] == [25], shown()
+win._recents.push(26)                                         # e.g. a player window opened from another page
+win._nav_to('compare')
+pump()
+assert shown()[:1] == [26], 'empty state shows the new recent after navigating back'
+# 6) the shared picker, created once and left closed, shows the update on its next open (both Recent tab and re-switching tabs)
+pk = pg._picker_for(pg._combo['a'])
+pg._combo['a'].open_picker('recent')
+assert [q['id'] for q in pk.rows()][0] == 26
+pk.close_popup()
+win._recents.push(27)
+pg._combo['a'].open_picker('recent')
+assert [q['id'] for q in pk.rows()][0] == 27, 'reopened picker re-reads the recents'
+win._recents.push(28)
+pk.set_source('squad')
+pk.set_source('recent')
+assert [q['id'] for q in pk.rows()][0] == 28, 'tab switch re-reads the recents'
+pk.close_popup()
+# 7) the 'Compare to...' popup of a player window, same rules (excludes the window's own player)
+pw = PlayerWindow(by(1), win._save_data, None, None, picker=win._picker_context())
+pw._toggle_compare_popup()
+assert [q['id'] for q in pw._picker.rows()][0] == 28 and 1 not in [q['id'] for q in pw._picker.rows()]
+pw._picker.close_popup()
+win._note_player_viewed(by(1))
+win._note_player_viewed(by(29))
+pw._toggle_compare_popup()
+assert [q['id'] for q in pw._picker.rows()][:1] == [29] and 1 not in [q['id'] for q in pw._picker.rows()], 'own player excluded, new recent shown'
+pw._picker.close_popup()
+pw.close()
 print('compare page OK')

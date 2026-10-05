@@ -381,6 +381,7 @@ class ComparePage(QScrollArea):
     playersChanged = pyqtSignal()
     shortlistBoth = pyqtSignal(dict, dict)
     message = pyqtSignal(str)
+    playerViewed = pyqtSignal(dict)   # a player was picked on this page: the host records it in the recents
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -450,6 +451,11 @@ class ComparePage(QScrollArea):
     def players(self):
         return self._a, self._b
 
+    def on_shown(self):
+        """Page navigated to: the empty state's RECENTLY VIEWED list was built when the page was last rebuilt, re-read it."""
+        if self._a is None or self._b is None:
+            self._rebuild()
+
     def mode(self):
         return self._mode
 
@@ -506,6 +512,7 @@ class ComparePage(QScrollArea):
         a, b = (person, self._b) if slot == 'a' else (self._a, person)
         if a is not None and b is not None and is_keeper(a) != is_keeper(b):
             self.message.emit(f"Player {'B' if slot == 'a' else 'A'} cleared: goalkeepers are only compared with goalkeepers.")
+        self.playerViewed.emit(person)
         self.set_players(a, b)
 
     def _clear(self, slot):

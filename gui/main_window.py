@@ -2389,6 +2389,7 @@ class MainWindow(QMainWindow):
         self._compare_page.shortlistBoth.connect(self._compare_shortlist_both)
         self._compare_page.message.connect(lambda m: self._status.showMessage(m, 4000))
         self._compare_page.playersChanged.connect(self._compare_changed)
+        self._compare_page.playerViewed.connect(self._note_player_viewed)
         self._main_stack.addWidget(self._compare_page)            # 11
         right_vbox.addWidget(self._main_stack)
         self._busy_veil = _BusyVeil(self._main_stack)
@@ -5423,6 +5424,8 @@ class MainWindow(QMainWindow):
             self._apply_staff_shortlist_filter()
         if key == 'settings':
             self._settings_page.on_shown()
+        if key == 'compare':
+            self._compare_page.on_shown()
         if key in ('club', 'squad', 'shortlist', 'staff_shortlist', 'save_info', 'settings', 'compare'):
             self._status_info_lbl.setText('')
         idx = self._VIEW_INDEX.get(key, 0)
@@ -5960,6 +5963,7 @@ class MainWindow(QMainWindow):
         if kind == 0:
             self._show_squad(obj)
         elif kind == 2:
+            self._note_player_viewed(obj)
             self._show_player_results([obj])
         else:
             self._show_staff_results([obj])
@@ -6200,6 +6204,12 @@ class MainWindow(QMainWindow):
             return
         self._run_player_window(person)
 
+    def _note_player_viewed(self, person):
+        """THE one place a shown player is recorded: feeds 'Recent' in the Compare pickers. Called by every path that shows a
+        player (player window, Compare page picks, Compare from the player window, search pick)."""
+        if person:
+            self._recents.push(person.get('id'))
+
     def _run_player_window(self, person, club_entity_id=None, in_squad=None):
         """Show the player window; then run the shortlist flow it asked for. Its HGP / HGC pills queue
         changes through this window (queue_*) only for players of a human-managed club, from any page."""
@@ -6210,7 +6220,7 @@ class MainWindow(QMainWindow):
         if club_id is not None:
             club_entity_id = club_id + 1  # club entity id = club id + 1 (memory fm24-binary-format)
         why = 'Open from Squads to patch' if club_id is None else 'Not your club'
-        self._recents.push(pid)   # every player window goes through here: feeds 'Recent' in the Compare pickers
+        self._note_player_viewed(person)
         dlg = PlayerWindow(person, sd, club_entity_id, self,
                            shortlisted=any(p.get('id') == pid for p in self._shortlist),
                            can_patch=can_patch and 'b' in sd, queue=self, patch_tip=why, picker=self._picker_context())
@@ -6231,6 +6241,8 @@ class MainWindow(QMainWindow):
 
     def _open_compare(self, a, b=None):
         """Show the Compare page with `a` as player A and `b` (or nobody) as player B."""
+        for p in (b, a):   # A last: newest first
+            self._note_player_viewed(p)
         self._compare_page.set_players(a, b)
         self._nav_to('compare')
 

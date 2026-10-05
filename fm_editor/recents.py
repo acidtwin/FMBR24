@@ -1,8 +1,9 @@
-"""Recently viewed players: the last 8 players whose player window was opened, newest first, no duplicates. No Qt imports.
+"""Recently viewed players: the last 8 players the user looked at (player window opened, picked on the Compare page, picked in search), newest first, no duplicates. No Qt imports.
 
 Persisted PER SAVE in recent_players.json in the config dir ({save_path: [ids]}); NOT in settings.json, so Reset to defaults and
 settings.load() never see it. Ids that are no longer in the save are dropped by the reader (`people_by_id`)."""
 import json
+import numbers
 import os
 
 from fm_editor import settings as _settings
@@ -39,8 +40,9 @@ class RecentPlayers:
 
     def push(self, pid):
         """Move `pid` to the front (LRU of MAX_RECENT) and persist."""
-        if not isinstance(pid, int) or pid < 0:
+        if not isinstance(pid, numbers.Integral) or isinstance(pid, bool) or pid < 0:   # numpy ints count
             return
+        pid = int(pid)
         self._ids = [pid] + [i for i in self._ids if i != pid][:MAX_RECENT - 1]
         self._write()
 
