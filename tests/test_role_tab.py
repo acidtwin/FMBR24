@@ -1,4 +1,4 @@
-"""Role Rating tab: fm_editor/rolepos.py logic + the tab on synthetic players (no save needed).
+"""Player Player Role Rating tab: fm_editor/rolepos.py logic + the tab on synthetic players (no save needed).
 Plain script: FMBR24_CONFIG_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen python3 tests/test_role_tab.py"""
 import os
 import random
@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QApplication, QScrollArea  # noqa: E402
 app = QApplication.instance() or QApplication([])
 from fm_editor import rolepos, weights  # noqa: E402
 from fm_editor.rolepos import POS_ROLES, best_by_position, position_roles, role_score, score_to_rating  # noqa: E402
-from gui.player_window import POS_DISPLAY, PlayerWindow, TABS  # noqa: E402
+from gui.player_window import PITCH_POS, POS_DISPLAY, PlayerWindow, TABS  # noqa: E402
 from gui.pw_roles import RoleTab  # noqa: E402
 from gui.roles import _ROLE_INDEX, FM_ROLES, role_rating  # noqa: E402
 from gui.stars import _StarWidget  # noqa: E402
@@ -105,12 +105,12 @@ tab = w._role_tab
 assert isinstance(tab, RoleTab)
 assert w._stack.currentWidget() is w._stack.widget(w._tab_keys.index('role'))
 page = w._stack.currentWidget()
-assert page.findChildren(_StarWidget) == [], 'no star widget on the Role Rating tab (percentages are not converted to stars)'
+assert page.findChildren(_StarWidget) == [], 'no star widget on the Player Role Rating tab (percentages are not converted to stars)'
 assert tab.pitch.hasMouseTracking(), 'hover tooltips need mouse tracking'
 assert tab.sel == 'DC' == tab.best_pos, 'default selection = the best position'
-assert page.verticalScrollBar().maximum() == 0, 'Role Rating scrolls'
+assert page.verticalScrollBar().maximum() == 0, 'Player Player Role Rating scrolls'
 # outfielder: every dot except GK is live, GK dashed; dim = unfamiliar (< 10) live positions
-assert tab.pitch._info['GK'] is None and all(tab.pitch._info[q] for q in POS_DISPLAY if q != 'GK')
+assert tab.pitch._info['GK'] is None and all(tab.pitch._info[q] for q in PITCH_POS if q != 'GK')
 assert tab.pitch._dim['ST'] and not tab.pitch._dim['DC'] and not tab.pitch._dim['DM'] and not tab.pitch._dim['GK']
 assert 'goalkeeper roles are only rated for goalkeepers' in tab.pitch._tips['GK']
 assert 'Best role:' in tab.pitch._tips['DC'] and '(best position)' in tab.pitch._tips['DC'] and '%' in tab.pitch._tips['DC']
@@ -153,7 +153,7 @@ w.close()
 g = window(person(gk=True))
 gt = g._role_tab
 assert gt.sel == 'GK' and gt.live == ['GK']
-assert gt.pitch._info['GK'] and all(gt.pitch._info[q] is None for q in POS_DISPLAY if q != 'GK')
+assert gt.pitch._info['GK'] and all(gt.pitch._info[q] is None for q in PITCH_POS if q != 'GK')
 assert 'outfield roles are not rated for goalkeepers' in gt.pitch._tips['DC']
 assert gt.rolelist.row_count() == (1 + 2) + (1 + 3), 'Goalkeeper D/S + Sweeper Keeper D/S/A'
 QTest.mouseClick(gt.pitch, Qt.MouseButton.LeftButton, pos=QPoint(*map(round, gt.pitch._pt('DC'))))
@@ -166,16 +166,26 @@ w2 = window(person(pos_hi='AML'))
 assert w2._role_tab.sel == 'AML'
 w2.close()
 
-# weight preset: Equal Weight vs another preset give different percentages; the footer names the preset
+# weight preset: Equal Weight vs another preset give different percentages
 vals = {}
 for name in ('Equal Weight', 'Direct Play'):
     weights.set_active_preset_name(name)
     wp = window(person())
     vals[name] = {q: v[1] for q, v in wp._role_tab.pitch._info.items() if v}
-    assert name in wp._role_tab._foot.text()
+    assert not hasattr(wp._role_tab, '_foot'), 'weights caption removed'
     wp.close()
 assert vals['Equal Weight'] != vals['Direct Play']
 weights.set_active_preset_name('FMScout Community')
+
+# pitch layout: 14 dots, no sweeper dot; a SW-best player defaults to DC; dots (28 px) never overlap at the Role tab's size
+import math  # noqa: E402
+assert 'SW' not in PITCH_POS and len(PITCH_POS) == 14 and 'SW' in POS_DISPLAY
+sw = window(person(pos_hi='SW'))
+assert sw._role_tab.sel == 'DC' and 'SW' not in sw._role_tab.live and 'SW' not in sw._role_tab.pitch._info
+for wdg in (sw._role_tab.pitch,):
+    pts = [wdg._pt(q) for q in PITCH_POS]
+    assert min(math.dist(a, b) for i, a in enumerate(pts) for b in pts[i + 1:]) > 40, 'dots overlap'
+sw.close()
 
 # missing attribute data: no crash, nothing rated, message shown
 bare = PlayerWindow({'id': 1, 'name': 'Bare', 'nation': 0}, {'squads': {}, 'clubs': []}, 0, None)

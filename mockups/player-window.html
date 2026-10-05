@@ -24,8 +24,8 @@ HOW TO USE
     data (show sample wage/value/height/weight/career history instead of PENDING)   nopend (Settings > Show PENDING markers OFF)
     nobadge (header identity line without the club badge: no logo pack / no logo for the club; the default shows a synthetic sample shield)
     face (header avatar shows a facepack picture instead of the silhouette; synthetic sample)   nums (CA/PA/Dev Rate as numbers instead of stars)   other ('Not your club': HGP/HGC pills display-only, tip 'Not your club')
-    tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip; on Role Rating it pins the selected dot's tip)
-  Role Rating: rpAML (select that position, any pitch code: rpDC rpST rpGK ...)   weq / wpos / wdir (Settings weight preset: Equal Weight / Possession-Based / Direct Play;
+    tips (pin the tooltips so they show in a screenshot; pins the HGP pill tip; on Player Role Rating it pins the selected dot's tip)
+  Player Role Rating: rpAML (select that position, any pitch code: rpDC rpST rpGK ...)   weq / wpos / wdir (Settings weight preset: Equal Weight / Possession-Based / Direct Play;
     default FMScout Community; also the 'weights' segment in the review bar)   nofam (review aid: turn OFF the default dimming of positions the player is not familiar with, position rating < 10)
     e.g.  #role   #role+rpAML+pot   #role+gk   #role+low+nums   #role+rpMC+nofam+weq   ?bare=1#role+rpDL+tips
   The review bar has segmented controls HGP / HGC (none | set | queued) and 'queued elsewhere' (0 | 1 | 3) for these states. Click a pill in the window to toggle queued.
@@ -53,7 +53,7 @@ COMPARE TO...  (action strip, flag +cmp or ?cmp: the popup open; ?cq=text types 
 
 WHERE TO EDIT (every tab is ONE function in section 4; the header is the same on every tab - there are NO per-tab header slots any more)
   tabProfile  tabContract(Contract & Transfer)  tabPositions  tabGeneral   tabRole  tabTraining  tabHistory  -> registry TABS (section 4)
-  Role Rating = section 4.7 (POS_ROLES table, roleList, rolePitch) + generated data section 1b (ROLE_RATINGS) + the ROLE RATING TAB block below.
+  Player Role Rating = section 4.7 (POS_ROLES table, roleList, rolePitch) + generated data section 1b (ROLE_RATINGS) + the ROLE RATING TAB block below.
   Persistent parts (section 3): header() (+ hgPill() = the HGP/HGC pills, queueSlot() = 'Changes queued'), tabStrip(), actionStrip().
   Homegrown state (section 2): S.hgp/S.hgc = set in the save, S.qhgp/S.qhgc = queued, canPatch(k), pillState(k), queuedHere(), queuedTotal().
   Data (section 1) is FICTIONAL sample data.
@@ -113,7 +113,7 @@ HGP / HGC PILLS = THE CONTROLS (no dialogs, no confirmations; changes are QUEUED
   Pill tooltips drop BELOW the pill (the header is at the top edge of the window).
   Keyboard: pills are real buttons (focus ring accent_hover, aria-pressed).
 
-ROLE RATING TAB (section 4.7; designed from FM Genie Scout's Role Rating screen but in OUR language: tokens, panels, TIER_HEX, the Positions-tab pitch)
+ROLE RATING TAB (section 4.7; designed from FM Genie Scout's Player Role Rating screen but in OUR language: tokens, panels, TIER_HEX, the Positions-tab pitch)
   What it shows: LEFT panel = the roles playable at the selected position, grouped by role, one row per duty (Defend / Support / Attack / Cover), sorted best first; RIGHT = the
   pitch (same field + SLOTS as Positions) with a dot on each of the 15 positions = the BEST role rating there, tier coloured; click a dot to select the position (white ring).
   Default selection = the player's best position (posr, as the Positions tab). Current | Full Potential = the app-wide `pot` toggle (shown in the pitch panel header, as on
@@ -123,7 +123,7 @@ ROLE RATING TAB (section 4.7; designed from FM Genie Scout's Role Rating screen 
   the colours equal the Best-by-Role report's. The pitch dots show the percent rounded to an integer (a '83.89%' does not fit a dot; the tooltip has the 2 decimals).
   NOT converted to stars -> the 'Star ratings rule' (stars + numbers mode) does not apply; nothing to add to ability_display.
   Goalkeepers: only the GK dot is live; outfielders: the GK dot is dim/dashed with a tooltip. Outfield dots of a keeper are dim, the GK roles of an outfielder are not rated.
-  Left panel footer: 'Weights: <preset name> (Settings)' + 'Rating = weighted mean of the role's key attributes, as a percentage of the maximum.'  Panel header right: '<n> roles · Rating %'.
+  No panel footer (weights caption) and no colour key under the pitch (removed). Panel header right: '<n> roles · Rating %'.
     Tooltip on a dot (QToolTip, 3 lines, +1 when dimmed): '<Position full name>[ (best position)]' / 'Best role: <FM_ROLES name> <83.89%>' / 'Position rating: <word> (<posr value>)'
     / (dimmed only) 'Dimmed: position rating below 10, not familiar with this position'.
   Why the position-rating line + the dimming: the role rating only looks at attributes, NOT at how well the player can play the position (a centre-back with pace 19 gets
@@ -216,7 +216,7 @@ OPEN QUESTIONS
   5. Tab strip style follows the current implementation (selection_bg + accent left edge), not the accent-fill of the earlier mock.
   7. Value by age: the requested footnote 'Estimated from the values of all players in this save' is NOT what the model does (a single save cannot give the change over time, and the level is dominated by the hidden
      reputation); the UI says 'simulated FM24 careers'. OK? Assume the contract is renewed (lines) with the expiry marker, or draw the dip / a free-agent drop at expiry? Show the band (~50% range) or hide it?
-  6. Role Rating: DECIDED: percent ratings (2 decimals, like Genie), duty names spelled out, unfamiliar positions dimmed by default. OPEN: POS_ROLES to verify in game (see the ROLE RATING TAB block).
+  6. Player Role Rating: DECIDED: percent ratings (2 decimals, like Genie), duty names spelled out, unfamiliar positions dimmed by default. OPEN: POS_ROLES to verify in game (see the ROLE RATING TAB block).
 =====================================================================================================================
 -->
 <style>
@@ -579,7 +579,7 @@ svg text{font-family:"Noto Sans","Liberation Sans",Arial,sans-serif}
 <li>History: seasons simulated in the save (2025-28) not shown; plain-year season labels for calendar-year leagues are an assumption; History needs the FM install database.</li>
 <li>Not in the save at all: club Region, Founded, Facilities; contract Bonuses &amp; clauses (panel removed).</li>
 <li>General Rating tab content: need in-game screens.</li>
-<li>Role Rating: POS_ROLES (which roles each of the 15 positions offers) is from memory of FM24 and must be verified in game; unsure: SW, Defensive Winger / Advanced Playmaker on AM(L/R), Wide Playmaker (D), Wing-Back / Wide Centre-Back on D(L/R). FM_ROLES lacks e.g. Wing-Back (A), Stopper (S/Cover), Regista. </li>
+<li>Player Role Rating: POS_ROLES (which roles each of the 15 positions offers) is from memory of FM24 and must be verified in game; unsure: SW, Defensive Winger / Advanced Playmaker on AM(L/R), Wide Playmaker (D), Wing-Back / Wide Centre-Back on D(L/R). FM_ROLES lacks e.g. Wing-Back (A), Stopper (S/Cover), Regista. </li>
 </ul>
 </details></div>
 
@@ -592,15 +592,14 @@ const CODE={GK:'GK',SW:'SW',DL:'D(L)',DC:'D(C)',DR:'D(R)',WBL:'WB(L)',WBR:'WB(R)
 const FULL={GK:'Goalkeeper',SW:'Sweeper',DL:'Defender (Left)',DC:'Defender (Centre)',DR:'Defender (Right)',WBL:'Wing Back (Left)',WBR:'Wing Back (Right)',DM:'Defensive Midfielder',ML:'Midfielder (Left)',MC:'Midfielder (Centre)',MR:'Midfielder (Right)',AML:'Attacking Mid (Left)',AMC:'Attacking Mid (Centre)',AMR:'Attacking Mid (Right)',ST:'Striker'};
 const BADGE={GK:'bGK',SW:'bD',DL:'bD',DC:'bD',DR:'bD',WBL:'bD',WBR:'bD',DM:'bDM',ML:'bM',MC:'bM',MR:'bM',AML:'bM',AMC:'bM',AMR:'bM',ST:'bST'};
 /* SLOTS: pitch slot of each position as fractions of the marked field rect, attacking UP. ONE table, edit here. */
-const SLOTS={
- ST:[.50,.11],
- AML:[.16,.25],AMC:[.50,.25],AMR:[.84,.25],
- ML:[.12,.40],MC:[.50,.40],MR:[.88,.40],
- DM:[.50,.535],
- WBL:[.08,.60],WBR:[.92,.60],
- DL:[.20,.72],DC:[.50,.72],DR:[.80,.72],
- SW:[.50,.835],
- GK:[.50,.94]};
+const SLOTS={   // 14 dots, NO sweeper dot (SW stays in the Positions list; its roles are reached through DC)
+ ST:[.50,.165],
+ AML:[.12,.316],AMC:[.50,.316],AMR:[.88,.316],
+ ML:[.12,.466],MC:[.50,.466],MR:[.88,.466],
+ WBL:[.12,.604],DM:[.50,.604],WBR:[.88,.604],
+ DL:[.12,.76],DC:[.50,.76],DR:[.88,.76],
+ GK:[.50,.845]};
+const PITCH_POS=POS.filter(p=>p in SLOTS);
 // attribute tuple: [name, current, at-potential, lowerIsBetter]
 const OUT={
  name:'Micky van de Ven',pos:'DC',nat:'Netherlands',age:26,born:'12 Apr 2000',club:'Tottenham',ca:149,pa:160,dev:16,inj:0,
@@ -683,7 +682,7 @@ const POTV={"out":{"Corners":6,"Crossing":9,"Dribbling":11,"Finishing":7,"First 
 Object.entries(SAMPLES).forEach(([k,d])=>{for(const g in d.g)d.g[g].forEach(a=>{a[2]=a[3]?a[1]:(POTV[k][a[0]]||a[1])})});
 
 /* =====================================================================================================================
-   1b. ROLE RATINGS of the 3 samples (Role Rating tab). GENERATED, do not hand edit.
+   1b. ROLE RATINGS of the 3 samples (Player Role Rating tab). GENERATED, do not hand edit.
    Source: the app's own logic. gui/roles.py FM_ROLES key attributes + fm_editor/weights/*.json, run on the sample attributes above
    (raw_attrs = 5 x the 1-20 value; Current = a[1], Full Potential = a[2] i.e. the POTV values), for the 4 bundled presets
    (eq = Equal Weight / no weights, fms = FMScout Community (the Settings default), pos = Possession-Based, dir = Direct Play).
@@ -1069,7 +1068,7 @@ function valueChart(){
 /* ---------- 4.4 POSITIONS (option 1: list + pitch, Current | Future) --------------------------------------------------
    Future = position ratings at full potential. DESIGN ONLY: the real implementation must recompute the 15 position ratings
    from the projected attributes (potential.project_attrs) - `posf` is hand-made sample data here. */
-function pitchSVG(R,W,H,M,dots){   // dots (optional) = fn(pt) -> svg of the dots, pt(code) -> [x,y]; the Role Rating tab draws its own dots on the same field
+function pitchSVG(R,W,H,M,dots){   // dots (optional) = fn(pt) -> svg of the dots, pt(code) -> [x,y]; the Player Role Rating tab draws its own dots on the same field
   const g={boxW:238,boxD:88,sixW:108,sixD:29,circR:54,spotD:58,goalW:43,goalD:6};
   const LN='rgba(255,255,255,0.42)',x0=M,y0=M,w=W-2*M,h=H-2*M,cx=x0+w/2,cy=y0+h/2,y1=y0+h;
   const n=12,bh=H/n;let s=`<rect x="0" y="0" width="${W}" height="${H}" fill="#15301F"/>`;
@@ -1084,17 +1083,18 @@ function pitchSVG(R,W,H,M,dots){   // dots (optional) = fn(pt) -> svg of the dot
     s+=`<circle cx="${cx}" cy="${spotY}" r="2" fill="${LN}"/><path d="M${cx-dx},${edgeY} A${g.circR} ${g.circR} 0 0 ${bot?1:0} ${cx+dx},${edgeY}" ${st}/>`;
   });
   // dots: positions rated 0 or 1 get NO dot; lowest first so the best sit on top. d28 solid tier fill, number 12/700 ink; 1-4 = ghost; 20 = white ring r18
-  s+=dots?dots(p=>[M+SLOTS[p][0]*w,M+SLOTS[p][1]*h]):POS.slice().filter(p=>R[p]>1).sort((a,b)=>R[a]-R[b]).map(p=>{
+  s+=dots?dots(p=>[M+SLOTS[p][0]*w,M+SLOTS[p][1]*h]):PITCH_POS.slice().filter(p=>R[p]>1).sort((a,b)=>R[a]-R[b]).map(p=>{
     const x=M+SLOTS[p][0]*w,y=M+SLOTS[p][1]*h,v=R[p],t=tier(v),c=HEX[t],ghost=t===1;
     return `<g class="dg" data-p="${p}">`+(v>=20?`<circle cx="${x}" cy="${y}" r="18" fill="none" stroke="#FFFFFF" stroke-width="2"/>`:'')
       +(ghost?`<circle cx="${x}" cy="${y}" r="13.5" fill="rgba(20,21,26,0.55)" stroke="${c}" stroke-width="1"/>`:`<circle cx="${x}" cy="${y}" r="14" fill="${c}"/>`)
       +`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="700" fill="${ghost?c:'#14151A'}">${v}</text>`
-      +`<text x="${x}" y="${y-22}" text-anchor="middle" font-size="10" font-weight="700" fill="rgba(255,255,255,0.72)">${CODE[p]}</text></g>`}).join('');
+      +`<text x="${x}" y="${p==='GK'?y+34:y-22}" text-anchor="middle" font-size="10" font-weight="700" fill="rgba(255,255,255,0.72)">${CODE[p]}</text></g>`}).join('');
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg>`;
 }
 function tabPositions(){
   const d=D(),R=S.future?d.posf:d.posr;
-  const rows=POS.map(p=>{const v=R[p],t=tier(v),dl=S.future?v-d.posr[p]:0;
+  const shown=POS.filter(p=>R[p]>1);   // rated 0 or 1: not listed (like the pitch dots); if all are, keep the best one
+  const rows=(shown.length?shown:[bestPos(R)]).map(p=>{const v=R[p],t=tier(v),dl=S.future?v-d.posr[p]:0;
     return `<div class="pr${v>=20?' nat':''}${p===d.pos?' me':''}" data-p="${p}">${badge(p,1)}<span class="nm">${FULL[p]}</span><span class="tile k${t} c${t}" style="width:34px">${v}</span><span class="wd">${word(v)}${dl>0?`<i>+${dl}</i>`:''}</span></div>`}).join('');
   const lf=d.g.foot[0][1],rf=d.g.foot[1][1],footed=Math.abs(lf-rf)>=4?(lf>rf?'Left-footed':'Right-footed'):'Either foot';
   const feet=d.g.foot.map(([l,v])=>`<div class="pr"><span class="lb">${l}</span><span class="tile k${tier(v)} c${tier(v)}" style="width:34px">${v}</span><span class="wd">${footWord(v)}</span></div>`).join('');
@@ -1142,7 +1142,7 @@ const rnd=v=>{const f=Math.floor(v),d=v-f;return d<.5-1e-9?f:d>.5+1e-9?f+1:(f%2?
 const wt=()=>S.weq?'eq':S.wpos?'pos':S.wdir?'dir':'fms';                                  // review aid: Settings > Role weights preset
 const rrv=()=>{const a=ROLE_RATINGS[`${wt()}.${S.smp}.${S.pot?'pot':'cur'}`];return n=>a[RR_NAMES.indexOf(n)]};
 const roleOk=p=>(p==='GK')===isGK();                                                       // GK roles only for goalkeepers, outfield roles only for outfielders
-const rolePos=()=>S.rp&&roleOk(S.rp)?S.rp:bestPos(D().posr);                               // default = the player's best position (Positions tab)
+const rolePos=()=>S.rp&&roleOk(S.rp)&&S.rp in SLOTS?S.rp:(b=>b==='SW'?'DC':b)(bestPos(D().posr));                               // default = the player's best position (Positions tab)
 function famGroups(p,rv){                                                                   // [{f:'Winger', r:[{n,d:'Support',v}, ...desc]}], groups by their best row, best first
   const m=new Map();
   POS_ROLES[p].forEach(n=>{const x=/^(.*) \((D|S|A|Cover)\)$/.exec(n),f=x?x[1]:n;if(!m.has(f))m.set(f,[]);m.get(f).push({n,d:DUTY[x?x[2]:''],v:rv(n)})});
@@ -1155,14 +1155,13 @@ function roleList(p,rv){
   const body=gs.map(g=>g.r.length===1
     ?`<div class="rg"><div class="rr flat${g.r[0].n===best?' best':''}"><span class="lb"><b>${g.f}</b><em>${g.r[0].d}</em></span>${val(g.r[0].v)}</div></div>`
     :`<div class="rg"><div class="rh">${g.f}</div>${g.r.map(r=>`<div class="rr${r.n===best?' best':''}"><span class="lb">${r.d}</span>${val(r.v)}</div>`).join('')}</div>`).join('');
-  return `<div class="ph"><span class="rph">${badge(p,1)}<span class="rpt">${FULL[p]}</span></span><span class="pnote">${gs.length} roles · Rating %</span></div>${body}
-    <div class="rfoot">Weights: <b>${WEIGHT_NAMES[wt()]}</b> (Settings)<br>Rating = weighted mean of the role's key attributes, as a percentage of the maximum.</div>`;
+  return `<div class="ph"><span class="rph">${badge(p,1)}<span class="rpt">${FULL[p]}</span></span><span class="pnote">${gs.length} roles · Rating %</span></div>${body}`;
 }
 function rolePitch(sel,rv){
   const d=D(),R=d.posr,bp=bestPos(R),info={};
-  POS.forEach(p=>{info[p]=roleOk(p)?posBest(p,rv):null});
-  const dots=pt=>POS.slice().sort((a,b)=>(a===sel?99:info[a]?info[a].v:-1)-(b===sel?99:info[b]?info[b].v:-1)).map(p=>{        // dim ones first, best next, the selected on top
-    const [x,y]=pt(p),code=CODE[p],lab=(c)=>`<text x="${x}" y="${y-26}" text-anchor="middle" font-size="10" font-weight="700" fill="${c}">${code}</text>`;
+  PITCH_POS.forEach(p=>{info[p]=roleOk(p)?posBest(p,rv):null});
+  const dots=pt=>PITCH_POS.slice().sort((a,b)=>(a===sel?99:info[a]?info[a].v:-1)-(b===sel?99:info[b]?info[b].v:-1)).map(p=>{        // dim ones first, best next, the selected on top
+    const [x,y]=pt(p),code=CODE[p],lab=(c)=>`<text x="${x}" y="${p==='GK'?y+38:y-26}" text-anchor="middle" font-size="10" font-weight="700" fill="${c}">${code}</text>`;
     if(!info[p])return `<g class="rdg dis" data-dis="1" data-p="${p}" data-x="${x}" data-y="${y}" data-t="${FULL[p]}&#10;Not rated: ${p==='GK'?'goalkeeper roles are only rated for goalkeepers':'outfield roles are not rated for goalkeepers'}">`
       +`<circle cx="${x}" cy="${y}" r="22" fill="transparent"/><circle cx="${x}" cy="${y}" r="15" fill="rgba(20,21,26,0.35)" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 3"/>`
       +`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="12" fill="rgba(255,255,255,0.35)">–</text>${lab('rgba(255,255,255,0.35)')}</g>`;
@@ -1172,8 +1171,7 @@ function rolePitch(sel,rv){
       +(ghost?`<circle cx="${x}" cy="${y}" r="16.5" fill="rgba(20,21,26,0.55)" stroke="${c}" stroke-width="1"/>`:`<circle cx="${x}" cy="${y}" r="17" fill="${c}"/>`)
       +`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700" fill="${ghost?c:'#14151A'}">${Math.round(v)}</text>${lab(on||p===bp?'#FFFFFF':'rgba(255,255,255,0.72)')}</g>`}).join('');
   return `<div class="ph"><span>Choose a position</span>${sgc('pot',[['cur','Current'],['pot','Full Potential']],S.pot?'pot':'cur')}</div>
-    <div class="pw">${pitchSVG(R,438,526,22,dots)}</div>
-    <div class="rlg">${RKEY.map(([l,t])=>`<span><i class="f${t}"></i>${l}</span>`).join('')}<span><i class="ring"></i>Selected</span></div>`;
+    <div class="pw">${pitchSVG(R,438,526,22,dots)}</div>`;
 }
 function tabRole(){
   const rv=rrv(),p=rolePos();
@@ -1209,7 +1207,7 @@ const TABS=[
  {key:'contract',label:'Contract & Transfer',page:tabContract},
  {key:'positions',label:'Positions',page:tabPositions},
  {key:'general',label:'General Rating',page:tabGeneral},
- {key:'role',label:'Role Rating',page:tabRole},
+ {key:'role',label:'Player Role Rating',page:tabRole},
  {key:'training',label:'Training',page:tabTraining},
  {key:'history',label:'History',page:tabHistory}];
 
@@ -1243,7 +1241,7 @@ function render(){
   const q=new URLSearchParams(location.search);S.tex===DEFAULT_THEME?q.delete('tex'):q.set('tex',S.tex);S.hdr==='a'?q.delete('hdr'):q.set('hdr',S.hdr);history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+'#'+S.tab+fl.map(f=>'+'+f).join(''));
   document.title='Player window - '+t.label;
   if(S.cmp)cmpWire();
-  // Role Rating: dot tooltip bubble (review aid; real app QToolTip). +tips pins the selected dot's tip.
+  // Player Role Rating: dot tooltip bubble (review aid; real app QToolTip). +tips pins the selected dot's tip.
   const rpn=document.querySelector('.rpn');
   if(rpn){const tip=document.createElement('div');tip.className='rtip';rpn.appendChild(tip);
     const place=g=>{const sv=rpn.querySelector('svg').getBoundingClientRect(),pr=rpn.getBoundingClientRect(),x=sv.left-pr.left+ +g.dataset.x,y=sv.top-pr.top+ +g.dataset.y,up=y>pr.height*.6;

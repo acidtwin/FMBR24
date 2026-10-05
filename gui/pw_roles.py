@@ -1,4 +1,4 @@
-"""Role Rating tab of the player window (mockups/player-window.html section 4.7 + the ROLE RATING TAB comment block; every
+"""Player Role Rating tab of the player window (mockups/player-window.html section 4.7 + the ROLE RATING TAB comment block; every
 number below is copied from there). LEFT panel = the roles playable at the selected position (RoleList, custom painted),
 RIGHT panel = the Positions-tab pitch with one dot per position = the best role there (RolePitch). Ratings are PERCENTS
 (fm_editor.rolepos.role_score, e.g. 83.89%), tier colour = the Best by Role report's 1-20 tier of percent / 5.
@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolic
 from fm_editor import rolepos
 from fm_editor import weights as _weights
 from fm_editor.words import position_word
-from gui.player_window import (C_ALT, POS_CODE, POS_DISPLAY, POS_FULL, TIER_HEX, _ElideLabel, _lab, _PitchBig, _spaced,
+from gui.player_window import (C_ALT, PITCH_POS, POS_CODE, POS_DISPLAY, POS_FULL, TIER_HEX, _ElideLabel, _lab, _PitchBig, _spaced,
                                tier)
 from gui.pw_widgets import _a, _font
 from gui.theme import COLORS
@@ -25,10 +25,8 @@ SEC, INK, WHITE = QColor(COLORS['text_secondary']), QColor('#14151A'), QColor('#
 # list columns (px from the row's left edge; the right edge is `width - 12`): label text x 27 (duty rows) / 15 (family + flat rows),
 # bar from x 235, number 52 wide, gaps 8
 LABEL_X, FLAT_X, BAR_X, NUM_W, GAP = 27, 15, 235, 52, 8
-TIER_KEY = [('0–22', 1), ('23–42', 2), ('43–57', 3), ('58–67', 4), ('68–82', 5), ('83–100', 6)]   # percent = tier boundaries x 5
 HIT_R = 22
 LOW_FAM = 10       # position rating below this = not familiar: the dot is dimmed (selected dot never)
-FOOT = ("Rating = weighted mean of the role's key attributes, as a percentage of the maximum.")
 
 
 def pct_text(v):
@@ -145,7 +143,7 @@ class RolePitch(_PitchBig):
     def hit(self, pt):
         """Position whose dot centre is within 22 px of pt (nearest), else None."""
         best, bd = None, HIT_R + 1
-        for q in POS_DISPLAY:
+        for q in PITCH_POS:
             x, y = self._pt(q)
             d = math.hypot(pt.x() - x, pt.y() - y)
             if d <= HIT_R and d < bd:
@@ -182,12 +180,12 @@ class RolePitch(_PitchBig):
         return self.mapToGlobal(QPoint(round(left) - 2, round(top) - 16))     # Qt adds (2, 16) to the position it is given
 
     def paint_dots(self, p):
-        order = sorted(POS_DISPLAY, key=lambda q: 99 if q == self._sel else (self._info[q][1] if self._info.get(q) else -1))
+        order = sorted(PITCH_POS, key=lambda q: 99 if q == self._sel else (self._info[q][1] if self._info.get(q) else -1))
         for q in order:
             x, y = self._pt(q)
             if self._dim.get(q) and q != self._sel:
                 # SVG group opacity: dot + number + label are composited together at 0.4 (not each primitive on its own)
-                img = QImage(80, 80, QImage.Format.Format_ARGB32_Premultiplied)
+                img = QImage(80, 100, QImage.Format.Format_ARGB32_Premultiplied)
                 img.fill(Qt.GlobalColor.transparent)
                 ip = QPainter(img)
                 ip.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -233,7 +231,8 @@ class RolePitch(_PitchBig):
         p.setFont(lab_f)
         p.setPen(lab_col)
         code = POS_CODE[q]
-        p.drawText(QPointF(x - QFontMetricsF(lab_f).horizontalAdvance(code) / 2, y - 26), code)
+        # GK label goes BELOW its dot: the D(C) dot sits only ~41 px above, so a label above would hide under it
+        p.drawText(QPointF(x - QFontMetricsF(lab_f).horizontalAdvance(code) / 2, y + 38 if q == 'GK' else y - 26), code)
 
     @staticmethod
     def _text(p, x, y, text, font, color):
@@ -244,39 +243,6 @@ class RolePitch(_PitchBig):
         p.drawText(QPointF(x - fm.horizontalAdvance(text) / 2, y + (fm.ascent() - fm.descent()) / 2), text)
 
 
-class _TierKey(QWidget):
-    """Strip under the pitch (27 px: 1 px hairline + 26): six tier swatches (percent ranges) + a ring for 'Selected'."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedHeight(27)
-
-    def paintEvent(self, _e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(QRect(0, 0, self.width(), 1), TRACK)
-        f = _font(11)
-        fm = QFontMetricsF(f)
-        cy = 1 + 26 / 2
-        x = 12.0
-        for label, t in TIER_KEY:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(TIER_HEX[t]))
-            p.drawRoundedRect(QRectF(x, cy - 5, 10, 10), 2, 2)
-            x += 15
-            p.setFont(f)
-            p.setPen(SEC)
-            p.drawText(QPointF(x, cy + (fm.ascent() - fm.descent()) / 2), label)
-            x += fm.horizontalAdvance(label) + 10
-        p.setPen(QPen(WHITE, 2))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(QPointF(x + 6, cy), 5, 5)
-        x += 17
-        p.setFont(f)
-        p.setPen(SEC)
-        p.drawText(QPointF(x, cy + (fm.ascent() - fm.descent()) / 2), 'Selected')
-
-
 class RoleTab:
     """Builds and drives the two panels for one PlayerWindow (`win`): list_panel (left, 456 wide) + pitch_panel (right)."""
 
@@ -284,7 +250,7 @@ class RoleTab:
         self.win = win
         self.preset = _weights.load_active_preset()
         self.is_gk = bool(win._is_gk)
-        self.live = [q for q in POS_DISPLAY if (q == 'GK') == self.is_gk]
+        self.live = [q for q in PITCH_POS if (q == 'GK') == self.is_gk]
         self.best_pos = self._default_pos()
         self.sel = self.best_pos
         self.list_panel = self._build_list()
@@ -303,10 +269,10 @@ class RoleTab:
     def _default_pos(self):
         """The player's best position (highest rating, then the listed one, then list order) among the rateable ones."""
         w = self.win
-        return sorted(self.live, key=lambda q: (-w._ratings.get(q, 1), q != w._pos, POS_DISPLAY.index(q)))[0]
-
-    def weights_name(self):
-        return (self.preset or {}).get('name') or 'Equal Weight'
+        R = w._ratings
+        # no SW dot: a sweeper's rating counts for D(C), where the SW roles live
+        listed = 'DC' if w._pos == 'SW' else w._pos
+        return sorted(self.live, key=lambda q: (-max(R.get(q, 1), R.get('SW', 1) if q == 'DC' else 1), q != listed, POS_DISPLAY.index(q)))[0]
 
     def tip(self, pos, info, dim):
         w = self.win
@@ -349,17 +315,6 @@ class RoleTab:
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(self.rolelist)
         v.addWidget(scroll, 1)
-        foot = QFrame()
-        foot.setObjectName('pwRoleFoot')
-        foot.setStyleSheet(f"QFrame#pwRoleFoot {{ border:none; border-top:1px solid {COLORS['border']}; }}")
-        fv = QVBoxLayout(foot)
-        fv.setContentsMargins(12, 6, 12, 8)
-        self._foot = _lab('', 'pwNote')
-        self._foot.setTextFormat(Qt.TextFormat.RichText)
-        self._foot.setWordWrap(True)
-        self._foot.setText(f'Weights: <span style="color:#FFFFFF; font-weight:500">{self.weights_name()}</span> (Settings)<br>{FOOT}')
-        fv.addWidget(self._foot)
-        v.addWidget(foot)
         return panel
 
     def _build_pitch(self):
@@ -383,7 +338,6 @@ class RoleTab:
         self.pitch = RolePitch()
         self.pitch.picked.connect(self.select)
         v.addWidget(self.pitch, 1)
-        v.addWidget(_TierKey())
         return panel
 
     # -- state -----------------------------------------------------------------------------------
@@ -397,9 +351,9 @@ class RoleTab:
         """Recompute everything from the window's current mode (Current | Full Potential) and the selection."""
         raw = self.attrs()
         best = rolepos.best_by_position(raw, self.preset, self.live) if raw else {}
-        info = {q: (best.get(q) if q in self.live else None) for q in POS_DISPLAY}
-        dim = {q: info[q] is not None and self.win._ratings.get(q, 1) < LOW_FAM for q in POS_DISPLAY}
-        self.pitch.set_state(info, {q: self.tip(q, info[q], dim[q]) for q in POS_DISPLAY}, dim, self.sel, self.best_pos)
+        info = {q: (best.get(q) if q in self.live else None) for q in PITCH_POS}
+        dim = {q: info[q] is not None and self.win._ratings.get(q, 1) < LOW_FAM for q in PITCH_POS}
+        self.pitch.set_state(info, {q: self.tip(q, info[q], dim[q]) for q in PITCH_POS}, dim, self.sel, self.best_pos)
         groups = rolepos.position_roles(self.sel, raw, self.preset) if raw else []
         self.rolelist.set_groups(groups, groups[0][1][0][1] if groups else None, 'No attribute data in the save.')
         old = self._badge

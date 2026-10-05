@@ -12,7 +12,7 @@ TABS rows = (key, label, page builder method name | None). None = "Coming soon" 
 Add a real tab = write `_page_<key>` and name it in TABS. Profile = layout C (cards Position / This season / Fitness;
 attribute grid + Attribute groups radar + Footedness soles; Personality + Player traits); Training = Recommended traits +
 a coming-soon block; Contract & Transfer = Contract | Transfer row + the Value by age chart (gui/pw_valuechart.py); Positions = list + pitch, its Current | Future switch has Future disabled (position ratings are
-stored in the save, not derived from attributes); Role Rating = role list + best-role pitch (gui/pw_roles.py).
+stored in the save, not derived from attributes); Player Role Rating = role list + best-role pitch (gui/pw_roles.py).
 
 Data the save does not give us yet is read from `data` (see `player_extra_data`) and shown as PENDING
 (respecting Settings > Show PENDING markers). Projected ("at potential") values are display only.
@@ -98,16 +98,15 @@ POS_FULL = {'GK': 'Goalkeeper', 'SW': 'Sweeper', 'DL': 'Defender (Left)', 'DC': 
             'MR': 'Midfielder (Right)', 'AML': 'Attacking Mid (Left)', 'AMC': 'Attacking Mid (Centre)',
             'AMR': 'Attacking Mid (Right)', 'ST': 'Striker'}
 # Pitch slot of each position as fractions of the marked field rect, attacking UP (mockup SLOTS). ONE table: edit here.
-SLOTS = {
-    'ST': (.50, .11),
-    'AML': (.16, .25), 'AMC': (.50, .25), 'AMR': (.84, .25),
-    'ML': (.12, .40), 'MC': (.50, .40), 'MR': (.88, .40),
-    'DM': (.50, .535),
-    'WBL': (.08, .60), 'WBR': (.92, .60),
-    'DL': (.20, .72), 'DC': (.50, .72), 'DR': (.80, .72),
-    'SW': (.50, .835),
-    'GK': (.50, .94),
+SLOTS = {   # 14 dots, NO sweeper dot (SW stays in the Positions list; its roles are reached through DC). Layout = FM Genie Scout.
+    'ST': (.50, .165),
+    'AML': (.12, .316), 'AMC': (.50, .316), 'AMR': (.88, .316),
+    'ML': (.12, .466), 'MC': (.50, .466), 'MR': (.88, .466),
+    'WBL': (.12, .604), 'DM': (.50, .604), 'WBR': (.88, .604),
+    'DL': (.12, .76), 'DC': (.50, .76), 'DR': (.88, .76),
+    'GK': (.50, .845),
 }
+PITCH_POS = [q for q in POS_DISPLAY if q in SLOTS]   # the positions that get a dot (all but SW)
 
 CLUB_BADGE_PX = 16      # mockup .hid .r2 .club .bdg: club badge box before the club name (row 2 is 16 tall)
 AVATAR_SIZE = (54, 64)   # mockup .avatar: the facepack cutout aspect (260:310), same box with or without a picture
@@ -120,7 +119,7 @@ TABS = [
     ('contract', 'Contract & Transfer', '_page_contract'),
     ('positions', 'Positions', '_page_positions'),
     ('general', 'General Rating', None),
-    ('role', 'Role Rating', '_page_role'),
+    ('role', 'Player Role Rating', '_page_role'),
     ('training', 'Training', '_page_training'),
     ('history', 'History', '_page_history'),
 ]
@@ -482,13 +481,13 @@ class _PitchBig(QWidget):
         return (self.M + sx_ * (self.width() - 2 * self.M), self.M + sy_ * (self.height() - 2 * self.M))
 
     def paint_dots(self, p):
-        """The dots on the field: the 15 position ratings (Positions tab). Hook: the Role Rating tab's pitch overrides it."""
+        """The dots on the field: the 14 position ratings (no SW dot; Positions tab). Hook: the Player Role Rating tab's pitch overrides it."""
         f = QFont(p.font())
         f.setPixelSize(12)
         f.setBold(True)
         fl = QFont(f)
         fl.setPixelSize(10)
-        for pos in sorted(POS_DISPLAY, key=lambda q: (self._r.get(q, 1), -POS_DISPLAY.index(q))):
+        for pos in sorted(PITCH_POS, key=lambda q: (self._r.get(q, 1), -POS_DISPLAY.index(q))):
             x, y = self._pt(pos)
             v = self._r.get(pos, 1)
             if v <= 1:       # rated 0 or 1: no dot at all (mockup: positions tab pitch)
@@ -513,7 +512,8 @@ class _PitchBig(QWidget):
             p.drawText(QRectF(x - 14, y - 14, 28, 28), Qt.AlignmentFlag.AlignCenter, str(v))
             p.setFont(fl)
             p.setPen(QColor(255, 255, 255, round(0.72 * 255)))
-            p.drawText(QRectF(x - 30, y - 34, 60, 12), Qt.AlignmentFlag.AlignCenter, POS_CODE[pos])
+            # GK label below its dot (D(C) is only ~46 px above it)
+            p.drawText(QRectF(x - 30, y + 22 if pos == 'GK' else y - 34, 60, 12), Qt.AlignmentFlag.AlignCenter, POS_CODE[pos])
 
 
 class _DevPips(QWidget):
@@ -780,7 +780,7 @@ class PlayerWindow(QDialog):
         return self._page(self._positions_list(), self._positions_pitch(), stretch={1: 1}, fill=True)
 
     def _page_role(self):
-        """Role Rating: role list of the selected position + pitch of best-role dots (gui/pw_roles.py)."""
+        """Player Role Rating: role list of the selected position + pitch of best-role dots (gui/pw_roles.py)."""
         from gui.pw_roles import RoleTab
         self._role_tab = RoleTab(self)
         return self._page(self._role_tab.list_panel, self._role_tab.pitch_panel, stretch={1: 1}, fill=True)
@@ -1323,7 +1323,9 @@ class PlayerWindow(QDialog):
         seg, _cur, fut = self._seg('Current', 'Future', right_enabled=False, right_tip=_FUTURE_TIP)
         panel, v = self._panel('Positions', seg)
         panel.setFixedWidth(456)
-        for i, pos in enumerate(POS_DISPLAY):
+        # rated 0 or 1 = not listed (like the pitch dots); never an empty list: if all are, keep the best one
+        shown = [q for q in POS_DISPLAY if R[q] > 1] or [self._best_pos(R)]
+        for i, pos in enumerate(shown):
             val = R[pos]
             nat = val >= 20
             row = QFrame()
